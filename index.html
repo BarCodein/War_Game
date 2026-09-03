@@ -25,20 +25,20 @@
         <div id="unitList" class="unit-list"></div>
         <div class="panel-heading tech-title"><span>快速部署</span><em>BUILD</em></div>
         <div class="build-list">
-          <button class="build-button" data-unit="scout"><span class="unit-glyph scout-glyph">◈</span><span><b>侦察兵</b><small>轻装 · 速度快</small></span><strong>80 <small>▦</small></strong></button>
-          <button class="build-button" data-unit="tank"><span class="unit-glyph tank-glyph">◆</span><span><b>突击坦克</b><small>装甲 · 重火力</small></span><strong>160 <small>▦</small></strong></button>
+          <button class="build-button" data-unit="infantry"><span class="unit-glyph scout-glyph">●</span><span><b>步兵师</b><small>机动 · 适合占领</small></span><strong>80 <small>▦</small></strong></button>
+          <button class="build-button" data-unit="armor"><span class="unit-glyph tank-glyph">●</span><span><b>装甲师</b><small>装甲 · 重火力</small></span><strong>160 <small>▦</small></strong></button>
         </div>
         <div class="status-card"><span class="status-label">基地状态</span><div class="status-row"><span>护盾完整度</span><b>78%</b></div><div class="progress"><i style="width:78%"></i></div><div class="status-row"><span>生产队列</span><b id="queueText">空闲</b></div></div>
       </aside>
       <section class="battlefield-wrap">
         <div class="battlefield-head"><div><span class="eyebrow">TACTICAL VIEW / SECTOR A-13</span><h1>前线态势</h1></div><div class="battlefield-tools"><span class="selection-readout" id="selectionReadout">未选择单位</span><button id="centerButton">◎ 聚焦基地</button></div></div>
-        <div class="canvas-frame"><canvas id="battlefield" width="960" height="620"></canvas><div class="canvas-tip">点击圆点选择　·　左键拖动绘制行军轨迹　·　轨迹可见</div><div class="toast" id="toast">指挥官，战场已准备就绪。</div></div>
+        <div class="canvas-frame"><canvas id="battlefield" width="960" height="620"></canvas><div class="canvas-tip">点击圆点选择　·　从已选圆点拖动画轨迹　·　空白处拖动框选</div><div class="toast" id="toast">指挥官，战场已准备就绪。</div></div>
         <div class="battlefield-foot"><span><i class="legend-dot friendly"></i>己方</span><span><i class="legend-dot hostile"></i>敌方</span><span><i class="legend-dot resource-dot"></i>资源点</span><span class="coords" id="coords">GRID 00 : 00</span></div>
       </section>
       <aside class="right-panel">
         <div class="panel mission-panel"><div class="panel-heading"><span>任务进度</span><em>PRIMARY</em></div><div class="mission-title"><span class="mission-number">01</span><div><b>夺取北方信标</b><small>控制并守住高地信标</small></div><strong id="missionPercent">42%</strong></div><div class="progress mission-progress"><i id="missionProgress" style="width:42%"></i></div><div class="sub-objective done"><span>✓</span>建立前线基地</div><div class="sub-objective"><span>○</span>清除信标周边敌军</div><div class="sub-objective"><span>○</span>保持控制 60 秒</div></div>
         <div class="panel event-panel"><div class="panel-heading"><span>战场通讯</span><em>LIVE FEED</em></div><div id="eventLog" class="event-log"><p><time>09:41</time><span class="event-tag blue">SYS</span>信标侦测范围已更新。</p><p><time>09:40</time><span class="event-tag red">WARN</span>西侧发现不明热源。</p><p><time>09:38</time><span class="event-tag green">OK</span>前线基地部署完成。</p></div></div>
-        <div class="panel controls-panel"><div class="panel-heading"><span>指令</span><em>HOTKEYS</em></div><div class="key-row"><kbd>Q</kbd><span>快速部署侦察兵</span></div><div class="key-row"><kbd>空格</kbd><span>暂停 / 继续</span></div><div class="key-row"><kbd>Esc</kbd><span>取消选择</span></div></div>
+        <div class="panel controls-panel"><div class="panel-heading"><span>指令</span><em>HOTKEYS</em></div><div class="key-row"><kbd>Q</kbd><span>快速部署步兵师</span></div><div class="key-row"><kbd>空格</kbd><span>暂停 / 继续</span></div><div class="key-row"><kbd>Esc</kbd><span>取消选择</span></div></div>
       </aside>
     </div>
   </main>
