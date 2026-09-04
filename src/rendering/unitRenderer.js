@@ -42,36 +42,137 @@ export function createUnitRenderer(scene, world, selection) {
   function drawUnit(unit) {
     const colors = SIDE_COLORS[unit.faction];
     const { x, y, radius } = unit;
-    if (unit.state === 'combat') { // 交战圈
-      graphics.lineStyle(3, 0x111111, 0.9);
-      graphics.strokeCircle(x, y, radius + 5 + Math.sin(scene.time.now / 100) * 2);
+    const isSelected = selection.isSelected(unit.id);
+    // 交战：去掉光圈特效，改为沿「自身→敌人」连线方向的小幅度高频抖动（仅渲染层，不影响模拟坐标）
+    let dx = x;
+    let dy = y;
+    if (unit.state === 'combat') {
+      const enemy = liveEnemy(unit);
+      if (enemy) {
+        const dirX = enemy.x - unit.x;
+        const dirY = enemy.y - unit.y;
+        const len = Math.hypot(dirX, dirY) || 1;
+        const offset = Math.sin(scene.time.now * 0.08 + unit.id) * 0.9; // 减小幅度、提高频率
+        dx += (dirX / len) * offset;
+        dy += (dirY / len) * offset;
+      }
     }
     if (unit.state === 'rout') { // 溃逃：白色闪烁圈
       graphics.lineStyle(3, 0xffffff, Math.sin(scene.time.now / 80) > 0 ? 0.9 : 0.25);
-      graphics.strokeCircle(x, y, radius + 8);
+      graphics.strokeCircle(dx, dy, radius + 8);
     }
-    if (selection.isSelected(unit.id)) { // 选中圈
-      graphics.lineStyle(3, 0xf9ed35, 1);
-      graphics.strokeCircle(x, y, radius + 8);
-    }
-    graphics.fillStyle(colors.fill, 1);
+    // 选中特效：去掉黄色亮圈，改为单位变深色
+    const fill = isSelected ? darken(colors.fill, 0.55) : colors.fill;
+    graphics.fillStyle(fill, 1);
     graphics.lineStyle(2, colors.outline, 1);
-    graphics.fillCircle(x, y, radius);
-    graphics.strokeCircle(x, y, radius);
-    drawBars(unit);
+    graphics.fillCircle(dx, dy, radius);
+    graphics.strokeCircle(dx, dy, radius);
+    drawCracks(unit, dx, dy); // 血量<50% 轻破碎、<20% 重破碎（对所有可见单位）
+    drawBars(unit, dx, dy); // 仅己方显示血条/士气条（敌方隐藏）
   }
 
-  function drawBars(unit) {
-    const { x, y } = unit;
-    const width = 36;
+  // 当前交战目标（用于抖动方向的连线）；无目标时兜底取接触范围内最近敌军
+  function liveEnemy(unit) {
+    const target = unit.targetId !== null
+      ? world.units.find(u => u.id === unit.targetId && u.state !== 'dead' && u.faction !== unit.faction)
+      : null;
+    if (target) return target;
+    let nearest = null;
+    let best = Infinity;
+    for (const u of world.units) {
+      if (u.state === 'dead' || u.faction === unit.faction) continue;
+      const d = Math.hypot(u.x - unit.x, u.y - unit.y);
+      if (d < best) {
+        best = d;
+        nearest = u;
+      }
+    }
+    return nearest;
+  }
+
+  // 颜色加深（选中态）
+  function darken(color, factor) {
+    const r = Math.floor(((color >> 16) & 0xff) * factor);
+    const g = Math.floor(((color >> 8) & 0xff) * factor);
+    const b = Math.floor((color & 0xff) * factor);
+    return ((r << 16) | (g << 8) | b) >>> 0;
+  }
+
+  function drawBars(unit, cx, cy) {
+    if (unit.faction !== 'blue') return; // 隐藏敌方血条与士气条
+    const { radius } = unit;
+    const width = radius * 2; // 接近圆点直径（截图效果）
+    const hpHeight = 5;
+    const morHeight = 5;
+    const gap = 2;
+    const boxHeight = hpHeight + gap + morHeight;
+    // 紧贴圆点上方
+    const bottom = cy - radius - 2;
+    const top = bottom - boxHeight;
+    // 黑色框底（截图样式）
+    graphics.fillStyle(0x0b0e10, 0.9);
+    graphics.fillRect(cx - width / 2 - 1, top - 1, width + 2, boxHeight + 2);
+    // 血条：≥50% 绿、<50% 黄、<20% 橘红（如图）
+    const ratio = unit.hp / unit.maxHp;
+    const hpColor = ratio >= 0.5 ? 0x53e77e : (ratio >= 0.2 ? 0xf2d42a : 0xff6a33);
     graphics.fillStyle(0x0c201b, 1);
-    graphics.fillRect(x - width / 2, y - unit.radius - 13, width, 4);
-    graphics.fillStyle(0x53e77e, 1);
-    graphics.fillRect(x - width / 2, y - unit.radius - 13, width * unit.hp / unit.maxHp, 4);
+    graphics.fillRect(cx - width / 2, top, width, hpHeight);
+    graphics.fillStyle(hpColor, 1);
+    graphics.fillRect(cx - width / 2, top, width * ratio, hpHeight);
+    // 士气条：青蓝色（如图）
     graphics.fillStyle(0x0c201b, 1);
-    graphics.fillRect(x - width / 2, y - unit.radius - 7, width, 3);
-    graphics.fillStyle(0xf2d42a, 1);
-    graphics.fillRect(x - width / 2, y - unit.radius - 7, width * unit.morale / 100, 3);
+    graphics.fillRect(cx - width / 2, top + hpHeight + gap, width, morHeight);
+    graphics.fillStyle(0x3fd6e6, 1);
+    graphics.fillRect(cx - width / 2, top + hpHeight + gap, width * Math.min(1, unit.morale / 100), morHeight);
+  }
+
+  // 血量破碎（截图效果）：<50% 轻度破碎、<20% 重度破碎；
+  // 以单位 id 作种子的确定性裂纹网，保证每帧稳定。
+  function drawCracks(unit, cx, cy) {
+    const ratio = unit.hp / unit.maxHp;
+    if (ratio >= 0.5) return;
+    const heavy = ratio < 0.2;
+    const count = heavy ? 13 : 6;
+    const rng = mulberry32(unit.id);
+    const { radius } = unit;
+    graphics.lineStyle(1, 0xd9d2b0, 0.92);
+    for (let i = 0; i < count; i += 1) {
+      const a = rng() * Math.PI * 2;
+      const r0 = rng() * radius * 0.6;
+      let px = cx + Math.cos(a) * r0;
+      let py = cy + Math.sin(a) * r0;
+      let dir = rng() * Math.PI * 2;
+      graphics.beginPath();
+      graphics.moveTo(px, py);
+      const segs = heavy ? 4 : 3;
+      for (let s = 0; s < segs; s += 1) {
+        dir += (rng() - 0.5) * 1.2;
+        const len = radius * (0.2 + rng() * 0.5);
+        px += Math.cos(dir) * len;
+        py += Math.sin(dir) * len;
+        const dx = px - cx;
+        const dy = py - cy;
+        const d = Math.hypot(dx, dy);
+        if (d > radius) {
+          px = cx + (dx / d) * radius;
+          py = cy + (dy / d) * radius;
+        }
+        graphics.lineTo(px, py);
+      }
+      graphics.strokePath();
+    }
+  }
+
+  // 确定性伪随机（mulberry32），以单位 id 作种子
+  function mulberry32(seed) {
+    let a = seed >>> 0;
+    return function next() {
+      a |= 0;
+      a = (a + 0x6D2B79F5) | 0;
+      let t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
   }
 
   function drawCity(city) {

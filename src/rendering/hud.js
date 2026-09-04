@@ -33,12 +33,9 @@ export function createHud(scene, world, controller, selection, orders) {
     accumulator: 0,
   };
 
-  let toastTimer = null;
-  function showToast(message) {
-    els.toast.textContent = message;
-    els.toast.classList.add('show');
-    clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => els.toast.classList.remove('show'), values.ui.toastDurationMs);
+  // 顶部弹出的 toast 通知已移除（如「任务完成」）——相关进度只保留在右侧战场通讯日志。
+  function showToast() {
+    return;
   }
 
   // 顶栏

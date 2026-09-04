@@ -13,6 +13,19 @@ import { createOrders } from '../../input/orders.js';
 import { createKeyboard } from '../../input/keyboard.js';
 import { createGameController } from '../../controllers/gameController.js';
 
+// 轨迹末端箭头：沿行进方向在终点画一个实心三角。
+function drawArrow(graphics, x0, y0, x1, y1, color) {
+  const angle = Math.atan2(y1 - y0, x1 - x0);
+  const size = 9;
+  const spread = 0.5;
+  graphics.fillStyle(color, 0.85);
+  graphics.fillTriangle(
+    x1, y1,
+    x1 - Math.cos(angle - spread) * size, y1 - Math.sin(angle - spread) * size,
+    x1 - Math.cos(angle + spread) * size, y1 - Math.sin(angle + spread) * size,
+  );
+}
+
 // 游戏主场景：组装模拟层 + 渲染层 + 输入层 + 控制器（architecture.md §3 数据流）。
 // 渲染只读世界状态；输入只产命令；模拟由固定步长 loop 推进。
 export class GameScene extends Phaser.Scene {
@@ -109,25 +122,35 @@ export class GameScene extends Phaser.Scene {
     if (this.orders.isRouting()) {
       const route = this.orders.getCurrentRoute();
       if (route.length > 1) {
-        this.overlayGraphics.lineStyle(4, 0x464646, 0.62);
+        this.overlayGraphics.lineStyle(4, 0x2f2f2f, 0.82);
         this.overlayGraphics.beginPath();
         this.overlayGraphics.moveTo(route[0].x, route[0].y);
         for (let i = 1; i < route.length; i += 1) this.overlayGraphics.lineTo(route[i].x, route[i].y);
         this.overlayGraphics.strokePath();
+        drawArrow(this.overlayGraphics, route[route.length - 2].x, route[route.length - 2].y,
+          route[route.length - 1].x, route[route.length - 1].y, 0x2f2f2f);
       }
     }
-    // 拖拽（move）指令下达后，未走完的轨迹持续显示，直到单位到达终点
-    // （bugfix：释放鼠标后轨迹不消失）。已走过/到达/溃逃/阵亡的部分随世界状态自然消失。
-    this.overlayGraphics.lineStyle(3, 0x66746e, 0.5);
+    // 行军/攻击前进轨迹（move 与 attackMove 均持续显示，含末端箭头）：
+    // 未到达终点前不消失，直到单位到达/命令结束；已走过/阵亡/溃逃/到达自然消失。
+    const routeColor = 0x1f2b24; // 加深轨迹颜色（截图效果）
+    this.overlayGraphics.lineStyle(3, routeColor, 0.9);
     for (const unit of this.world.units) {
-      if (unit.faction !== 'blue' || unit.state !== 'moving') continue;
-      if (unit.command?.type !== 'move' || unit.routeIndex >= unit.route.length) continue;
+      if (unit.faction !== 'blue' || unit.state === 'dead' || unit.state === 'rout') continue;
+      const cmd = unit.command?.type;
+      if (cmd !== 'move' && cmd !== 'attackMove') continue;
+      if (unit.route.length === 0 || unit.routeIndex >= unit.route.length) continue;
       this.overlayGraphics.beginPath();
       this.overlayGraphics.moveTo(unit.x, unit.y);
       for (let i = unit.routeIndex; i < unit.route.length; i += 1) {
         this.overlayGraphics.lineTo(unit.route[i].x, unit.route[i].y);
       }
       this.overlayGraphics.strokePath();
+      const lastIndex = unit.route.length - 1;
+      const beforeIndex = lastIndex - 1;
+      const end = unit.route[lastIndex];
+      const start = beforeIndex >= unit.routeIndex ? unit.route[beforeIndex] : { x: unit.x, y: unit.y };
+      drawArrow(this.overlayGraphics, start.x, start.y, end.x, end.y, routeColor);
     }
   }
 }

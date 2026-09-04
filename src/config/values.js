@@ -17,6 +17,7 @@ export const values = {
   combat: {
     firstStrikeImmediate: true,        // 首次接触立即攻击
     targetPriority: 'currentUntilDead', // 优先当前目标直至死亡，否则取最近（暂定）
+    contactTolerance: 2,               // 交战接触判定额外容忍（px）：圆点距离 ≤ 半径和 + 此值即触发交战
   },
 
   terrain: {

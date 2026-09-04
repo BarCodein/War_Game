@@ -2,7 +2,7 @@ import { makeUnit, makeCity } from './entities.js';
 import { parseMap } from './map.js';
 import { SpatialGrid } from './spatial.js';
 import { validateCommand } from './commands.js';
-import { updateMovement } from './systems/movement.js';
+import { updateMovement, planRoute } from './systems/movement.js';
 import { updateCombat } from './systems/combat.js';
 import { updateMorale } from './systems/morale.js';
 import { updateSupply } from './systems/supply.js';
@@ -53,7 +53,7 @@ export class World {
     const ids = new Set(unitIds);
     for (const unit of this.units) {
       if (unit.state === 'dead' || unit.state === 'rout' || !ids.has(unit.id)) continue;
-      applyCommand(unit, command);
+      applyCommand(this, unit, command);
     }
   }
 
@@ -94,7 +94,7 @@ export class World {
   }
 }
 
-function applyCommand(unit, command) {
+function applyCommand(world, unit, command) {
   unit.command = command;
   unit.targetId = null;
   if (command.type === 'hold') {
@@ -104,9 +104,10 @@ function applyCommand(unit, command) {
     return;
   }
   if (command.type === 'move' || command.type === 'attackMove') {
-    unit.route = command.type === 'move'
-      ? command.path.map(point => ({ x: point.x, y: point.y }))
-      : [{ x: command.target.x, y: command.target.y }];
+    const waypoints = command.type === 'move' ? command.path : [command.target];
+    // 下令时整条规划最短路径（A* 绕开水域），使 move 与 attackMove 轨迹显示真实路径；
+    // 中途接敌停下交战，敌军清空后沿该路线继续（attack-forward，gdd.md §4）。
+    unit.route = planRoute(world.terrain, unit.x, unit.y, waypoints);
     unit.routeIndex = 0;
     unit.pathDirty = true;
     unit.state = 'moving';

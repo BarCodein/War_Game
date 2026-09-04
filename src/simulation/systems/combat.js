@@ -1,11 +1,11 @@
 import { values } from '../../config/index.js';
 import { effectsFor } from './morale.js';
 
-// 战斗系统（gdd.md §4）：敌对单位进入攻击距离后自动攻击；
-// 目标选择：优先当前目标直至死亡，否则取攻击距离内最近（config.combat.targetPriority）；
+// 战斗系统（gdd.md §4）：敌我单位足够接近（圆点接触）后自动交战；
+// 目标选择：优先当前目标直至死亡，否则取接触范围内最近（config.combat.targetPriority）；
 // 伤害 = 基础伤害 × 士气削弱 × 防御者地形修正；每单位独立攻击冷却，首次接触立即攻击。
-// 例外（bugfix）：正在执行 move（行军）命令的单位不被自动交战锁定——
-// 可沿命令脱离战斗后撤；attackMove/attack/hold 仍按原规则接敌停下交战。
+// 统一为「攻击前进」（attack-forward）：move 与 attackMove 都沿预定路线行军，
+// 途中接触敌军即停下交战，敌军离开/清空后恢复行军（见 gdd.md §4）。
 export function updateCombat(world, dt) {
   for (const unit of world.units) {
     if (unit.state !== 'dead') unit.underFire = false;
@@ -17,12 +17,6 @@ export function updateCombat(world, dt) {
     if (!enemy) {
       unit.targetId = null;
       unit.state = unit.route.length > 0 ? 'moving' : 'hold';
-      continue;
-    }
-    if (hasMarchOrder(unit)) {
-      // 行军命令途中：自动交战不锁定，单位继续前进（可后撤脱离战斗）
-      unit.targetId = null;
-      unit.state = 'moving';
       continue;
     }
     unit.state = 'combat';
@@ -38,21 +32,20 @@ export function updateCombat(world, dt) {
   }
 }
 
+// 交战目标：仅与「视觉上接触」的敌军交战——距离 ≤ 双方半径和 + contactTolerance。
+// 相比按攻击距离（range）判定更严格，保证「图像上显示接触」才开打。
 function resolveTarget(world, unit) {
-  const range = values.units[unit.type].range;
-  const candidates = world.spatial.query(unit.x, unit.y, range);
+  const maxRadius = values.units.heavy.radius; // 敌方最大半径（用于查询范围）
+  const tolerance = values.combat.contactTolerance;
+  const reach = unit.radius + maxRadius + tolerance;
+  const candidates = world.spatial.query(unit.x, unit.y, reach);
   const enemies = candidates.filter(candidate =>
     candidate.state !== 'dead'
     && candidate.faction !== unit.faction
-    && Math.hypot(candidate.x - unit.x, candidate.y - unit.y) <= range);
+    && Math.hypot(candidate.x - unit.x, candidate.y - unit.y) <= unit.radius + candidate.radius + tolerance);
   if (enemies.length === 0) return null;
   const current = enemies.find(enemy => enemy.id === unit.targetId);
   if (current) return current;
   return enemies.reduce((nearest, enemy) =>
     Math.hypot(enemy.x - unit.x, enemy.y - unit.y) < Math.hypot(nearest.x - unit.x, nearest.y - unit.y) ? enemy : nearest);
-}
-
-// 是否处于执行中的行军（move）命令：命令有效且仍有未走完的路径点。
-function hasMarchOrder(unit) {
-  return unit.command?.type === 'move' && unit.routeIndex < unit.route.length;
 }

@@ -8,7 +8,12 @@ test.describe('指挥输入', () => {
     await clickWorld(page, unit.x, unit.y); // 选中
     const startX = unit.x;
     await clickWorld(page, 600, 300, { button: 'right' });
-    await expect(page.locator('#toast')).toContainText('部队向目标推进');
+    // 下达的是 attackMove（顶部不再弹出提示，改为校验命令）
+    const commandType = await page.evaluate((id) => {
+      const u = window.__game.world.units.find(item => item.id === id);
+      return u?.command?.type ?? null;
+    }, unit.id);
+    expect(commandType).toBe('attackMove');
     // 单位应向目标方向移动
     await expect.poll(async () => {
       const state = await page.evaluate((id) => {
@@ -37,7 +42,6 @@ test.describe('指挥输入', () => {
     }, { timeout: 5000 }).toBe(true);
     const red = await firstRedUnit(page); // 目视后再取实时坐标
     await clickWorld(page, red.x, red.y, { button: 'right' });
-    await expect(page.locator('#toast')).toContainText('锁定敌军目标');
     const commandType = await page.evaluate((id) => {
       const u = window.__game.world.units.find(item => item.id === id);
       return u?.command?.type ?? null;
@@ -79,7 +83,6 @@ test.describe('指挥输入', () => {
     await page.mouse.down();
     await page.mouse.move(toPage(unit.x + 200, unit.y).x, toPage(unit.x + 200, unit.y).y, { steps: 8 });
     await page.mouse.up();
-    await expect(page.locator('#toast')).toContainText('行军轨迹已记录');
     const commandType = await page.evaluate((id) => {
       const u = window.__game.world.units.find(item => item.id === id);
       return u?.command?.type ?? null;

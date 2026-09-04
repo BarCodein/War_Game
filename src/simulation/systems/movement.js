@@ -263,3 +263,23 @@ function simplify(points) {
   }
   return simplified;
 }
+
+// 下达命令时整条规划最短路径：对每个途经点逐段用 A* 绕开水域，返回去掉共线点的路径点。
+// move 与 attackMove 共用（attack-forward 攻击前进，见 gdd.md §4）——
+// 调用方在 applyCommand 时规划，使轨迹显示的是真实的绕行路径。
+export function planRoute(terrain, startX, startY, waypoints) {
+  const points = [];
+  let cx = startX;
+  let cy = startY;
+  for (const wp of waypoints) {
+    if (segmentBlocked(terrain, cx, cy, wp.x, wp.y)) {
+      const detour = findPath(terrain, cx, cy, wp.x, wp.y);
+      if (detour && detour.length) points.push(...detour);
+      // 无路可达时保留直线（维持原行为：交由移动时的惰性绕行）
+    }
+    points.push({ x: wp.x, y: wp.y });
+    cx = wp.x;
+    cy = wp.y;
+  }
+  return simplify(points);
+}
