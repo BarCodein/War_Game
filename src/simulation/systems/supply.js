@@ -32,12 +32,15 @@ export function updateSupply(world, dt) {
     if (nearCity) unit.hp = Math.min(unit.maxHp, unit.hp + values.cities.recovery.hpPerSecond * dt);
   }
 
-  // 3. 生产：每 12s 一个轻型单位；该城补给已满时暂停（计时器保持满值）
+  // 3. 生产：每 12s 一个轻型单位；补给满或城市被围攻（敌方单位进入占领半径）时暂停。
+  //    被围暂停保证攻城战可决出胜负（gdd.md §7）；计时器保持满值，解除后立即生产。
   for (const city of world.cities) {
     city.productionTimer += dt;
     if (city.productionTimer < values.cities.production.interval) continue;
     const assigned = (claimants.get(city.id) ?? []).length;
-    if (values.cities.production.pauseWhenSupplyFull && assigned >= values.supply.capacityPerCity) {
+    const contested = world.spatial.query(city.x, city.y, values.cities.capture.radius)
+      .some(unit => unit.state !== 'dead' && unit.faction !== city.faction);
+    if ((values.cities.production.pauseWhenSupplyFull && assigned >= values.supply.capacityPerCity) || contested) {
       city.productionTimer = values.cities.production.interval;
       continue;
     }

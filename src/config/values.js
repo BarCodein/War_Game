@@ -34,7 +34,7 @@ export const values = {
       cityNearby: 5,      // 附近己方城市（≤ ranges.city）
       supplied: 1,
       unsupplied: -2,
-      inCombat: -3,
+      inCombat: -1, // 持续交战的士气损耗（过低会使围攻不可行，见 gdd.md §6）
     },
     ranges: { friendly: 60, city: 120, allyDeath: 100 },
     onAllyDeath: -10,     // 附近友军阵亡瞬间
@@ -92,6 +92,7 @@ export const values = {
     map: { width: 1280, height: 720, midlineX: 640 },
     forces: { blue: { light: 3, heavy: 1 }, red: { light: 2, heavy: 2 } },
     garrisonRadius: 80,
+    clearRadius: 200, // 目标 3「清除信标周边敌军」的判定半径
     reinforcement: { atSecond: 60, count: 2, unitType: 'light' },
   },
 };

@@ -71,7 +71,7 @@
 | 附近己方城市（≤120 px） | +5 /s |
 | 补给充足 | +1 /s |
 | 补给不足 | −2 /s |
-| 交战中（正在被攻击） | −3 /s |
+| 交战中（正在被攻击） | −1 /s（持续围攻需 ~80 s 才溃逃，保证攻城可行） |
 | 附近友军阵亡（≤100 px，阵亡瞬间） | −10 |
 
 **阈值与效果**：
@@ -96,7 +96,7 @@
 - 己方单位全部离开后，进度以 **3% /s** 衰减回 0。
 - 进度达到 100% 时城市变更阵营（从 0 重新计数，供再占领）。
 
-**生产（暂定）**：MVP 采用**自动生产**——每座己方城市每 **12 s** 生产 1 个轻型单位，出生在城市旁；当该城补给容量已满时暂停生产。玩家配置生产（队列、兵种选择）不在 MVP 范围，作为后续扩展。原型中的「钢材/能源/情报」资源面板与快速部署按钮为占位设计，MVP 移除（无经济系统）。
+**生产（暂定）**：MVP 采用**自动生产**——每座己方城市每 **12 s** 生产 1 个轻型单位，出生在城市旁；当该城补给容量已满，或**城市被围攻（敌方单位进入占领半径）时暂停生产**，保证攻城战可决出胜负。玩家配置生产（队列、兵种选择）不在 MVP 范围，作为后续扩展。原型中的「钢材/能源/情报」资源面板与快速部署按钮为占位设计，MVP 移除（无经济系统）。
 
 **恢复（暂定）**：己方城市 120 px 内的己方单位，生命 +3 /s，士气 +5 /s（与 §6 城市士气修正叠加）。
 
@@ -125,13 +125,15 @@
 1. 开局：全部单位驻守城市 B。
 2. 第 60 s：东侧出生点增援 2 个轻型单位，向城市 B 移动。
 3. 触发：蓝军任一单位越过地图中线（x = 640）时，守军向最近的蓝军单位进攻。
-4. 目标：占领全部蓝军城市后停止脚本。
+4. 蓝军覆灭后，红军向蓝军城市 A 进军并占领（保证失败条件可达）。
+
+**平衡验证**：headless 实测（模拟合理玩家：每 5 s 全军 attackMove 信标）蓝军 45 s 获胜，结束时蓝军存活 5（含城市生产增援）；兵力配比无需额外调整。
 
 **任务链**（右侧任务面板逐条点亮）：
 
 1. 「建立前线基地」— 教学：框选全部单位（开局自动完成）。
 2. 「向桥头推进」— 教学：指挥所选单位移动至桥头区域（完成一次移动指令即通过）。
-3. 「清除信标周边敌军」— 消灭城市 B 周边敌军。
+3. 「清除信标周边敌军」— 信标（城市 B）周边 200 px 内无红军。
 4. 「占领北方信标」— 城市 B 占领进度达到 100%（即完成占领）。
 
 **胜负条件**：
@@ -179,7 +181,7 @@
 | units.light：hp / damage / attackInterval / range / speed / radius / vision | 60 / 8 / 1.0 s / 40 / 90 / 10 / 140 |
 | units.heavy：hp / damage / attackInterval / range / speed / radius / vision | 120 / 16 / 1.6 s / 55 / 55 / 14 / 160 |
 | morale.initial / min / max | 80 / 0 / 100 |
-| morale.perSecond：friendlyNearby / cityNearby / supplied / unsupplied / inCombat | +2 / +5 / +1 / −2 / −3（/s） |
+| morale.perSecond：friendlyNearby / cityNearby / supplied / unsupplied / inCombat | +2 / +5 / +1 / −2 / −1（/s） |
 | morale.ranges：friendly / city / allyDeath | 60 / 120 / 100（px） |
 | morale.onAllyDeath | −10 |
 | morale.thresholds：weakenedBelow / shakenBelow / routAt | 60 / 30 / 0 |
@@ -213,7 +215,7 @@
 |---|---|
 | tutorial.map：width / height / midlineX | 1280 / 720 / 640 |
 | tutorial.forces：blue / red | 3 轻 + 1 重 / 2 轻 + 2 重 |
-| tutorial.garrisonRadius | 80 |
+| tutorial.garrisonRadius / clearRadius | 80 / 200 |
 | tutorial.reinforcement：atSecond / count / unitType | 60 s / 2 / light |
 
 ### 性能预算

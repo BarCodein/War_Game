@@ -39,6 +39,8 @@ export class GameScene extends Phaser.Scene {
           moveTo: { x: 1080, y: 160 },
         },
         trigger: { onEnemyCrossX: values.tutorial.map.midlineX, retargetInterval: 5 },
+        // 蓝军覆灭后红军向蓝城进军（失败条件可达，gdd.md §10）
+        fallbackTarget: world.cities.find(city => city.faction === 'blue'),
       },
     });
 

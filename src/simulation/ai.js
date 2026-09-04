@@ -58,13 +58,15 @@ export class ScriptedAI {
     }
   }
 
-  // 全军向各自最近的敌军位置 attackMove
+  // 全军向各自最近的敌军位置 attackMove；无敌人时向 fallbackTarget
+//（如敌方城市）进军——保证失败条件可达（gdd.md §10 胜负对称）。
   retargetNearestEnemy() {
     for (const unit of this.world.units) {
       if (unit.state === 'dead' || unit.faction !== this.faction) continue;
       const enemy = this.nearestEnemy(unit);
-      if (!enemy) continue;
-      this.world.issueCommands([unit.id], attackMoveCommand({ x: enemy.x, y: enemy.y }));
+      const target = enemy ? { x: enemy.x, y: enemy.y } : this.script.fallbackTarget;
+      if (!target) continue;
+      this.world.issueCommands([unit.id], attackMoveCommand(target));
     }
   }
 
