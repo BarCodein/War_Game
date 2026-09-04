@@ -5,8 +5,10 @@ export const GAME_HEIGHT = 720;
 
 export async function waitForGame(page) {
   await page.goto('/');
+  await page.evaluate(() => document.fonts.ready); // 等字体就绪，避免布局漂移导致画布坐标失效
   await expect(page.locator('#battlefield canvas')).toBeVisible();
-  await page.waitForFunction(() => window.__gameReady === true);
+  // 并行负载下软件渲染启动较慢，给足等待时间
+  await page.waitForFunction(() => window.__gameReady === true, null, { timeout: 60000 });
 }
 
 // 世界坐标 → 页面坐标点击（补偿 Scale.FIT 缩放与画布偏移）
