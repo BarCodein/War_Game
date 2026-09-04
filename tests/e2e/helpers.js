@@ -4,7 +4,9 @@ export const GAME_WIDTH = 1280;
 export const GAME_HEIGHT = 720;
 
 export async function waitForGame(page) {
-  await page.goto('/');
+  // waitUntil: domcontentloaded——外部字体等慢资源偶发拖住 load 事件（firefox），
+  // 游戏就绪由下方的 canvas / __gameReady 断言保证。
+  await page.goto('/', { waitUntil: 'domcontentloaded' });
   await page.evaluate(() => document.fonts.ready); // 等字体就绪，避免布局漂移导致画布坐标失效
   await expect(page.locator('#battlefield canvas')).toBeVisible();
   // 并行负载下软件渲染启动较慢，给足等待时间
