@@ -116,5 +116,18 @@ export class GameScene extends Phaser.Scene {
         this.overlayGraphics.strokePath();
       }
     }
+    // 拖拽（move）指令下达后，未走完的轨迹持续显示，直到单位到达终点
+    // （bugfix：释放鼠标后轨迹不消失）。已走过/到达/溃逃/阵亡的部分随世界状态自然消失。
+    this.overlayGraphics.lineStyle(3, 0x66746e, 0.5);
+    for (const unit of this.world.units) {
+      if (unit.faction !== 'blue' || unit.state !== 'moving') continue;
+      if (unit.command?.type !== 'move' || unit.routeIndex >= unit.route.length) continue;
+      this.overlayGraphics.beginPath();
+      this.overlayGraphics.moveTo(unit.x, unit.y);
+      for (let i = unit.routeIndex; i < unit.route.length; i += 1) {
+        this.overlayGraphics.lineTo(unit.route[i].x, unit.route[i].y);
+      }
+      this.overlayGraphics.strokePath();
+    }
   }
 }

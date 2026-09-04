@@ -86,4 +86,29 @@ test.describe('指挥输入', () => {
     }, unit.id);
     expect(commandType).toBe('move');
   });
+
+  test('释放轨迹后未走完的行军命令保留，且移动鼠标不再出现框选矩形', async ({ page }) => {
+    await waitForGame(page);
+    const unit = await firstBlueUnit(page);
+    await clickWorld(page, unit.x, unit.y);
+    const canvas = page.locator('#battlefield canvas');
+    const box = await canvas.boundingBox();
+    const toPage = (x, y) => ({ x: box.x + x / 1280 * box.width, y: box.y + y / 720 * box.height });
+    const start = toPage(unit.x, unit.y);
+    await page.mouse.move(start.x, start.y);
+    await page.mouse.down();
+    await page.mouse.move(toPage(unit.x + 200, unit.y).x, toPage(unit.x + 200, unit.y).y, { steps: 8 });
+    await page.mouse.up();
+    // 命令下达后立即读取：行军命令与剩余路径点仍在（单位尚未到达）
+    const afterRelease = await page.evaluate((id) => {
+      const u = window.__game.world.units.find(item => item.id === id);
+      return { type: u?.command?.type ?? null, remaining: u?.route?.length - u?.routeIndex ?? 0 };
+    }, unit.id);
+    expect(afterRelease.type).toBe('move');
+    expect(afterRelease.remaining).toBeGreaterThan(0);
+    // 释放后移动鼠标（不按任何键）：不应再出现框选矩形（修复 dragging 悬挂）
+    await page.mouse.move(toPage(600, 300).x, toPage(600, 300).y, { steps: 3 });
+    const rect = await page.evaluate(() => window.__game.selection.getDragRect());
+    expect(rect).toBeNull();
+  });
 });

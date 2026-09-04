@@ -39,6 +39,57 @@ test.describe('单位选择', () => {
     await expect(page.locator('#selectionReadout')).toContainText('个单位已选择');
   });
 
+  test('点击单位不触发框选：按住不放（未拖动）时不绘制选框', async ({ page }) => {
+    await waitForGame(page);
+    const unit = await firstBlueUnit(page);
+    await page.evaluate((id) => { // 把其余蓝军挪远，保证点击只命中目标单位
+      for (const u of window.__game.world.units) {
+        if (u.faction === 'blue' && u.id !== id && u.state !== 'dead') {
+          u.x = 900;
+          u.y = 100;
+        }
+      }
+    }, unit.id);
+    const canvas = page.locator('#battlefield canvas');
+    const box = await canvas.boundingBox();
+    const px = box.x + (unit.x / 1280) * box.width;
+    const py = box.y + (unit.y / 720) * box.height;
+    await page.mouse.move(px, py);
+    await page.mouse.down();
+    const rect = await page.evaluate(() => window.__game.selection.getDragRect());
+    expect(rect).toBeNull(); // 简单点击不应出现框选矩形
+    await page.mouse.up();
+    await expect(page.locator('#selectionReadout')).toHaveText('1 个单位已选择');
+  });
+
+  test('在单位上按下并小幅拖动仍是点击单选，不进入框选', async ({ page }) => {
+    await waitForGame(page);
+    const unit = await firstBlueUnit(page);
+    await page.evaluate((id) => { // 挪走其余蓝军，使拖动选框即使发生也只会框到单个单位
+      for (const u of window.__game.world.units) {
+        if (u.faction === 'blue' && u.id !== id && u.state !== 'dead') {
+          u.x = 900;
+          u.y = 100;
+        }
+      }
+    }, unit.id);
+    const canvas = page.locator('#battlefield canvas');
+    const box = await canvas.boundingBox();
+    const start = { x: box.x + (unit.x / 1280) * box.width, y: box.y + (unit.y / 720) * box.height };
+    await page.mouse.move(start.x, start.y);
+    await page.mouse.down();
+    await page.mouse.move(start.x + (30 / 1280) * box.width, start.y, { steps: 3 });
+    // 拖动途中也不应进入框选模式（起点命中单位 → 点击语义）
+    const midRect = await page.evaluate(() => window.__game.selection.getDragRect());
+    expect(midRect).toBeNull();
+    await page.mouse.up();
+    const state = await page.evaluate((id) => {
+      const s = window.__game.selection;
+      return { size: s.selected.size, has: s.selected.has(id) };
+    }, unit.id);
+    expect(state).toEqual({ size: 1, has: true });
+  });
+
   test('Esc 取消选择', async ({ page }) => {
     await waitForGame(page);
     const unit = await firstBlueUnit(page);

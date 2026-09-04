@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { advance, makePlainMap, makeWorld } from './helpers.js';
+import { moveCommand } from '../../src/simulation/commands.js';
 import { values } from '../../src/config/index.js';
 
 function combatWorld({ forestForRed = false } = {}) {
@@ -57,5 +58,19 @@ describe('combat', () => {
     advance(world, 1 / 60);
     expect(blue.hp).toBe(blueHp); // 无反击
     expect(world.history.some(e => e.type === 'unitDied' && e.unitId === red.id)).toBe(true);
+  });
+
+  it('交战中的单位收到 move（行军）命令后可脱离战斗后撤', () => {
+    const { world, blue, red } = combatWorld();
+    advance(world, 1 / 60);
+    expect(blue.state).toBe('combat'); // 双方已进入交战
+    // 下达行军命令向左侧后撤（与红军拉开距离）
+    world.issueCommands([blue.id], moveCommand([{ x: 40, y: 100 }]));
+    expect(blue.state).toBe('moving');
+    advance(world, 2);
+    expect(blue.x).toBeLessThan(60); // 确实移动到目标附近，未被交战锁定原地
+    expect(blue.state).not.toBe('combat');
+    // 脱离攻击距离后红军失去自动交战目标
+    expect(red.state).not.toBe('combat');
   });
 });
