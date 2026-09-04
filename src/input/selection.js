@@ -66,12 +66,13 @@ export function createSelection(scene, world) {
     const p = { x: pointer.worldX, y: pointer.worldY };
     const boxDragged = dragging;
     const boxStart = dragStart ?? pressPoint;
+    const pressTarget = pressedUnit; // 先保存按下命中的单位，resetPress 会清空它
     resetPress();
 
     if (!pointer.event.shiftKey) selected.clear();
     if (!boxDragged) {
       // 点击单选：优先按下位置命中的单位，其次抬起位置附近的单位
-      const target = pressedUnit ?? unitAt(p);
+      const target = pressTarget ?? unitAt(p);
       if (target) selected.add(target.id);
       notify();
       return;
