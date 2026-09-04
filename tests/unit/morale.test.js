@@ -31,12 +31,12 @@ describe('morale', () => {
     expect(b.morale).toBeCloseTo(80 + 2 + 1);
   });
 
-  it('交战中 −3/s', () => {
+  it('交战中 −1/s', () => {
     const world = makeWorld(cityMap());
     const blue = world.spawnUnit('blue', 'light', 500, 300);
     world.spawnUnit('red', 'light', 520, 300); // 相距 20 ≤ 40 交战
     advance(world, 1);
-    expect(blue.morale).toBeCloseTo(80 - 3 + 1); // 交战 + 补给
+    expect(blue.morale).toBeCloseTo(80 - 1 + 1); // 交战 −1 + 补给 +1
   });
 
   it('附近友军阵亡瞬间 −10', () => {

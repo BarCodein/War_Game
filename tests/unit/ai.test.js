@@ -56,4 +56,22 @@ describe('scripted ai', () => {
     const redUnits = world.units.filter(u => u.faction === 'red');
     expect(redUnits.every(u => u.command === null && u.state === 'hold')).toBe(true);
   });
+
+  it('敌军覆灭后向 fallbackTarget 进军（失败条件可达）', () => {
+    const world = aiWorld();
+    const ai = new ScriptedAI(world, {
+      faction: 'red',
+      script: { ...script(), fallbackTarget: { x: 100, y: 600 } },
+    });
+    const blue = world.units.find(u => u.faction === 'blue');
+    blue.x = 700; // 越过中线触发进攻
+    runSimulation(world, [ai], 0.1);
+    for (const unit of world.units.filter(u => u.faction === 'blue' && u.state !== 'dead')) {
+      world.killUnit(unit, 'combat');
+    }
+    runSimulation(world, [ai], 5.2); // 下一个重选目标周期：无敌人 → fallback
+    const redUnits = world.units.filter(u => u.faction === 'red');
+    expect(redUnits.every(u => u.command?.type === 'attackMove')).toBe(true);
+    expect(redUnits[0].command.target).toEqual({ x: 100, y: 600 });
+  });
 });

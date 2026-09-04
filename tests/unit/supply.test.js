@@ -39,6 +39,14 @@ describe('supply', () => {
     expect(full.units.filter(u => u.faction === 'blue').length).toBe(5); // 满补给，生产暂停
   });
 
+  it('被敌方单位围攻时暂停生产', () => {
+    const world = makeWorld(blueCityMap());
+    world.spawnUnit('blue', 'light', 300, 600); // 守方不在地图半径内，避免交战
+    world.spawnUnit('red', 'light', 150, 600);   // 距蓝城 50 ≤ 占领半径 60
+    advance(world, 13);
+    expect(world.units.filter(u => u.faction === 'blue').length).toBe(1); // 无产出
+  });
+
   it('己方城市附近恢复生命 +3/s（上限封顶）', () => {
     const world = makeWorld(blueCityMap());
     const unit = world.spawnUnit('blue', 'light', 150, 600); // 距城 50 ≤ 120
