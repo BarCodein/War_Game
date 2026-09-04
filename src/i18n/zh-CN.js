@@ -59,6 +59,12 @@ export default {
   'toast.paused': '战场已暂停。',
   'toast.resumed': '战场继续推进。',
   'toast.victory': '作战结束。',
+  'toast.obj2': '任务完成：已学会指挥部队。',
+  'toast.obj3': '任务完成：信标周边敌军已肃清。',
+  'toast.obj4': '任务完成：北方信标已占领。',
+  'event.obj2': '已掌握部队指挥',
+  'event.obj3': '信标周边敌军已肃清',
+  'event.obj4': '北方信标已占领',
   // 胜利结算
   'victory.title.win': '胜利',
   'victory.title.lose': '失败',

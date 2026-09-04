@@ -27,6 +27,7 @@ export function createHud(scene, world, controller, selection, orders) {
   const status = {
     obj2Done: false,
     obj3Done: false,
+    obj4Done: false,
     victoryShown: false,
     lastEventIndex: 0,
     accumulator: 0,
@@ -95,6 +96,10 @@ export function createHud(scene, world, controller, selection, orders) {
   // 城市状态（我方城市 c1 + 敌方信标 c2 的占领进度）
   function renderCityCard() {
     const blueCity = world.cities.find(city => city.faction === 'blue');
+    if (!blueCity) { // 蓝军失去全部城市（失败结算后仍会渲染 HUD）
+      els.cityCard.innerHTML = '';
+      return;
+    }
     const redCity = world.cities.find(city => city.faction === 'red');
     const supplied = world.units.filter(unit => unit.state !== 'dead' && unit.faction === 'blue' && unit.supplied).length;
     const productionLeft = Math.max(0, values.cities.production.interval - blueCity.productionTimer);
@@ -108,24 +113,44 @@ export function createHud(scene, world, controller, selection, orders) {
       <div class="status-row"><span>${t('hud.city.capture')} · 己方基地</span><b>${blueCity.captureProgress.toFixed(0)}%</b></div>` : ''}`;
   }
 
-  // 任务进度（gdd.md §10 任务链）
+  // 任务进度（gdd.md §10 任务链）：目标 2 = 完成一次移动指令；目标完成时提示并写入通讯
   function renderMission() {
-    const redAlive = world.units.filter(unit => unit.state !== 'dead' && unit.faction === 'red').length;
-    if (world.units.some(unit => unit.state !== 'dead' && unit.faction === 'blue' && unit.x >= 560)) status.obj2Done = true;
-    if (redAlive === 0) status.obj3Done = true;
+    if (!status.obj2Done && world.units.some(unit =>
+      unit.state !== 'dead' && unit.faction === 'blue' && unit.command !== null)) {
+      status.obj2Done = true;
+      objectiveCompleted('toast.obj2', 'event.obj2');
+    }
+    // 目标 3：信标（c2）周边 clearRadius 内无红军（gdd.md §10）
+    const beacon = world.cities.find(city => city.id === 'c2');
+    if (!status.obj3Done && beacon && !world.units.some(unit =>
+      unit.state !== 'dead' && unit.faction === 'red'
+      && Math.hypot(unit.x - beacon.x, unit.y - beacon.y) <= values.tutorial.clearRadius)) {
+      status.obj3Done = true;
+      objectiveCompleted('toast.obj3', 'event.obj3');
+    }
     const redCity = world.cities.find(city => city.faction === 'red');
-    const obj4Done = !redCity;
+    if (!status.obj4Done && !redCity) {
+      status.obj4Done = true;
+      objectiveCompleted('toast.obj4', 'event.obj4');
+    }
     const steps = [
       { done: true, key: 'hud.mission.obj1' },
       { done: status.obj2Done, key: 'hud.mission.obj2' },
       { done: status.obj3Done, key: 'hud.mission.obj3' },
-      { done: obj4Done, key: 'hud.mission.obj4' },
+      { done: status.obj4Done, key: 'hud.mission.obj4' },
     ];
     els.missionList.innerHTML = steps.map(step => `
       <div class="sub-objective ${step.done ? 'done' : ''}"><span>${step.done ? '✓' : '○'}</span>${t(step.key)}</div>`).join('');
     const percent = redCity ? Math.min(100, redCity.captureProgress) : 100;
     els.missionPercent.textContent = `${Math.round(percent)}%`;
     els.missionProgress.style.width = `${percent}%`;
+  }
+
+  function objectiveCompleted(toastKey, eventKey) {
+    showToast(t(toastKey));
+    els.eventLog.insertAdjacentHTML('afterbegin', `
+      <p><time>${formatTime(world.time)}</time><span class="event-tag OK">OK</span>${t(eventKey)}</p>`);
+    while (els.eventLog.children.length > 8) els.eventLog.lastElementChild.remove();
   }
 
   // 事件日志（world.history 增量）
