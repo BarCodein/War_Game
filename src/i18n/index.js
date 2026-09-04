@@ -8,11 +8,15 @@ export const currentLocale = 'zh-CN';
 
 const active = dictionaries[currentLocale];
 
-// 查表取文案；缺键在开发模式报 warning 并返回键名，避免页面空白。
-export function t(key) {
+// 查表取文案，支持 {name} 参数插值；缺键在开发模式报 warning 并返回键名。
+export function t(key, params = {}) {
   if (!(key in active)) {
     if (import.meta.env.DEV) console.warn(`[i18n] missing key: ${key}`);
     return key;
   }
-  return active[key];
+  let text = active[key];
+  for (const [name, value] of Object.entries(params)) {
+    text = text.replaceAll(`{${name}}`, String(value));
+  }
+  return text;
 }

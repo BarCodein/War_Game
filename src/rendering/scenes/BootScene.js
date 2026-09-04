@@ -1,13 +1,14 @@
 import Phaser from 'phaser';
 
-// 启动场景：后续负责加载资源 → 解析地图 JSON → 构造 world → 进入 GameScene
-// （docs/architecture.md §10）。阶段 1 暂无外部资源，直接切换。
+// 启动场景（architecture.md §10）：加载资源 → 获取地图 JSON → 进入 GameScene。
 export class BootScene extends Phaser.Scene {
   constructor() {
     super({ key: 'Boot' });
   }
 
-  create() {
-    this.scene.start('Game');
+  async create() {
+    const response = await fetch('/assets/maps/fracture-canyon.json');
+    const mapData = await response.json();
+    this.scene.start('Game', { mapData });
   }
 }

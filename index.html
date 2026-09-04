@@ -7,7 +7,66 @@
   <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
-  <div id="game"></div>
+  <main class="app-shell">
+    <header class="topbar">
+      <div class="brand"><span class="brand-mark">+</span><div><strong>WAR OF DOTS</strong><small>FRONTLINE COMMAND</small></div></div>
+      <div class="mission-name"><span class="eyebrow">OPERATION 07</span><span>断裂峡谷 · Dawn Sector</span></div>
+      <div class="top-actions">
+        <div class="speed-controls">
+          <button class="icon-button" data-speed="0.5" title="0.5×">½×</button>
+          <button class="icon-button active" data-speed="1" title="1×">1×</button>
+          <button class="icon-button" data-speed="2" title="2×">2×</button>
+        </div>
+        <button class="icon-button" id="pauseButton" title="暂停游戏">Ⅱ</button>
+      </div>
+    </header>
+    <div class="game-layout">
+      <aside class="left-panel panel">
+        <div class="panel-heading"><span>我的编队</span><em id="unitCount">00 UNITS</em></div>
+        <div id="unitList" class="unit-list"></div>
+        <div class="panel-heading tech-title"><span>城市状态</span><em>CITY</em></div>
+        <div class="status-card" id="cityCard"></div>
+      </aside>
+      <section class="battlefield-wrap">
+        <div class="battlefield-head">
+          <div><span class="eyebrow">TACTICAL VIEW / 断裂峡谷</span><h1>前线态势</h1></div>
+          <div class="battlefield-tools"><span class="selection-readout" id="selectionReadout">未选择单位</span><span class="timer-readout" id="timer">00:00</span></div>
+        </div>
+        <div class="canvas-frame">
+          <div id="battlefield"></div>
+          <div class="canvas-tip">左键选择 · Shift 增减选 · 从已选单位拖动绘制轨迹 · 右键移动 / 攻击</div>
+          <div class="toast" id="toast"></div>
+        </div>
+        <div class="battlefield-foot"><span><i class="legend-dot friendly"></i>己方</span><span><i class="legend-dot hostile"></i>敌方</span><span><i class="legend-dot city-dot"></i>城市</span><span class="coords" id="coords">GRID 00 : 00</span></div>
+      </section>
+      <aside class="right-panel">
+        <div class="panel mission-panel">
+          <div class="panel-heading"><span>任务进度</span><em>PRIMARY</em></div>
+          <div class="mission-title"><span class="mission-number">01</span><div><b>夺取北方信标</b><small>控制并守住高地信标</small></div><strong id="missionPercent">0%</strong></div>
+          <div class="progress mission-progress"><i id="missionProgress" style="width:0%"></i></div>
+          <div id="missionList"></div>
+        </div>
+        <div class="panel event-panel">
+          <div class="panel-heading"><span>战场通讯</span><em>LIVE FEED</em></div>
+          <div id="eventLog" class="event-log"><p><time>09:41</time><span class="event-tag blue">SYS</span>通讯已接通，等待战报。</p></div>
+        </div>
+        <div class="panel controls-panel">
+          <div class="panel-heading"><span>指令</span><em>HOTKEYS</em></div>
+          <div class="key-row"><kbd>左键拖动</kbd><span>从已选单位绘制行军轨迹</span></div>
+          <div class="key-row"><kbd>空格</kbd><span>暂停 / 继续</span></div>
+          <div class="key-row"><kbd>Esc</kbd><span>取消选择</span></div>
+          <div class="key-row"><kbd>1/2/3</kbd><span>切换游戏速度</span></div>
+        </div>
+      </aside>
+    </div>
+  </main>
+  <div class="victory-overlay" id="victoryOverlay">
+    <div class="victory-card">
+      <h2 id="victoryTitle">胜利</h2>
+      <p id="victoryDetail"></p>
+      <button id="restartButton">重新开始</button>
+    </div>
+  </div>
   <script type="module" src="/src/main.js"></script>
 </body>
 </html>
