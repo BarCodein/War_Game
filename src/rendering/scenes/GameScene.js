@@ -42,8 +42,8 @@ export class GameScene extends Phaser.Scene {
             atTime: values.tutorial.reinforcement.atSecond,
             count: values.tutorial.reinforcement.count,
             unitType: values.tutorial.reinforcement.unitType,
-            spawn: { x: 1230, y: 400 },
-            moveTo: { x: 1080, y: 160 },
+            spawn: { ...values.tutorial.reinforcement.spawn },
+            moveTo: { ...values.tutorial.reinforcement.moveTo },
           },
           trigger: { onEnemyCrossX: values.tutorial.map.midlineX, retargetInterval: 5 },
           // 蓝军覆灭后红军向蓝城进军（失败条件可达，gdd.md §10）
