@@ -1,2 +1,0 @@
-# This project has no Python runtime dependencies.
-# JavaScript dependencies are declared in package.json and installed with npm.
