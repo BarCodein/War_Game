@@ -2,7 +2,7 @@ import { isSpotted } from '../simulation/systems/fog.js';
 import { t } from '../i18n/index.js';
 
 const SIDE_COLORS = {
-  blue: { fill: 0x1911df, outline: 0x090b78 },
+  blue: { fill: 0x2f6bff, outline: 0x090b78 },
   red: { fill: 0xf01818, outline: 0x76100e },
 };
 
@@ -43,7 +43,7 @@ export function createUnitRenderer(scene, world, selection) {
     const colors = SIDE_COLORS[unit.faction];
     const { x, y, radius } = unit;
     const isSelected = selection.isSelected(unit.id);
-    // 交战：去掉光圈特效，改为沿「自身→敌人」连线方向的小幅度高频抖动（仅渲染层，不影响模拟坐标）
+    // 交战：去掉光圈特效，改为沿「自身→敌人」连线方向的低频率小幅度抖动（仅渲染层，不影响模拟坐标）
     let dx = x;
     let dy = y;
     if (unit.state === 'combat') {
@@ -52,7 +52,7 @@ export function createUnitRenderer(scene, world, selection) {
         const dirX = enemy.x - unit.x;
         const dirY = enemy.y - unit.y;
         const len = Math.hypot(dirX, dirY) || 1;
-        const offset = Math.sin(scene.time.now * 0.08 + unit.id) * 0.9; // 减小幅度、提高频率
+        const offset = Math.sin(scene.time.now * 0.06 + unit.id) * 1; // 降低频率、保持小幅度
         dx += (dirX / len) * offset;
         dy += (dirY / len) * offset;
       }
@@ -61,14 +61,14 @@ export function createUnitRenderer(scene, world, selection) {
       graphics.lineStyle(3, 0xffffff, Math.sin(scene.time.now / 80) > 0 ? 0.9 : 0.25);
       graphics.strokeCircle(dx, dy, radius + 8);
     }
-    // 选中特效：去掉黄色亮圈，改为单位变深色
-    const fill = isSelected ? darken(colors.fill, 0.55) : colors.fill;
+    // 选中特效：去掉黄色亮圈，改为单位变深色（加深 + 去饱和，增强选中/未选中对比度）
+    const fill = isSelected ? dim(colors.fill) : colors.fill;
     graphics.fillStyle(fill, 1);
     graphics.lineStyle(2, colors.outline, 1);
     graphics.fillCircle(dx, dy, radius);
     graphics.strokeCircle(dx, dy, radius);
-    drawCracks(unit, dx, dy); // 血量<50% 轻破碎、<20% 重破碎（对所有可见单位）
-    drawBars(unit, dx, dy); // 仅己方显示血条/士气条（敌方隐藏）
+    drawCracks(unit, dx, dy); // 血量<50% 轻破碎、<20% 重破碎（跟随单位震动）
+    drawBars(unit, x, y); // 仅己方显示血条/士气条；固定于单位真实位置，不跟随震动
   }
 
   // 当前交战目标（用于抖动方向的连线）；无目标时兜底取接触范围内最近敌军
@@ -90,12 +90,18 @@ export function createUnitRenderer(scene, world, selection) {
     return nearest;
   }
 
-  // 颜色加深（选中态）
-  function darken(color, factor) {
-    const r = Math.floor(((color >> 16) & 0xff) * factor);
-    const g = Math.floor(((color >> 8) & 0xff) * factor);
-    const b = Math.floor((color & 0xff) * factor);
-    return ((r << 16) | (g << 8) | b) >>> 0;
+  // 选中态加深：提黑 + 向灰色靠拢（去饱和），使选中与未选中对比明显
+  function dim(color) {
+    const r = (color >> 16) & 0xff;
+    const g = (color >> 8) & 0xff;
+    const b = color & 0xff;
+    const gray = (r + g + b) / 3;
+    const mix = 0.45; // 向灰靠拢程度
+    const factor = 0.32; // 提黑
+    const dr = Math.floor(((r * (1 - mix) + gray * mix) * factor));
+    const dg = Math.floor(((g * (1 - mix) + gray * mix) * factor));
+    const db = Math.floor(((b * (1 - mix) + gray * mix) * factor));
+    return ((dr << 16) | (dg << 8) | db) >>> 0;
   }
 
   function drawBars(unit, cx, cy) {
