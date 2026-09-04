@@ -1,6 +1,8 @@
 import { values } from '../config/index.js';
 
-// 地形渲染（静态）：四类地形按逻辑网格着色（gdd.md §5），仅创建时绘制一次。
+// 地形渲染（静态）：四类地形按逻辑网格着色（gdd.md §5）。
+// 烘焙为纹理一次后以单个 Image 显示，避免每帧重放数千矩形的 Graphics 命令
+// （性能基线见 acceptance G3；阶段 6 优化）。
 const CELL_COLORS = {
   0: 0xa7c942, // 平原
   1: 0x536426, // 森林
@@ -9,8 +11,8 @@ const CELL_COLORS = {
 };
 
 export function createTerrainRenderer(scene, world) {
-  const graphics = scene.add.graphics().setDepth(0);
   const terrain = world.terrain;
+  const graphics = scene.make.graphics({ x: 0, y: 0, add: false });
   for (let cy = 0; cy < terrain.rows; cy += 1) {
     for (let cx = 0; cx < terrain.cols; cx += 1) {
       const code = terrain.cells[terrain.cellIndex(cx, cy)];
@@ -28,5 +30,8 @@ export function createTerrainRenderer(scene, world) {
       graphics.lineBetween(x, y + terrain.cellSize / 2, x + terrain.cellSize, y + terrain.cellSize / 2);
     }
   }
-  return { graphics };
+  graphics.generateTexture('terrain-static', terrain.cols * terrain.cellSize, terrain.rows * terrain.cellSize);
+  graphics.destroy();
+  const image = scene.add.image(0, 0, 'terrain-static').setOrigin(0).setDepth(0);
+  return { image };
 }

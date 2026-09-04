@@ -35,27 +35,35 @@ export class GameScene extends Phaser.Scene {
 
   init(data) {
     this.mapData = data.mapData;
+    this.fromEditor = data.fromEditor === true;
   }
 
   create() {
+    document.body.classList.remove('editor-mode');
     const world = new World(this.mapData);
     this.world = world;
-    this.spawnTutorialForces();
-    this.ai = new ScriptedAI(world, {
-      faction: 'red',
-      script: {
-        reinforcement: {
-          atTime: values.tutorial.reinforcement.atSecond,
-          count: values.tutorial.reinforcement.count,
-          unitType: values.tutorial.reinforcement.unitType,
-          spawn: { x: 1230, y: 400 },
-          moveTo: { x: 1080, y: 160 },
+    if (this.fromEditor) {
+      // 编辑器试玩：仅按地图出生点部署兵力，无脚本敌军（REQUIREMENTS.md §4.6）
+      world.spawnInitial();
+      this.ai = null;
+    } else {
+      this.spawnTutorialForces();
+      this.ai = new ScriptedAI(world, {
+        faction: 'red',
+        script: {
+          reinforcement: {
+            atTime: values.tutorial.reinforcement.atSecond,
+            count: values.tutorial.reinforcement.count,
+            unitType: values.tutorial.reinforcement.unitType,
+            spawn: { ...values.tutorial.reinforcement.spawn },
+            moveTo: { ...values.tutorial.reinforcement.moveTo },
+          },
+          trigger: { onEnemyCrossX: values.tutorial.map.midlineX, retargetInterval: 5 },
+          // 蓝军覆灭后红军向蓝城进军（失败条件可达，gdd.md §10）
+          fallbackTarget: world.cities.find(city => city.faction === 'blue'),
         },
-        trigger: { onEnemyCrossX: values.tutorial.map.midlineX, retargetInterval: 5 },
-        // 蓝军覆灭后红军向蓝城进军（失败条件可达，gdd.md §10）
-        fallbackTarget: world.cities.find(city => city.faction === 'blue'),
-      },
-    });
+      });
+    }
 
     this.controller = createGameController();
     this.loop = createLoop(world);
@@ -75,9 +83,12 @@ export class GameScene extends Phaser.Scene {
     // HUD（DOM）
     this.hud = createHud(this, world, this.controller, this.selection, this.orders);
 
-    // 开发环境暴露实例供 Playwright 断言（生产构建不包含）
+    // 开发环境暴露实例供 Playwright 断言（生产构建不包含）；场景关闭时清理，避免旧引用竞态
     if (import.meta.env.DEV) {
       window.__game = { world, scene: this, controller: this.controller, selection: this.selection };
+      this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+        delete window.__game;
+      });
     }
     window.__gameReady = true;
   }
@@ -99,7 +110,7 @@ export class GameScene extends Phaser.Scene {
     const dt = delta / 1000;
     if (!this.controller.paused && !this.world.winner) {
       this.loop.advance(dt, this.controller.speed);
-      this.ai.update(dt * this.controller.speed);
+      this.ai?.update(dt * this.controller.speed);
     }
     // 渲染（每帧，只读状态；暂停时保持静态画面）
     this.unitRenderer.draw();

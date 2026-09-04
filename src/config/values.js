@@ -94,7 +94,13 @@ export const values = {
     forces: { blue: { light: 3, heavy: 1 }, red: { light: 2, heavy: 2 } },
     garrisonRadius: 80,
     clearRadius: 200, // 目标 3「清除信标周边敌军」的判定半径
-    reinforcement: { atSecond: 60, count: 2, unitType: 'light' },
+    reinforcement: {
+      atSecond: 60,
+      count: 2,
+      unitType: 'light',
+      spawn: { x: 1230, y: 400 },   // 增援出生点（东侧）
+      moveTo: { x: 1080, y: 160 },  // 增援目标（信标）
+    },
   },
 };
 

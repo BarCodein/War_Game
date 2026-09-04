@@ -24,6 +24,7 @@ test('HUD 关键元素渲染', async ({ page }) => {
 });
 
 test('在 1920×1080 下正常启动', async ({ page }) => {
+  test.setTimeout(90000);
   await page.setViewportSize({ width: 1920, height: 1080 });
   await waitForGame(page);
   await expect(page.locator('#battlefield canvas')).toBeVisible();

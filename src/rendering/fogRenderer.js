@@ -1,10 +1,24 @@
 import { FOG_EXPLORED, FOG_UNEXPLORED, FOG_VISIBLE } from '../simulation/systems/fog.js';
 
 // 战争迷雾渲染（gdd.md §9）：按玩家阵营（blue）的三态网格叠加罩层；
-// 当前可见透明、已探索半暗、从未探索更暗。仅在网格变化时重绘（逐格比较）。
+// 当前可见透明、已探索半暗、从未探索更暗。仅在网格变化时重绘并重新烘焙纹理，
+// 平时以单个 Image 显示（阶段 6 性能优化）。
 export function createFogRenderer(scene, world) {
-  const graphics = scene.add.graphics().setDepth(1);
+  const terrain = world.terrain;
+  const width = terrain.cols * terrain.cellSize;
+  const height = terrain.rows * terrain.cellSize;
+  const graphics = scene.make.graphics({ x: 0, y: 0, add: false });
   let last = null;
+  let image = null;
+
+  function bake() {
+    graphics.generateTexture('fog-static', width, height);
+    if (!image) {
+      image = scene.add.image(0, 0, 'fog-static').setOrigin(0).setDepth(1);
+    } else {
+      image.setTexture('fog-static');
+    }
+  }
 
   function sync() {
     const grid = world.fog.blue;
@@ -20,7 +34,6 @@ export function createFogRenderer(scene, world) {
     }
     last = Uint8Array.from(grid);
     graphics.clear();
-    const terrain = world.terrain;
     for (let cy = 0; cy < terrain.rows; cy += 1) {
       for (let cx = 0; cx < terrain.cols; cx += 1) {
         const state = grid[terrain.cellIndex(cx, cy)];
@@ -29,6 +42,7 @@ export function createFogRenderer(scene, world) {
         graphics.fillRect(cx * terrain.cellSize, cy * terrain.cellSize, terrain.cellSize, terrain.cellSize);
       }
     }
+    bake();
   }
 
   return { sync };

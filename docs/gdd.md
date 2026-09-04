@@ -217,7 +217,7 @@
 | tutorial.map：width / height / midlineX | 1280 / 720 / 640 |
 | tutorial.forces：blue / red | 3 轻 + 1 重 / 2 轻 + 2 重 |
 | tutorial.garrisonRadius / clearRadius | 80 / 200 |
-| tutorial.reinforcement：atSecond / count / unitType | 60 s / 2 / light |
+| tutorial.reinforcement：atSecond / count / unitType / spawn / moveTo | 60 s / 2 / light / (1230, 400) / (1080, 160) |
 
 ### 性能预算
 

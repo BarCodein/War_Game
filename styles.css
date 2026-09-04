@@ -109,6 +109,24 @@ body { margin: 0; background: #e7efeb; color: var(--ink); font-family: 'Barlow C
 .victory-card button { border: 1px solid #46625f; background: #102a2b; color: #d6e7df; padding: 8px 24px; cursor: pointer; font: inherit; font-size: 14px; }
 .victory-card button:hover { background: #294746; }
 
+/* 地图编辑器 */
+.editor-toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; padding: 10px 34px; background: #102a2b; border-bottom: 1px solid #46625f; }
+.editor-group { display: flex; gap: 6px; align-items: center; }
+.editor-toolbar button, .editor-toolbar .editor-exit { border: 1px solid #46625f; background: transparent; color: #d6e7df; padding: 6px 12px; cursor: pointer; font: inherit; font-size: 13px; text-decoration: none; }
+.editor-toolbar button:hover, .editor-toolbar .editor-exit:hover { background: #294746; }
+.editor-status { margin-left: auto; font: 11px 'IBM Plex Mono', monospace; color: #93abab; }
+.editor-status.error { color: var(--red); }
+.editor-dialog { display: flex; gap: 8px; align-items: center; }
+.editor-dialog input { background: #f6f8f3; border: 1px solid #46625f; color: var(--ink); padding: 6px 10px; font: inherit; font-size: 13px; }
+.editor-dialog select { background: #f6f8f3; border: 1px solid #46625f; color: var(--ink); padding: 6px; font: inherit; }
+body.editor-mode .left-panel,
+body.editor-mode .right-panel,
+body.editor-mode .battlefield-head,
+body.editor-mode .battlefield-foot,
+body.editor-mode .speed-controls,
+body.editor-mode #pauseButton { display: none; }
+body.editor-mode .game-layout { grid-template-columns: 1fr; }
+
 /* 响应式 */
 @media (max-width: 1050px) {
   .game-layout { grid-template-columns: 200px minmax(450px, 1fr); padding: 18px; }
