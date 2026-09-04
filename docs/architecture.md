@@ -16,6 +16,8 @@ src/
   config/
     values.js                # 全部数值的唯一权威来源（gdd.md §12 数值总表为镜像）
     index.js                 # 聚合导出
+  editor/
+    editorStore.js           # 地图编辑器状态：纯数据操作，复用 map.js 校验
   i18n/
     index.js                 # t(key) 查表
     zh-CN.js                 # 中文文案（默认）
@@ -43,7 +45,8 @@ src/
     unitRenderer.js          # 单位/血条/士气条/选中圈/虚影
     terrainRenderer.js       # 地形与网格
     fogRenderer.js           # 迷雾三态罩层
-    hud.js                   # 侧栏/顶栏/toast（DOM 或 Phaser 容器，阶段 3 定）
+    hud.js                   # 侧栏/顶栏/toast（DOM）
+    editorToolbar.js         # 编辑器工具栏（DOM）：存储/导入导出/校验状态
   input/
     selection.js             # 左键单选/框选/Shift 增减选
     orders.js                # 右键移动/攻击移动/攻击、轨迹绘制 → 命令
@@ -143,7 +146,7 @@ world.issueCommands(unitIds, command)           // 唯一入口，附带校验
 
 - `BootScene`：加载资源 → 解析地图 JSON → 构造 world → 进入 `GameScene`。
 - `GameScene`：创建模拟层 + 输入层 + HUD，注册渲染循环；结算界面（胜利/失败）为场景内覆盖层。
-- `EditorScene`（阶段 5）：复用 map 模型与校验，一键试玩 = 用当前编辑地图构造 world 进入 `GameScene`，返回时回到编辑器。
+- `EditorScene`：复用 map 模型与校验，一键试玩 = 用当前编辑地图构造 world 进入 `GameScene`，返回时回到编辑器。入口为 `#editor` hash（BootScene 路由，hash 变化时重载页面）；编辑器地图试玩无脚本敌军，仅按出生点部署。
 
 ## 11. 测试策略
 

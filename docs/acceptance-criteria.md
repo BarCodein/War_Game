@@ -50,15 +50,15 @@
 
 ## F. 地图编辑器
 
-- [ ] F1 新建地图并设置名称、尺寸 — Playwright
-- [ ] F2 绘制与擦除地形 — Playwright
-- [ ] F3 放置、移动、删除城市、出生点、桥梁 — Playwright
-- [ ] F4 设置城市初始阵营 — Playwright
-- [ ] F5 校验基本可玩条件（双方出生点与城市）— Vitest
-- [ ] F6 localStorage 保存与载入 — Playwright
-- [ ] F7 文件 API 导入、导出 — Playwright
-- [ ] F8 从编辑器一键测试地图并安全返回 — Playwright
-- [ ] F9 编辑器与运行时共享同一地图模型 — 评审
+- [x] F1 新建地图并设置名称、尺寸 — Playwright
+- [x] F2 绘制与擦除地形 — Playwright
+- [x] F3 放置、移动、删除城市、出生点、桥梁 — Playwright
+- [x] F4 设置城市初始阵营 — Playwright
+- [x] F5 校验基本可玩条件（双方出生点与城市）— Vitest
+- [x] F6 localStorage 保存与载入 — Playwright
+- [x] F7 文件 API 导入、导出 — Playwright
+- [x] F8 从编辑器一键测试地图并安全返回 — Playwright
+- [x] F9 编辑器与运行时共享同一地图模型 — 评审
 - [x] F10 地图为版本化 JSON，读取时结构校验并具备迁移机制 — Vitest
 
 ## G. 数据、表现与性能
