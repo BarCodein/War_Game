@@ -7,7 +7,7 @@
 - [x] 阶段 0 产出：`docs/gdd.md`、`docs/architecture.md`、`docs/acceptance-criteria.md`、`src/config/values.js`
 - [ ] 阶段 0 出口：三份文档评审通过（团队确认后，REQUIREMENTS.md §8 各项由「暂定」改为「已确认」）
 - [x] 阶段 1 工程骨架
-- [ ] 阶段 2 纯模拟层
+- [x] 阶段 2 纯模拟层
 - [ ] 阶段 3 Phaser 渲染 + 输入
 - [ ] 阶段 4 教学战役 + 脚本敌军
 - [ ] 阶段 5 地图编辑器
