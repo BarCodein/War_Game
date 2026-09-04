@@ -12,6 +12,10 @@ export class BootScene extends Phaser.Scene {
       this.scene.start('Editor');
       return;
     }
+    if (window.location.hash === '#bench') {
+      this.scene.start('Bench');
+      return;
+    }
     const response = await fetch('/assets/maps/fracture-canyon.json');
     const mapData = await response.json();
     this.scene.start('Game', { mapData });

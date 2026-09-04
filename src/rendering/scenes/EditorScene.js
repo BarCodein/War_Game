@@ -41,7 +41,7 @@ export class EditorScene extends Phaser.Scene {
     const zoom = Math.min(1280 / this.store.mapData.size.width, 720 / this.store.mapData.size.height);
     this.cameras.main.setZoom(zoom);
 
-    this.terrainGraphics = this.add.graphics().setDepth(0);
+    this.terrainImage = null; // 地形烘焙纹理（drawTerrain 中生成）
     this.objectGraphics = this.add.graphics().setDepth(5);
     this.drawTerrain();
     this.drawObjects();
@@ -148,14 +148,22 @@ export class EditorScene extends Phaser.Scene {
   }
 
   drawTerrain() {
-    this.terrainGraphics.clear();
+    // 烘焙为纹理：画笔修改时重生成，平时以单个 Image 显示
     const terrain = this.terrain;
+    const graphics = this.make.graphics({ x: 0, y: 0, add: false });
     for (let cy = 0; cy < terrain.rows; cy += 1) {
       for (let cx = 0; cx < terrain.cols; cx += 1) {
         const code = terrain.cells[terrain.cellIndex(cx, cy)];
-        this.terrainGraphics.fillStyle(TERRAIN_COLORS[code] ?? TERRAIN_COLORS[0], 1);
-        this.terrainGraphics.fillRect(cx * terrain.cellSize, cy * terrain.cellSize, terrain.cellSize, terrain.cellSize);
+        graphics.fillStyle(TERRAIN_COLORS[code] ?? TERRAIN_COLORS[0], 1);
+        graphics.fillRect(cx * terrain.cellSize, cy * terrain.cellSize, terrain.cellSize, terrain.cellSize);
       }
+    }
+    graphics.generateTexture('editor-terrain', terrain.cols * terrain.cellSize, terrain.rows * terrain.cellSize);
+    graphics.destroy();
+    if (!this.terrainImage) {
+      this.terrainImage = this.add.image(0, 0, 'editor-terrain').setOrigin(0).setDepth(0);
+    } else {
+      this.terrainImage.setTexture('editor-terrain');
     }
   }
 
