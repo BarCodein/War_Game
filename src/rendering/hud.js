@@ -7,10 +7,12 @@ export function createHud(scene, world, controller, selection, orders) {
   const els = {
     pauseButton: document.querySelector('#pauseButton'),
     speedButtons: document.querySelectorAll('[data-speed]'),
+    exitPlaytest: document.querySelector('#exitPlaytest'),
     unitList: document.querySelector('#unitList'),
     unitCount: document.querySelector('#unitCount'),
     cityCard: document.querySelector('#cityCard'),
     selectionReadout: document.querySelector('#selectionReadout'),
+    missionPanel: document.querySelector('#missionPanel'),
     missionList: document.querySelector('#missionList'),
     missionPercent: document.querySelector('#missionPercent'),
     missionProgress: document.querySelector('#missionProgress'),
@@ -33,12 +35,24 @@ export function createHud(scene, world, controller, selection, orders) {
     accumulator: 0,
   };
 
+  // toast 队列：同时到达的提示依次展示（避免目标完成提示顶掉命令提示）
   let toastTimer = null;
+  const toastQueue = [];
   function showToast(message) {
+    if (!els.toast.classList.contains('show')) {
+      displayToast(message);
+      return;
+    }
+    toastQueue.push(message);
+  }
+  function displayToast(message) {
     els.toast.textContent = message;
     els.toast.classList.add('show');
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => els.toast.classList.remove('show'), values.ui.toastDurationMs);
+    toastTimer = setTimeout(() => {
+      els.toast.classList.remove('show');
+      if (toastQueue.length > 0) displayToast(toastQueue.shift());
+    }, values.ui.toastDurationMs);
   }
 
   // 顶栏
@@ -46,7 +60,22 @@ export function createHud(scene, world, controller, selection, orders) {
   for (const button of els.speedButtons) {
     button.addEventListener('click', () => controller.setSpeed(Number(button.dataset.speed)));
   }
-  els.restartButton.addEventListener('click', () => window.location.reload());
+  // 返回目标：编辑器试玩结束后安全返回编辑器（REQUIREMENTS.md §4.6），否则重开教学关
+  function returnFromGame() {
+    if (scene.fromEditor) {
+      scene.scene.start('Editor', { mapData: scene.mapData, fromPlaytest: true });
+    } else {
+      window.location.reload();
+    }
+  }
+  els.restartButton.addEventListener('click', returnFromGame);
+  if (scene.fromEditor) {
+    els.exitPlaytest.hidden = false;
+    els.exitPlaytest.textContent = t('hud.exitPlaytest');
+    els.exitPlaytest.addEventListener('click', returnFromGame);
+  } else {
+    els.exitPlaytest.hidden = true;
+  }
   controller.onChange(() => {
     renderTopBarUI();
     showToast(controller.paused ? t('toast.paused') : t('toast.resumed'));
@@ -113,15 +142,22 @@ export function createHud(scene, world, controller, selection, orders) {
       <div class="status-row"><span>${t('hud.city.capture')} · 己方基地</span><b>${blueCity.captureProgress.toFixed(0)}%</b></div>` : ''}`;
   }
 
-  // 任务进度（gdd.md §10 任务链）：目标 2 = 完成一次移动指令；目标完成时提示并写入通讯
+  // 任务进度（gdd.md §10 任务链）：目标 2 = 完成一次移动指令；目标完成时提示并写入通讯。
+  // 信标取自地图 objectives（编辑器试玩地图可能无任务，此时隐藏任务面板）。
   function renderMission() {
+    const objective = world.map.objectives.find(item => item.type === 'captureCity');
+    if (!objective) {
+      els.missionPanel.style.display = 'none';
+      return;
+    }
+    els.missionPanel.style.display = '';
     if (!status.obj2Done && world.units.some(unit =>
       unit.state !== 'dead' && unit.faction === 'blue' && unit.command !== null)) {
       status.obj2Done = true;
       objectiveCompleted('toast.obj2', 'event.obj2');
     }
-    // 目标 3：信标（c2）周边 clearRadius 内无红军（gdd.md §10）
-    const beacon = world.cities.find(city => city.id === 'c2');
+    // 目标 3：信标周边 clearRadius 内无红军（gdd.md §10）
+    const beacon = world.cities.find(city => city.id === objective.cityId);
     if (!status.obj3Done && beacon && !world.units.some(unit =>
       unit.state !== 'dead' && unit.faction === 'red'
       && Math.hypot(unit.x - beacon.x, unit.y - beacon.y) <= values.tutorial.clearRadius)) {
