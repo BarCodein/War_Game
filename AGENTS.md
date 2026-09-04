@@ -2,7 +2,7 @@
 
 ## Project Structure & Module Organization
 
-The repository currently contains a browser prototype in `index.html`, `styles.css`, and `game.js`. It will evolve into a Phaser 3 game built with Vite and JavaScript ES modules. Put runtime code under `src/`, static assets under `public/assets/`, unit tests under `tests/unit/`, and Playwright tests under `tests/e2e/` as those directories are introduced. Product scope is defined in `REQUIREMENTS.md`; team practices are in `CONTRIBUTING.md`.
+The project is a Phaser 3 game built with Vite and JavaScript ES modules. Runtime code lives under `src/` (simulation, rendering, input, controllers, config, i18n), static assets under `public/assets/`, unit tests under `tests/unit/`, and Playwright tests under `tests/e2e/`. Design and technical docs live in `docs/` (gdd, architecture, acceptance-criteria, development-plan). The earlier Canvas prototype (`index.html`, `styles.css`, `game.js`) has been migrated and remains in git history. Product scope is defined in `REQUIREMENTS.md`; team practices are in `CONTRIBUTING.md`.
 
 ## Build, Test, and Development Commands
 

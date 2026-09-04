@@ -27,19 +27,24 @@ npm run build      # 构建到 dist/
 
 ## 项目结构
 
-- `index.html`、`styles.css`、`game.js` — 当前浏览器原型（Canvas 2D）
+- `src/main.js` — 入口；`src/config/` — 全部数值唯一来源；`src/i18n/` — 文案集中管理
+- `src/rendering/` — Phaser 场景；`src/simulation/`、`src/input/`、`src/controllers/` — 后续阶段接入
+- `public/assets/` — 静态资源；`tests/unit/` — Vitest 单元测试；`tests/e2e/` — Playwright 端到端测试
 - `REQUIREMENTS.md` — 产品需求与 MVP 验收范围
 - `AGENTS.md` — 仓库开发规范
 - `CONTRIBUTING.md` — 团队协作流程
+- `docs/` — 设计文档（gdd / architecture / acceptance-criteria / development-plan）
+
+旧浏览器原型（`game.js` 等）已迁移，保留在 git 历史（019796f）。
 
 ## 进度
 
-- [x] 可运行的原型：选择与框选、轨迹行军、接触战斗、士气、战争迷雾与战线
-- [ ] 迁移至 Phaser 3 + Vite 工程结构（`src/`）
+- [x] 阶段 0：设计文档与全部数值统一配置
+- [x] 阶段 1：Vite + Phaser 工程骨架（`npm run dev / test / test:e2e / build` 全部跑通）
+- [ ] 原型玩法迁入模拟层（选择、轨迹行军、接触战斗、士气、迷雾）
 - [ ] 城市占领、生产与补给系统
 - [ ] 地形与战争迷雾三态
 - [ ] 教学战役与脚本敌军
 - [ ] 地图编辑器
-- [ ] 单元与端到端测试
 
 详见 `REQUIREMENTS.md` 中的 MVP 功能需求与验收标准。
