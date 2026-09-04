@@ -6,6 +6,7 @@ import { defineConfig, devices } from '@playwright/test';
 export default defineConfig({
   testDir: 'tests/e2e',
   fullyParallel: true,
+  workers: 2, // 限制并发，避免多浏览器实例在本机争抢 CPU 造成超时
   timeout: 30000,
   use: {
     baseURL: 'http://localhost:5173',
