@@ -10,7 +10,7 @@
 - [x] A4 Shift 增减选择 — Playwright
 - [x] A5 右键移动（含轨迹多路径点）— Playwright
 - [x] A6 右键攻击移动 / 攻击指定敌军 — Playwright
-- [ ] A7 ≥100 单位统一下令无阻塞，命令经统一接口分发 — Vitest + 手动性能
+- [x] A7 ≥100 单位统一下令无阻塞，命令经统一接口分发 — Vitest + 手动性能
 - [x] A8 输入与战斗逻辑解耦（input 只产命令，simulation 独立可测）— 评审 + Vitest
 
 ## B. 城市、生产与补给
@@ -66,19 +66,21 @@
 - [x] G1 固定时间步长模拟与帧率无关（同输入下结果确定）— Vitest
 - [x] G2 无全单位两两检测（空间分区邻居查询）— 评审 + Vitest
 - [ ] G3 约 500 活动单位下保持 60 FPS 的可测量基线（tick ≤ 8 ms，渲染 ≤ 8 ms）— 手动三浏览器 + 基准页
-- [ ] G4 支持最新版 Chrome、Firefox、Edge — Playwright 三工程
-- [ ] G5 1280×720 至 1920×1080 布局正常 — Playwright + 手动
-- [ ] G6 用户可见文本集中管理，中文优先并预留英文 — 评审
-- [ ] G7 构建产物可静态部署（`npm run build` 后 `dist/` 独立可用）— 手动
+- [ ] G4 支持最新版 Chrome、Firefox、Edge — Playwright 三工程（Chromium/Firefox 已跑；Edge 项目在 playwright.config.js 中待有 Edge 的机器启用）
+- [ ] G5 1280×720 至 1920×1080 布局正常 — Playwright + 手动（Playwright 已覆盖两分辨率，待团队三浏览器手动确认）
+- [x] G6 用户可见文本集中管理，中文优先并预留英文 — 评审
+- [x] G7 构建产物可静态部署（`npm run build` 后 `dist/` 独立可用）— 手动
 
 ## H. 工程规范
 
-- [ ] H1 规则与数值全部配置化，无魔法数字 — 评审
-- [ ] H2 模拟/渲染/输入/控制器分离，simulation 无 Phaser/DOM 依赖 — 评审
-- [ ] H3 `npm test`、`npm run test:e2e`、`npm run build`、`git diff --check` 全部通过 — 每次提交前
-- [ ] H4 视觉/交互改动经三浏览器两分辨率手动检查 — 提交前
-- [ ] H5 全部数值（规则/交互/UI/教学/性能）唯一来源为 `src/config/values.js`，与 gdd.md §12 镜像表一致 — Vitest + 评审
+- [x] H1 规则与数值全部配置化，无魔法数字 — 评审
+- [x] H2 模拟/渲染/输入/控制器分离，simulation 无 Phaser/DOM 依赖 — 评审
+- [x] H3 `npm test`、`npm run test:e2e`、`npm run build`、`git diff --check` 全部通过 — 每次提交前
+- [ ] H4 视觉/交互改动经三浏览器两分辨率手动检查 — 提交前（待团队）
+- [x] H5 全部数值（规则/交互/UI/教学/性能）唯一来源为 `src/config/values.js`，与 gdd.md §12 镜像表一致 — Vitest + 评审
 
 ## 完成定义
 
 以上全部勾选，且 `REQUIREMENTS.md` §8 各事项在本仓库文档中标注为「已确认」或「暂定」（无「待决定」遗留），MVP 即达成。
+
+**当前状态**：44/48 已勾选。剩余 4 项均为团队手动/环境依赖项：G3（真实 GPU 三浏览器跑 `#bench` 确认 60 FPS）、G4（Edge 项目启用）、G5（三浏览器两分辨率手动）、H4（视觉手动检查）。
