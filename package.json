@@ -1,0 +1,26 @@
+{
+  "name": "war-of-dots-course-project",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "A browser-based single-player real-time strategy course project.",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "playwright test"
+  },
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "dependencies": {
+    "phaser": "3.90.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.62.1",
+    "vite": "8.2.2",
+    "vitest": "5.0.0"
+  }
+}
