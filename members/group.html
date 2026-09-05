@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>小组介绍 - 沙盘战争</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/pages.css">
+</head>
+<body>
+
+    <!-- ==================== 导航栏 ==================== -->
+    <nav class="navbar">
+        <div class="navbar-inner">
+            <a href="main.html" class="navbar-logo">
+                <span class="logo-icon">&#9876;</span>
+                沙盘战争
+            </a>
+            <button class="navbar-toggle" onclick="document.querySelector('.navbar-menu').classList.toggle('open')">
+                <span class="hamburger-line"></span>
+                <span class="hamburger-line"></span>
+                <span class="hamburger-line"></span>
+            </button>
+            <ul class="navbar-menu">
+                <li><a href="main.html">首页</a></li>
+                <li><a href="about.html">游戏背景</a></li>
+                <li><a href="group.html" class="active">小组介绍</a></li>
+                <li><a href="progress.html">开发进度</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <!-- ==================== 小组介绍横幅 ==================== -->
+    <section class="hero" style="padding: 3rem 2rem;">
+        <div class="hero-content">
+            <h1>&#9876; 开发团队 &#9876;</h1>
+            <p class="subtitle">四位热血青年，共铸铁血传奇</p>
+        </div>
+    </section>
+
+    <!-- ==================== 小组简介 ==================== -->
+    <section class="section">
+        <div class="group-intro-box">
+            <h2>关于我们的团队</h2>
+            <p>
+                我们是一个由六名热爱游戏开发的大学生组成的项目小组。团队名称取自我们共同的信念——
+                <strong>"沙盘战争"</strong>象征着坚韧不拔的意志和燃烧的热情。我们致力于开发一款以红色战争为背景的即时战略（RTS）游戏，
+                将历史与策略相结合，为玩家带来沉浸式的战争体验。团队成员各有所长，涵盖策划设计、前端开发、后端架构和美术音效等领域，
+                通过紧密协作，我们正在将这个梦想变为现实。
+            </p>
+        </div>
+    </section>
+
+    <!-- ==================== 组员列表 ==================== -->
+    <section class="section">
+        <h2 class="section-title">组员介绍</h2>
+        <p class="section-desc">点击姓名查看个人主页</p>
+        <div style="max-width: 800px; margin: 0 auto; display: flex; flex-direction: column; gap: 1.2rem;">
+
+            <a href="member1.html" class="member-card">
+                <div style="width:100px; height:100px; border-radius:50%; background:var(--military-green); display:flex; align-items:center; justify-content:center; color:#fff; font-size:1.5rem; flex-shrink:0; letter-spacing:2px;">林祺晗</div>
+                <div class="member-info">
+                    <h3>林祺晗</h3>
+                    <p class="role">项目负责人 / 策划设计</p>
+                    <p>负责项目整体规划、游戏策划与团队协调。热爱策略游戏，对RTS品类有深入研究。</p>
+                    <span>查看个人主页 &rarr;</span>
+                </div>
+            </a>
+
+            <a href="member2.html" class="member-card">
+                <div style="width:100px; height:100px; border-radius:50%; background:var(--dark-red); display:flex; align-items:center; justify-content:center; color:#fff; font-size:1.5rem; flex-shrink:0; letter-spacing:2px;">黄训礼</div>
+                <div class="member-info">
+                    <h3>黄训礼</h3>
+                    <p class="role">网站程序员 / 游戏程序员</p>
+                    <p>来自印度尼西亚泗水。热爱运动与音乐，擅长Python、NumPy、Pandas和SQL。</p>
+                    <span>查看个人主页 &rarr;</span>
+                </div>
+            </a>
+
+            <a href="member3.html" class="member-card">
+                <div style="width:100px; height:100px; border-radius:50%; background:var(--military-green-light); display:flex; align-items:center; justify-content:center; color:#fff; font-size:1.5rem; flex-shrink:0; letter-spacing:2px;">李梓健</div>
+                <div class="member-info">
+                    <h3>李梓健</h3>
+                    <p class="role">关卡设计师 / 游戏程序员</p>
+                    <p>负责关卡设计以及测试。</p>
+                    <span>查看个人主页 &rarr;</span>
+                </div>
+            </a>
+
+            <a href="member4.html" class="member-card">
+                <div style="width:100px; height:100px; border-radius:50%; background:var(--dark-red-light); display:flex; align-items:center; justify-content:center; color:#fff; font-size:1.5rem; flex-shrink:0; letter-spacing:2px;">刘安瑜</div>
+                <div class="member-info">
+                    <h3>刘安瑜</h3>
+                    <p class="role">视频剪辑 / 美工</p>
+                    <p>负责游戏美术资源、UI视觉设计与音效制作。拥有扎实的美术功底和丰富的设计经验。</p>
+                    <span>查看个人主页 &rarr;</span>
+                </div>
+            </a>
+
+            <a href="member5.html" class="member-card">
+                <div style="width:100px; height:100px; border-radius:50%; background:var(--dark-red-light); display:flex; align-items:center; justify-content:center; color:#fff; font-size:1.5rem; flex-shrink:0; letter-spacing:2px;">邵逸晨</div>
+                <div class="member-info">
+                    <h3>邵逸晨</h3>
+                    <p class="role">UI设计 / 文案</p>
+                    <p>项目计划书撰写，交互设计。</p>
+                    <span>查看个人主页 &rarr;</span>
+                </div>
+            </a>
+
+            <a href="member6.html" class="member-card">
+                <div style="width:100px; height:100px; border-radius:50%; background:var(--dark-red-light); display:flex; align-items:center; justify-content:center; color:#fff; font-size:1.5rem; flex-shrink:0; letter-spacing:2px;">陈开馨</div>
+                <div class="member-info">
+                    <h3>陈开馨</h3>
+                    <p class="role">文档编辑 / CIO</p>
+                    <p>各种文档撰写/作业提交</p>
+                    <span>查看个人主页 &rarr;</span>
+                </div>
+            </a>
+
+        </div>
+    </section>
+
+    <!-- ==================== 页脚 ==================== -->
+    <footer class="footer">
+        <p>&copy; 2026 沙盘战争项目组 | 红色战争RTS游戏 </p>
+    </footer>
+
+</body>
+</html>

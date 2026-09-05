@@ -3,7 +3,7 @@ import { clickWorld } from './helpers.js';
 
 // 地图编辑器闭环（验收 F1–F10）：新建 → 绘制/放置 → 保存/载入 → 导入/导出 → 试玩返回。
 async function openEditor(page) {
-  await page.goto('/#editor', { waitUntil: 'domcontentloaded' }); // 同 helpers.waitForGame，避免慢字体拖住 load
+  await page.goto('/editor.html', { waitUntil: 'domcontentloaded' }); // 编辑器为独立页面
   await page.evaluate(() => document.fonts.ready); // 等字体就绪，避免布局漂移导致画布坐标失效
   await page.waitForFunction(() => window.__editor !== undefined);
   await expect(page.locator('#editorToolbar')).toBeVisible();

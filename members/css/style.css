@@ -1,0 +1,583 @@
+/* Global Reset & Variables */
+:root {
+    --dark-red: #8B0000;
+    --dark-red-light: #A52A2A;
+    --military-green: #2E4A2E;
+    --military-green-light: #3D6B3D;
+    --cream: #F5F0E8;
+    --cream-dark: #E8E0D0;
+    --text-dark: #1A1A1A;
+    --text-light: #FFFFFF;
+    --text-muted: #6B6B6B;
+    --shadow: 0 2px 8px rgba(0,0,0,0.15);
+    --shadow-lg: 0 4px 16px rgba(0,0,0,0.25);
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: "Microsoft YaHei", "SimHei", Arial, sans-serif;
+    background-color: var(--cream);
+    color: var(--text-dark);
+    line-height: 1.6;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+a {
+    text-decoration: none;
+    color: inherit;
+}
+
+img {
+    max-width: 100%;
+    display: block;
+}
+
+/* ==================== NAVBAR ==================== */
+.navbar {
+    background-color: var(--dark-red);
+    padding: 0 2rem;
+    position: sticky;
+    top: 0;
+    z-index: 1000;
+    box-shadow: var(--shadow-lg);
+}
+
+.navbar-inner {
+    max-width: 1200px;
+    margin: 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 64px;
+}
+
+.navbar-logo {
+    font-size: 1.4rem;
+    font-weight: bold;
+    color: var(--text-light);
+    letter-spacing: 2px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.navbar-logo .logo-icon {
+    font-size: 1.6rem;
+}
+
+.navbar-menu {
+    display: flex;
+    list-style: none;
+    gap: 0;
+}
+
+.navbar-menu li a {
+    display: block;
+    padding: 0.5rem 1.2rem;
+    color: var(--cream);
+    font-size: 0.95rem;
+    transition: background-color 0.3s, color 0.3s;
+    border-radius: 4px;
+}
+
+.navbar-menu li a:hover,
+.navbar-menu li a.active {
+    background-color: var(--dark-red-light);
+    color: var(--text-light);
+}
+
+.navbar-toggle {
+    display: none;
+    background: none;
+    border: none;
+    padding: 4px;
+    cursor: pointer;
+}
+
+.hamburger-line {
+    display: block;
+    width: 22px;
+    height: 2px;
+    background-color: var(--cream);
+    margin: 5px 0;
+    border-radius: 2px;
+}
+
+/* ==================== HERO BANNER ==================== */
+.hero {
+    background: linear-gradient(135deg, var(--dark-red) 0%, var(--military-green) 100%);
+    color: var(--text-light);
+    text-align: center;
+    padding: 5rem 2rem;
+    position: relative;
+    overflow: hidden;
+}
+
+.hero::before {
+    content: "";
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="60" height="60"><rect fill="none" stroke="%23ffffff15" stroke-width="1" width="60" height="60"/></svg>');
+    opacity: 0.3;
+}
+
+.hero-content {
+    position: relative;
+    z-index: 1;
+    max-width: 800px;
+    margin: 0 auto;
+}
+
+.hero h1 {
+    font-size: 2.8rem;
+    margin-bottom: 1rem;
+    letter-spacing: 4px;
+    text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+}
+
+.hero .subtitle {
+    font-size: 1.2rem;
+    margin-bottom: 2rem;
+    opacity: 0.9;
+}
+
+.hero-btn {
+    display: inline-block;
+    padding: 0.8rem 2.5rem;
+    background-color: var(--military-green);
+    color: var(--text-light);
+    font-size: 1.1rem;
+    border: 2px solid var(--military-green-light);
+    border-radius: 4px;
+    transition: all 0.3s;
+    cursor: pointer;
+}
+
+.hero-btn:hover {
+    background-color: var(--military-green-light);
+    transform: translateY(-2px);
+    box-shadow: var(--shadow);
+}
+
+/* ==================== SECTIONS ==================== */
+.section {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 3rem 2rem;
+}
+
+.section-title {
+    font-size: 1.8rem;
+    color: var(--dark-red);
+    text-align: center;
+    margin-bottom: 0.5rem;
+    position: relative;
+    letter-spacing: 2px;
+}
+
+.section-title::after {
+    content: "";
+    display: block;
+    width: 60px;
+    height: 3px;
+    background-color: var(--military-green);
+    margin: 0.8rem auto 0;
+}
+
+.section-desc {
+    text-align: center;
+    color: var(--text-muted);
+    margin-bottom: 2.5rem;
+    font-size: 0.95rem;
+}
+
+/* ==================== CARDS ==================== */
+.card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 1.5rem;
+}
+
+.card {
+    background: #fff;
+    border-radius: 8px;
+    box-shadow: var(--shadow);
+    overflow: hidden;
+    transition: transform 0.3s, box-shadow 0.3s;
+}
+
+.card:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--shadow-lg);
+}
+
+.card-img {
+    width: 100%;
+    height: 200px;
+    object-fit: cover;
+    background-color: var(--cream-dark);
+}
+
+.card-body {
+    padding: 1.2rem;
+}
+
+.card-body h3 {
+    color: var(--dark-red);
+    margin-bottom: 0.5rem;
+    font-size: 1.1rem;
+}
+
+.card-body p {
+    color: var(--text-muted);
+    font-size: 0.9rem;
+}
+
+/* ==================== TEAM MEMBER CARD ==================== */
+.member-card {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+    background: #fff;
+    border-radius: 8px;
+    box-shadow: var(--shadow);
+    padding: 1.5rem;
+    transition: transform 0.3s, box-shadow 0.3s;
+}
+
+.member-card:hover {
+    transform: translateY(-3px);
+    box-shadow: var(--shadow-lg);
+}
+
+.member-avatar {
+    width: 100px;
+    height: 100px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 3px solid var(--dark-red);
+    flex-shrink: 0;
+}
+
+.member-info h3 {
+    color: var(--dark-red);
+    margin-bottom: 0.3rem;
+}
+
+.member-info .role {
+    color: var(--military-green);
+    font-size: 0.9rem;
+    font-weight: bold;
+    margin-bottom: 0.3rem;
+}
+
+.member-info p {
+    color: var(--text-muted);
+    font-size: 0.9rem;
+}
+
+.member-info a {
+    color: var(--dark-red);
+    text-decoration: underline;
+    font-size: 0.85rem;
+}
+
+/* ==================== TIMELINE (Progress) ==================== */
+.timeline {
+    position: relative;
+    padding-left: 40px;
+    max-width: 800px;
+    margin: 0 auto;
+}
+
+.timeline::before {
+    content: "";
+    position: absolute;
+    left: 15px;
+    top: 0;
+    bottom: 0;
+    width: 3px;
+    background-color: var(--dark-red);
+}
+
+.timeline-item {
+    position: relative;
+    margin-bottom: 2rem;
+    padding-left: 20px;
+}
+
+.timeline-item::before {
+    content: "";
+    position: absolute;
+    left: -32px;
+    top: 6px;
+    width: 14px;
+    height: 14px;
+    background-color: var(--military-green);
+    border: 3px solid var(--dark-red);
+    border-radius: 50%;
+}
+
+.timeline-item .date {
+    font-weight: bold;
+    color: var(--dark-red);
+    font-size: 0.95rem;
+    margin-bottom: 0.3rem;
+}
+
+.timeline-item .content {
+    background: #fff;
+    padding: 1rem 1.2rem;
+    border-radius: 6px;
+    box-shadow: var(--shadow);
+    font-size: 0.95rem;
+}
+
+.timeline-item .content h4 {
+    color: var(--military-green);
+    margin-bottom: 0.3rem;
+}
+
+.timeline-item .content p {
+    color: var(--text-muted);
+    font-size: 0.9rem;
+}
+
+/* ==================== AUTH PAGES (Login / Register) ==================== */
+.auth-wrapper {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 3rem 2rem;
+    background: linear-gradient(135deg, var(--dark-red) 0%, var(--military-green) 100%);
+    min-height: calc(100vh - 64px - 60px);
+}
+
+.auth-box {
+    background: #fff;
+    border-radius: 10px;
+    box-shadow: var(--shadow-lg);
+    padding: 2.5rem;
+    width: 100%;
+    max-width: 440px;
+}
+
+.auth-box h2 {
+    text-align: center;
+    color: var(--dark-red);
+    margin-bottom: 0.5rem;
+    font-size: 1.6rem;
+}
+
+.auth-box .auth-sub {
+    text-align: center;
+    color: var(--text-muted);
+    margin-bottom: 1.5rem;
+    font-size: 0.9rem;
+}
+
+.form-group {
+    margin-bottom: 1.2rem;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 0.4rem;
+    color: var(--text-dark);
+    font-weight: bold;
+    font-size: 0.9rem;
+}
+
+.form-group input {
+    width: 100%;
+    padding: 0.7rem 1rem;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    font-size: 0.95rem;
+    transition: border-color 0.3s;
+}
+
+.form-group input:focus {
+    outline: none;
+    border-color: var(--dark-red);
+    box-shadow: 0 0 0 2px rgba(139,0,0,0.15);
+}
+
+.btn-primary {
+    width: 100%;
+    padding: 0.8rem;
+    background-color: var(--dark-red);
+    color: var(--text-light);
+    border: none;
+    border-radius: 6px;
+    font-size: 1.05rem;
+    font-weight: bold;
+    cursor: pointer;
+    transition: background-color 0.3s;
+    margin-top: 0.5rem;
+}
+
+.btn-primary:hover {
+    background-color: var(--dark-red-light);
+}
+
+.auth-box .auth-link {
+    text-align: center;
+    margin-top: 1.2rem;
+    font-size: 0.9rem;
+    color: var(--text-muted);
+}
+
+.auth-box .auth-link a {
+    color: var(--dark-red);
+    font-weight: bold;
+    text-decoration: underline;
+}
+
+/* ==================== MEMBER DETAIL PAGE ==================== */
+.profile-hero {
+    background: linear-gradient(135deg, var(--dark-red), var(--military-green));
+    color: var(--text-light);
+    padding: 4rem 2rem;
+    text-align: center;
+}
+
+.profile-hero img {
+    width: 150px;
+    height: 150px;
+    border-radius: 50%;
+    border: 4px solid var(--cream);
+    margin: 0 auto 1rem;
+    object-fit: cover;
+}
+
+.profile-hero h1 {
+    font-size: 2rem;
+    margin-bottom: 0.3rem;
+}
+
+.profile-hero .profile-role {
+    font-size: 1.1rem;
+    opacity: 0.9;
+}
+
+.profile-content {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 3rem 2rem;
+}
+
+.profile-content h2 {
+    color: var(--dark-red);
+    margin-bottom: 1rem;
+    font-size: 1.4rem;
+    border-bottom: 2px solid var(--military-green);
+    padding-bottom: 0.5rem;
+}
+
+.profile-content p {
+    font-size: 1rem;
+    line-height: 1.8;
+    margin-bottom: 1rem;
+    color: #333;
+}
+
+.profile-content .skill-list {
+    list-style: none;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.8rem;
+    margin-bottom: 1.5rem;
+}
+
+.profile-content .skill-list li {
+    background-color: var(--cream-dark);
+    padding: 0.4rem 1rem;
+    border-radius: 20px;
+    font-size: 0.9rem;
+    color: var(--dark-red);
+    border: 1px solid var(--dark-red);
+}
+
+/* ==================== FOOTER ==================== */
+.footer {
+    background-color: var(--dark-red);
+    color: var(--cream);
+    text-align: center;
+    padding: 1.5rem 2rem;
+    font-size: 0.85rem;
+    margin-top: auto;
+}
+
+.footer a {
+    color: var(--cream-dark);
+}
+
+/* ==================== RESPONSIVE ==================== */
+@media (max-width: 768px) {
+    .navbar-menu {
+        display: none;
+        flex-direction: column;
+        width: 100%;
+        position: absolute;
+        top: 64px;
+        left: 0;
+        background-color: var(--dark-red);
+        box-shadow: var(--shadow);
+    }
+
+    .navbar-menu.open {
+        display: flex;
+    }
+
+    .navbar-toggle {
+        display: block;
+    }
+
+    .hero h1 {
+        font-size: 1.8rem;
+    }
+
+    .hero .subtitle {
+        font-size: 1rem;
+    }
+
+    .section {
+        padding: 2rem 1rem;
+    }
+
+    .section-title {
+        font-size: 1.4rem;
+    }
+
+    .member-card {
+        flex-direction: column;
+        text-align: center;
+    }
+
+    .card-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 480px) {
+    .hero {
+        padding: 3rem 1rem;
+    }
+
+    .hero h1 {
+        font-size: 1.4rem;
+    }
+
+    .auth-box {
+        padding: 1.5rem;
+    }
+}

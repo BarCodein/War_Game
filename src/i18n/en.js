@@ -71,7 +71,7 @@ export default {
   'editor.export': 'Export',
   'editor.import': 'Import',
   'editor.play': 'Playtest',
-  'editor.exit': 'Back to game',
+  'editor.exit': 'Main menu',
   'editor.tool.plain': 'Plain',
   'editor.tool.forest': 'Forest',
   'editor.tool.water': 'Water',
@@ -94,4 +94,12 @@ export default {
   'editor.status.exported': 'Map file exported',
   'editor.importError': 'Import failed: not a valid map JSON',
   'hud.exitPlaytest': 'Back to editor',
+  // Home (landing page)
+  'home.title': 'War of Dots',
+  'home.eyebrow': 'TACTICAL STRATEGY',
+  'home.tagline': 'Command the dot fleet, capture territory, win the war.',
+  'home.play': 'Play',
+  'home.play.desc': 'Enter the Fracture Canyon mission',
+  'home.editor': 'Map Editor',
+  'home.editor.desc': 'Create and playtest custom maps',
 };

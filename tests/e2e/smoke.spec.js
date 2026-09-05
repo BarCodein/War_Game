@@ -3,10 +3,18 @@ import { waitForGame } from './helpers.js';
 
 // 冒烟测试：页面加载、画布渲染、Phaser 启动（GameScene.create 置 window.__gameReady）。
 test('页面加载并启动 Phaser 游戏', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/game.html');
   await expect(page).toHaveTitle(/War of Dots/);
   await expect(page.locator('#battlefield canvas')).toBeVisible();
   await page.waitForFunction(() => window.__gameReady === true);
+});
+
+test('主页提供游戏与地图编辑器入口', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.locator('.home-card.primary')).toBeVisible();
+  await expect(page.locator('.home-card')).toHaveCount(2);
+  await expect(page.locator('.home-card.primary')).toHaveAttribute('href', '/game.html');
+  await expect(page.locator('.home-card').nth(1)).toHaveAttribute('href', '/editor.html');
 });
 
 test('HUD 关键元素渲染', async ({ page }) => {

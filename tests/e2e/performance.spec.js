@@ -4,7 +4,7 @@ import { expect, test } from '@playwright/test';
 // 模拟 tick 耗时（帧率受软件渲染限制，60 FPS 的最终确认在真实 GPU 上手动完成）。
 test('性能基准：500 单位 tick 预算与可测基线', async ({ page }) => {
   test.setTimeout(180000);
-  await page.goto('/#bench', { waitUntil: 'domcontentloaded' });
+  await page.goto('/game.html#bench', { waitUntil: 'domcontentloaded' });
   await page.waitForFunction(() => window.__gameReady === true);
   await page.waitForFunction(() => window.__bench.ready === true, null, { timeout: 120000 });
   const result = await page.evaluate(() => {

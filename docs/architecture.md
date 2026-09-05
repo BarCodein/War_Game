@@ -12,7 +12,10 @@
 
 ```
 src/
-  main.js                    # 入口：创建 Phaser Game，注册场景
+  entries/
+    home.js                  # 主页入口（index.html）：仅填充 i18n 文案的落地页
+    game.js                  # 游戏页入口（game.html）：创建 Phaser Game，注册场景
+    editor.js                # 编辑器页入口（editor.html）：创建 Phaser Game，注册场景
   config/
     values.js                # 全部数值的唯一权威来源（gdd.md §12 数值总表为镜像）
     index.js                 # 聚合导出
@@ -146,7 +149,7 @@ world.issueCommands(unitIds, command)           // 唯一入口，附带校验
 
 - `BootScene`：加载资源 → 解析地图 JSON → 构造 world → 进入 `GameScene`。
 - `GameScene`：创建模拟层 + 输入层 + HUD，注册渲染循环；结算界面（胜利/失败）为场景内覆盖层。
-- `EditorScene`：复用 map 模型与校验，一键试玩 = 用当前编辑地图构造 world 进入 `GameScene`，返回时回到编辑器。入口为 `#editor` hash（BootScene 路由，hash 变化时重载页面）；编辑器地图试玩无脚本敌军，仅按出生点部署。
+- `EditorScene`：复用 map 模型与校验，一键试玩 = 把当前编辑地图写入 `sessionStorage` 并跳转到游戏页（`/game.html?fromEditor=1`），由 `BootScene` 读取地图、以无脚本敌军按出生点部署；试玩结束后“返回编辑器”跳回编辑器页。游戏、编辑器、主页各自为独立页面（`index.html`/`game.html`/`editor.html`，Vite 多页构建）。
 
 ## 11. 测试策略
 

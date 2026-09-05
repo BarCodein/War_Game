@@ -48,7 +48,8 @@ export function createHud(scene, world, controller, selection, orders) {
   // 返回目标：编辑器试玩结束后安全返回编辑器（REQUIREMENTS.md §4.6），否则重开教学关
   function returnFromGame() {
     if (scene.fromEditor) {
-      scene.scene.start('Editor', { mapData: scene.mapData, fromPlaytest: true });
+      // 编辑器为独立页面，试玩后返回编辑器页（带 fromPlaytest 以恢复编辑中的地图）
+      window.location.href = '/editor.html?fromPlaytest=1';
     } else {
       window.location.reload();
     }

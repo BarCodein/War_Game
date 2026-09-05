@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>黄训礼 - 个人主页</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/pages.css">
+</head>
+<body>
+
+    <!-- ==================== 导航栏 ==================== -->
+    <nav class="navbar">
+        <div class="navbar-inner">
+            <a href="main.html" class="navbar-logo">
+                <span class="logo-icon">&#9876;</span>
+                沙盘战争
+            </a>
+            <button class="navbar-toggle" onclick="document.querySelector('.navbar-menu').classList.toggle('open')">
+                <span class="hamburger-line"></span>
+                <span class="hamburger-line"></span>
+                <span class="hamburger-line"></span>
+            </button>
+            <ul class="navbar-menu">
+                <li><a href="main.html">首页</a></li>
+                <li><a href="about.html">游戏背景</a></li>
+                <li><a href="group.html" class="active">小组介绍</a></li>
+                <li><a href="progress.html">开发进度</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <!-- ==================== 个人主页头部 ==================== -->
+    <section class="profile-hero">
+        <img src="images/xunli.jpg" alt="黄训礼" style="width:150px; height:150px; border-radius:50%; object-fit:cover; border:4px solid var(--cream); margin:0 auto 1rem;">
+        <h1>黄训礼</h1>
+        <p class="profile-role">网站程序员 / 游戏程序员</p>
+    </section>
+
+    <!-- ==================== 个人介绍 ==================== -->
+    <div class="profile-content">
+
+        <h2>个人简介</h2>
+        <p>
+            大家好，我是黄训礼，来自印度尼西亚的泗水。目前在"沙盘战争"项目中担任网站程序员和游戏程序员，
+            负责网站的前端开发以及游戏逻辑的程序实现。我对编程充满热情，喜欢通过代码将想法变为现实。
+        </p>
+        <p>
+            在日常生活中，我是一个热爱运动的人。篮球、网球、羽毛球都是我擅长的运动项目。
+            运动教会了我团队协作和坚持不懈的精神，这些品质在软件开发中同样重要。
+            除了运动，我还喜欢学习新的乐器，音乐让我在紧张的开发工作之余能够放松身心，
+            也培养了我对节奏和细节的敏感度，这在程序调试中意外地有所帮助。
+        </p>
+        <p>
+            在技术方面，我熟悉Python编程语言，擅长使用NumPy和Pandas进行数据处理和分析，
+            同时也具备SQL数据库操作能力。在"沙盘战争"项目中，我主要负责网站的搭建和维护，
+            以及游戏核心逻辑的编写。我希望能在2026年底成功卖出自己的数字产品，
+            让其他人能够真正感受到我的产品所带来的价值。这是我当前最大的目标，
+            也是驱动我不断学习和进步的动力。
+        </p>
+
+        <h2>技能特长</h2>
+        <ul class="skill-list">
+            <li>Python</li>
+            <li>NumPy</li>
+            <li>Pandas</li>
+            <li>SQL</li>
+            <li>网站开发</li>
+            <li>游戏编程</li>
+        </ul>
+
+        <p style="text-align:center; margin-top:2rem;">
+            <a href="group.html" class="hero-btn" style="font-size:0.95rem; padding:0.6rem 2rem;">&larr; 返回团队介绍</a>
+        </p>
+    </div>
+
+    <!-- ==================== 页脚 ==================== -->
+    <footer class="footer">
+        <p>&copy; 2026 沙盘战争项目组 | 红色战争RTS游戏</p>
+    </footer>
+
+</body>
+</html>

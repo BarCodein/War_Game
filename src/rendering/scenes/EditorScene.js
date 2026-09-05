@@ -25,7 +25,15 @@ export class EditorScene extends Phaser.Scene {
   }
 
   init(data) {
-    this.mapData = data?.fromPlaytest ? data.mapData : null;
+    // 编辑器为独立页面；若从试玩返回（?fromPlaytest=1），恢复试玩前的编辑地图。
+    this.mapData = null;
+    if (new URLSearchParams(window.location.search).get('fromPlaytest') === '1') {
+      const raw = sessionStorage.getItem('war-of-dots.playtest');
+      if (raw) {
+        this.mapData = JSON.parse(raw);
+        sessionStorage.removeItem('war-of-dots.playtest');
+      }
+    }
   }
 
   create() {
@@ -194,6 +202,9 @@ export class EditorScene extends Phaser.Scene {
       this.toolbar.syncStatus();
       return;
     }
-    this.scene.start('Game', { mapData: this.store.mapData, fromEditor: true });
+    // 跨页试玩：把当前地图写入 sessionStorage，跳转到游戏页（?fromEditor=1），
+    // 由 BootScene 读取地图并以无脚本敌军方式部署。
+    sessionStorage.setItem('war-of-dots.playtest', JSON.stringify(this.store.mapData));
+    window.location.href = '/game.html?fromEditor=1';
   }
 }

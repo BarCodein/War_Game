@@ -2,7 +2,7 @@
 export default {
   'boot.loading': '加载中…',
   // 顶栏
-  'hud.brand.title': 'WAR OF DOTS',
+  'hud.brand.title': '沙盘战争',
   'hud.brand.subtitle': 'FRONTLINE COMMAND',
   'hud.mission.eyebrow': 'OPERATION 07',
   'hud.mission.name': '断裂峡谷 · Dawn Sector',
@@ -79,7 +79,7 @@ export default {
   'editor.export': '导出',
   'editor.import': '导入',
   'editor.play': '试玩',
-  'editor.exit': '返回游戏',
+  'editor.exit': '主菜单',
   'editor.tool.plain': '平原',
   'editor.tool.forest': '森林',
   'editor.tool.water': '水域',
@@ -102,4 +102,12 @@ export default {
   'editor.status.exported': '已导出地图文件',
   'editor.importError': '导入失败：不是有效的地图 JSON',
   'hud.exitPlaytest': '返回编辑器',
+  // 主页（落地页）
+  'home.title': '沙盘战争',
+  'home.eyebrow': 'TACTICAL STRATEGY',
+  'home.tagline': '指挥军队，攻占领地，赢得战争。',
+  'home.play': '开始游戏',
+  'home.play.desc': '前往「断裂峡谷」教学战役',
+  'home.editor': '地图编辑器',
+  'home.editor.desc': '创建并测试自定义地图',
 };
