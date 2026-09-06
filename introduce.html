@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>沙盘战争 - 操作介绍</title>
+  <link rel="stylesheet" href="/styles.css">
+  <style>
+    .intro-content {
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+    .intro-section {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      padding: 28px 32px;
+      margin-bottom: 20px;
+      box-shadow: 0 4px 13px #9bb1a50d;
+    }
+    .intro-section h2 {
+      font-size: 22px;
+      font-weight: 600;
+      margin: 0 0 16px;
+      padding-bottom: 10px;
+      border-bottom: 2px solid var(--lime);
+      color: var(--ink);
+    }
+    .intro-section p {
+      font-size: 15px;
+      line-height: 1.9;
+      color: #3a5350;
+      margin: 0 0 12px;
+      text-align: justify;
+    }
+    .key-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 14px;
+    }
+    .key-table th,
+    .key-table td {
+      text-align: left;
+      padding: 10px 14px;
+      border-bottom: 1px solid #edf1ee;
+      font-size: 14px;
+    }
+    .key-table th {
+      font-weight: 600;
+      color: var(--ink);
+      background: #f0f5f1;
+    }
+    .key-table td:first-child {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 13px;
+      color: #47885e;
+      white-space: nowrap;
+    }
+    .key-table td {
+      color: #3a5350;
+    }
+    .tip-box {
+      background: #102a2b;
+      color: #d6e7df;
+      padding: 20px 24px;
+      margin: 20px 0;
+    }
+    .tip-box h3 {
+      font-size: 15px;
+      font-weight: 600;
+      margin: 0 0 12px;
+      color: var(--lime);
+      letter-spacing: 1px;
+    }
+    .tip-box p {
+      font-size: 14px;
+      line-height: 1.8;
+      color: #b8ccc5;
+      margin: 0 0 8px;
+    }
+    .tip-box p:last-child {
+      margin-bottom: 0;
+    }
+    .ui-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-top: 14px;
+    }
+    .ui-item {
+      background: #f0f5f1;
+      padding: 16px;
+      border-left: 3px solid var(--lime);
+    }
+    .ui-item h4 {
+      font-size: 14px;
+      font-weight: 600;
+      margin: 0 0 6px;
+      color: var(--ink);
+    }
+    .ui-item p {
+      font-size: 13px;
+      margin: 0;
+      color: #6f8585;
+    }
+    .back-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--muted);
+      font-size: 13px;
+      text-decoration: none;
+      margin-bottom: 20px;
+      transition: color .15s;
+    }
+    .back-link:hover {
+      color: var(--ink);
+    }
+  </style>
+</head>
+<body>
+  <main class="home-shell">
+    <header class="topbar home-topbar">
+      <div class="brand"><span class="brand-mark">+</span><div><strong data-i18n="hud.brand.title">沙盘战争</strong><small data-i18n="hud.brand.subtitle">FRONTLINE COMMAND</small></div></div>
+    </header>
+    <section class="home-hero" style="align-items: stretch; padding-top: 24px;">
+      <div class="intro-content">
+        <a class="back-link" href="/">← 返回首页</a>
+
+        <div class="intro-section">
+          <h2>基本操作</h2>
+          <p>在《沙盘战争》中，你将扮演一名军事指挥员，通过鼠标和键盘操控部队完成战役目标。所有操作均在战场地图上直接执行。</p>
+          <table class="key-table">
+            <thead>
+              <tr><th>操作</th><th>按键</th><th>说明</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>选择单位</td><td>左键单击</td><td>点击己方单位进行单选</td></tr>
+              <tr><td>框选单位</td><td>左键拖动</td><td>在空地按住左键拖动，框选范围内所有己方单位</td></tr>
+              <tr><td>增减选择</td><td>Shift + 左键</td><td>按住 Shift 键点击或框选，可追加或移除单位</td></tr>
+              <tr><td>取消选择</td><td>Esc</td><td>取消当前所有选中单位</td></tr>
+              <tr><td>移动</td><td>右键空地</td><td>选中单位后，右键点击空地执行攻击移动（遇敌自动开火）</td></tr>
+              <tr><td>攻击</td><td>右键敌军</td><td>选中单位后，右键点击敌方单位执行强制攻击</td></tr>
+              <tr><td>绘制轨迹</td><td>从已选单位左键拖动</td><td>按住左键拖动可绘制多路径点行军轨迹</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="intro-section">
+          <h2>快捷键</h2>
+          <table class="key-table">
+            <thead>
+              <tr><th>快捷键</th><th>功能</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>空格</td><td>暂停 / 继续游戏</td></tr>
+              <tr><td>1</td><td>切换至 0.5× 慢速</td></tr>
+              <tr><td>2</td><td>切换至 1× 正常速度</td></tr>
+              <tr><td>3</td><td>切换至 2× 快速</td></tr>
+              <tr><td>Esc</td><td>取消选择所有单位</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="intro-section">
+          <h2>界面说明</h2>
+          <div class="ui-grid">
+            <div class="ui-item">
+              <h4>顶栏</h4>
+              <p>显示当前战役名称、游戏速度控制（½× / 1× / 2×）和暂停按钮。</p>
+            </div>
+            <div class="ui-item">
+              <h4>左侧面板</h4>
+              <p>「我的编队」显示所有己方单位及其状态；「城市状态」显示当前控制的城市信息。</p>
+            </div>
+            <div class="ui-item">
+              <h4>战场地图</h4>
+              <p>主视图区域，显示地形、单位和战场态势。底部图例标注己方（绿）、敌方（红）、城市（黄）。</p>
+            </div>
+            <div class="ui-item">
+              <h4>右侧面板</h4>
+              <p>「任务进度」显示当前战役目标完成情况；「战场通讯」实时滚动战报事件。</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="tip-box">
+          <h3>// 指挥技巧</h3>
+          <p>· 先侦察再推进。利用地形掩护，避免在开阔地带与敌方主力正面对抗。</p>
+          <p>· 合理分兵。将部队分成多个小组，从不同方向包抄敌军侧翼。</p>
+          <p>· 善用速度控制。在复杂战斗中使用 ½× 慢速精细操控，行军时切换 2× 加速。</p>
+          <p>· 保持攻势。消灭敌方有生力量比单纯占领地盘更重要，歼灭战是胜利关键。</p>
+        </div>
+
+        <div class="intro-section">
+          <h2>胜利条件</h2>
+          <p>每场战役有明确的任务目标，显示在右侧面板的「任务进度」中。完成所有目标即可获得胜利。注意：单纯消灭敌人不一定能赢，务必关注任务要求。</p>
+        </div>
+      </div>
+    </section>
+  </main>
+</body>
+</html>
