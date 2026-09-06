@@ -27,6 +27,7 @@ npm run build      # 构建到 dist/
 
 ## 项目结构
 
+- `members/` — 全部的介绍页面
 - `src/main.js` — 入口；`src/config/` — 全部数值唯一来源；`src/i18n/` — 文案集中管理
 - `src/rendering/` — Phaser 场景；`src/simulation/`、`src/input/`、`src/controllers/` — 后续阶段接入
 - `public/assets/` — 静态资源；`tests/unit/` — Vitest 单元测试；`tests/e2e/` — Playwright 端到端测试
