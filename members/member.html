@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>林祺晗 - 个人主页</title>
+    <title id="person_page"></title>
     <link rel="stylesheet" href="css/style.css">
     <link rel="stylesheet" href="css/pages.css">
 </head>
@@ -32,36 +32,22 @@
 
     <!-- ==================== 个人主页头部 ==================== -->
     <section class="profile-hero">
-        <img src="images/qihan.jpg" alt="林祺晗" style="width:150px; height:150px; border-radius:50%; object-fit:cover; border:4px solid var(--cream); margin:0 auto 1rem;">
-        <h1>林祺晗</h1>
-        <p class="profile-role">项目负责人 / 策划设计</p>
+        <img id="image" src="" alt="" style="width:150px; height:150px; border-radius:50%; object-fit:cover; 
+            border:4px solid var(--cream); margin:0 auto 1rem;">
+        <h1 id="personname"></h1>
+        <p  class="profile-role" id="profile_role"></p>
     </section>
 
     <!-- ==================== 个人介绍 ==================== -->
     <div class="profile-content">
 
         <h2>个人简介</h2>
-        <p>
-            25级计算机科学与技术，负责项目的统筹与组织
-        </p>
-        <p>
-            喜爱看书，打乒乓球，弹钢琴，以及走路。对文史哲有所涉猎，物理专精，正在学习计算机。希望能找到人切磋球技。
-            也希望能匹配到旗鼓相当的同志来交流知识。
-        </p>
-        <p>
-            对于本项目而言掌握html js css linux ，如果需要的话还会python c c++ java
-        </p>
+        <p id="intro"></p>
+        <p id="interest">        </p>
+        <p id="ability"></p>
 
         <h2>技能特长</h2>
-        <ul class="skill-list">
-            <li>html</li>
-            <li>jvaaScript</li>
-            <li>css</li>
-            <li>Linux</li>
-            <li>Python</li>
-            <li>c</li>
-            <li>c++</li>
-            <li>Java</li>
+        <ul class="skill-list" id="skill_list">
         </ul>
 
         <p style="text-align:center; margin-top:2rem;">
@@ -73,6 +59,7 @@
     <footer class="footer">
         <p>&copy; 2026 沙盘战争项目组 | 红色战争RTS游戏</p>
     </footer>
-
+    <script src="pagedata.js" defer></script>
+    <script src="srcipt_member.js" defer></script>
 </body>
 </html>
