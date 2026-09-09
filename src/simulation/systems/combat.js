@@ -22,11 +22,14 @@ export function updateCombat(world, dt) {
     unit.state = 'combat';
     unit.targetId = enemy.id;
     enemy.underFire = true; // 交战中持续生效（morale 每秒修正，gdd.md §6）
+    var mode=1;
+    if(enemy.route.length === 0)mode=1*values.combat.defend; // 判断敌军是原地固守还是运动
     if (unit.cooldown > 0) continue;
     const stats = values.units[unit.type];
     const effects = effectsFor(unit.morale);
     const damage = stats.damage * effects.damageMultiplier * world.terrain.defenseModifierAt(enemy.x, enemy.y);
-    enemy.hp -= damage;
+    const recieved_damage = damage* mode;
+    enemy.hp -= recieved_damage;
     unit.cooldown = stats.attackInterval;
     if (enemy.hp <= 0) world.killUnit(enemy, 'combat');
   }
