@@ -14,3 +14,11 @@ new Phaser.Game({
   },
   scene: [EditorScene],
 });
+
+// 全局禁用浏览器默认右键上下文菜单，防止干扰编辑器内右键操作。
+// 仅在 canvas 元素上阻止，不影响其他页面的正常右键行为。
+document.addEventListener('contextmenu', (e) => {
+  if (e.target.tagName === 'CANVAS') {
+    e.preventDefault();
+  }
+});

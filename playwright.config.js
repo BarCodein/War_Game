@@ -11,6 +11,17 @@ export default defineConfig({
   use: {
     baseURL: 'http://localhost:5173',
     trace: 'on-first-retry',
+    // 既有游戏测试覆盖登录后的功能流程，统一提供测试用户会话。
+    storageState: {
+      cookies: [],
+      origins: [{
+        origin: 'http://localhost:5173',
+        localStorage: [{
+          name: 'war-of-dots.session',
+          value: JSON.stringify({ username: 'e2e-user', loggedInAt: 0 }),
+        }],
+      }],
+    },
   },
   projects: [
     { name: 'chromium', use: { ...devices['Desktop Chrome'] } },

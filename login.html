@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>登录 · 沙盘战争</title>
+  <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/src/auth/login.css">
+</head>
+<body class="auth-page">
+  <main class="auth-shell">
+    <section class="auth-panel" aria-labelledby="authTitle">
+      <div class="auth-brand"><span class="brand-mark">+</span><span>WAR OF DOTS</span></div>
+      <p class="auth-kicker">FRONTLINE COMMAND</p>
+      <h1 id="authTitle">登录战区</h1>
+      <p class="auth-subtitle">登录后继续你的战役与地图编辑。</p>
+
+      <div class="auth-tabs" role="tablist" aria-label="账户操作">
+        <button class="auth-tab active" id="loginTab" type="button" role="tab" aria-selected="true">登录</button>
+        <button class="auth-tab" id="registerTab" type="button" role="tab" aria-selected="false">注册</button>
+      </div>
+
+      <form id="authForm">
+        <label for="username">用户名或邮箱</label>
+        <input id="username" name="username" type="text" autocomplete="username" required placeholder="输入用户名">
+        <label for="password">密码</label>
+        <input id="password" name="password" type="password" autocomplete="current-password" required placeholder="输入密码">
+        <p class="auth-message" id="authMessage" role="alert" aria-live="polite"></p>
+        <button class="auth-submit" type="submit" id="authSubmit">登录</button>
+      </form>
+      <p class="auth-note">本地演示模式：账户信息仅保存在当前浏览器。</p>
+    </section>
+  </main>
+  <script type="module" src="/src/entries/login.js"></script>
+</body>
+</html>
