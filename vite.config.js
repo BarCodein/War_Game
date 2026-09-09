@@ -3,7 +3,7 @@ import { defineConfig } from 'vite';
 
 const root = fileURLToPath(new URL('.', import.meta.url));
 
-// 多页构建：主页（落地页）、游戏页、地图编辑器页各自独立入口。
+// 多页构建：主页（落地页）、战役选择页、游戏页、地图编辑器页各自独立入口。
 // 开发模式由 Vite dev server 直接提供这些 .html；build 时以 rollupOptions.input 产出多个静态页面。
 export default defineConfig({
   base: '/',
@@ -11,6 +11,8 @@ export default defineConfig({
     rollupOptions: {
       input: {
         home: `${root}index.html`,
+        login: `${root}login.html`,
+        battlechoose: `${root}battlechoose.html`,
         game: `${root}game.html`,
         editor: `${root}editor.html`,
         battle: `${root}battle.html`,

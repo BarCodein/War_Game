@@ -10,6 +10,7 @@
   <main class="home-shell">
     <header class="topbar home-topbar">
       <div class="brand"><span class="brand-mark">+</span><div><strong data-i18n="hud.brand.title">沙盘战争</strong><small data-i18n="hud.brand.subtitle">FRONTLINE COMMAND</small></div></div>
+      <button class="icon-button" id="logoutButton" type="button">退出登录</button>
     </header>
     <section class="home-hero">
       <div class="home-heading">
@@ -23,6 +24,11 @@
           <b data-i18n="home.play">开始游戏</b>
           <small data-i18n="home.play.desc">前往「断裂峡谷」教学战役</small>
         </a>
+        <a class="home-card" href="/battlechoose.html">
+          <span class="home-icon">⚔</span>
+          <b data-i18n="home.battle">战役</b>
+          <small data-i18n="home.battle.desc">选择战役，开始战斗</small>
+        </a>
         <a class="home-card" href="/editor.html">
           <span class="home-icon">▦</span>
           <b data-i18n="home.editor">地图编辑器</b>
@@ -30,27 +36,23 @@
         </a>
         <a class="home-card" href="/members/main.html">
           <span>📖</span>
-          <b>关于我们</b>
+          <b data-i18n="home.about">关于我们</b>
           <small>查看项目介绍</small>
-        </a>
-        <a class="home-card" href="/battle.html">
-          <span>💣</span>
-          <b>战役</b>
-          <small>开始战役</small>
         </a>
         <a class="home-card" href="/story.html">
           <span>📖</span>
-          <b>剧情</b>
+          <b data-i18n="home.story">剧情</b>
           <small>了解背景故事</small>
         </a>
-        <a class="home-card" href="introduce.html">
+        <a class="home-card" href="/introduce.html">
           <span>📖</span>
-          <b>操作介绍</b>
+          <b data-i18n="home.introduce">操作介绍</b>
           <small>了解游戏的基本操作</small>
         </a>
       </div>
     </section>
   </main>
+  <script type="module" src="/src/auth.js"></script>
   <script type="module" src="/src/entries/home.js"></script>
 </body>
 </html>

@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>沙盘战争 — 战役选择</title>
+  <link rel="stylesheet" href="/styles.css">
+  <style>
+    /* 战役选择页专用样式 */
+
+    /* 过场遮罩：全屏，默认显示，动画完成后移除 */
+    .cutscene-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 200;
+      background: #0a1816;
+      display: grid;
+      place-items: center;
+      transition: opacity .6s ease;
+    }
+    .cutscene-overlay.fade-out {
+      opacity: 0;
+      pointer-events: none;
+    }
+    .cutscene-content {
+      text-align: center;
+      color: #d6e7df;
+    }
+    .cutscene-content .eyebrow {
+      font: 10px 'IBM Plex Mono', monospace;
+      color: var(--lime);
+      letter-spacing: 3px;
+      display: block;
+      margin-bottom: 16px;
+    }
+    .cutscene-content h1 {
+      font-size: 48px;
+      letter-spacing: 6px;
+      margin: 0 0 12px;
+      font-weight: 700;
+      color: #f8fff7;
+    }
+    .cutscene-content p {
+      font-size: 15px;
+      color: #8da29d;
+      margin: 0;
+      max-width: 480px;
+      line-height: 1.8;
+    }
+
+    /* 战役列表区 */
+    .battlechoose-shell {
+      min-height: 100vh;
+      background: var(--paper);
+      display: flex;
+      flex-direction: column;
+    }
+    .battlechoose-topbar {
+      flex-shrink: 0;
+      background: #102a2b;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 34px;
+      height: 74px;
+    }
+    .back-link {
+      color: #8da29d;
+      font: 11px 'IBM Plex Mono', monospace;
+      text-decoration: none;
+      letter-spacing: 1px;
+      transition: color .15s;
+    }
+    .back-link:hover { color: var(--lime); }
+
+    .battlechoose-hero {
+      padding: 40px 24px 20px;
+      text-align: center;
+    }
+    .battlechoose-hero .eyebrow {
+      font: 10px 'IBM Plex Mono', monospace;
+      color: var(--muted);
+      letter-spacing: 3px;
+    }
+    .battlechoose-hero h1 {
+      font-size: 36px;
+      margin: 8px 0 0;
+      letter-spacing: 3px;
+      font-weight: 700;
+    }
+
+    .battle-card-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 20px;
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 0 24px 60px;
+      /* 初始隐藏，过场动画结束后由 JS 显示 */
+      opacity: 0;
+      transform: translateY(16px);
+      transition: opacity .5s ease, transform .5s ease;
+      pointer-events: none;
+    }
+    .battle-card-grid.visible {
+      opacity: 1;
+      transform: translateY(0);
+      pointer-events: auto;
+    }
+
+    .battle-card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      box-shadow: 0 4px 13px #9bb1a50d;
+      padding: 24px;
+      transition: transform .12s, border-color .12s, box-shadow .12s;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .battle-card:hover {
+      transform: translateY(-2px);
+      border-color: var(--lime);
+      box-shadow: 0 10px 22px #9bb1a51a;
+    }
+    .battle-card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .battle-card-number {
+      font: 20px 'IBM Plex Mono', monospace;
+      color: #a4b7b0;
+    }
+    .battle-card-status {
+      font: 9px 'IBM Plex Mono', monospace;
+      padding: 3px 8px;
+      border: 1px solid #afc0b9;
+      color: var(--muted);
+      letter-spacing: 1px;
+    }
+    .battle-card-status.available {
+      color: #5b9e70;
+      border-color: #94c888;
+      background: #edf8dd;
+    }
+    .battle-card-status.completed {
+      color: #47885e;
+      border-color: #8cb972;
+      background: #edf8dd;
+    }
+    .battle-card h2 {
+      font-size: 18px;
+      margin: 0;
+      font-weight: 600;
+      letter-spacing: 1px;
+    }
+    .battle-card .eyebrow-sub {
+      font: 9px 'IBM Plex Mono', monospace;
+      color: var(--muted);
+      letter-spacing: 1.5px;
+    }
+    .battle-card p {
+      font-size: 13px;
+      color: #5a726d;
+      line-height: 1.7;
+      margin: 0;
+      flex: 1;
+    }
+    .battle-card-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .battle-card-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 18px;
+      border: 1px solid #46625f;
+      background: #102a2b;
+      color: #d6e7df;
+      font: inherit;
+      font-size: 13px;
+      letter-spacing: 1px;
+      cursor: pointer;
+      text-decoration: none;
+      transition: background .12s;
+    }
+    .battle-card-btn:hover {
+      background: #294746;
+      border-color: var(--lime);
+      color: var(--lime);
+    }
+    .battle-card-btn:disabled {
+      opacity: .4;
+      cursor: not-allowed;
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+  <!-- 过场动画遮罩：进入页面时播放，完成后自动淡出 -->
+  <div class="cutscene-overlay" id="cutsceneOverlay">
+    <div class="cutscene-content">
+      <span class="eyebrow" data-i18n="battlechoose.cutscene.eyebrow">CAMPAIGN SELECT</span>
+      <h1 data-i18n="battlechoose.cutscene.title">沙盘战争</h1>
+      <p data-i18n="battlechoose.cutscene.desc">选择战役，开始你的指挥之旅。</p>
+    </div>
+  </div>
+
+  <div class="battlechoose-shell">
+    <!-- 顶栏 -->
+    <header class="battlechoose-topbar">
+      <a class="back-link" href="/index.html">← 返回首页</a>
+      <div class="brand">
+        <span class="brand-mark">+</span>
+        <div>
+          <strong data-i18n="hud.brand.title">沙盘战争</strong>
+          <small data-i18n="hud.brand.subtitle">FRONTLINE COMMAND</small>
+        </div>
+      </div>
+    </header>
+
+    <!-- 标题区 -->
+    <section class="battlechoose-hero">
+      <span class="eyebrow" data-i18n="battlechoose.hero.eyebrow">SELECT YOUR CAMPAIGN</span>
+      <h1 data-i18n="battlechoose.hero.title">战役选择</h1>
+    </section>
+
+    <!-- 关卡卡片网格：过场完成后显示 -->
+    <div class="battle-card-grid" id="battleCardGrid">
+      <!-- 卡片由 battlechoose.js 动态生成 -->
+    </div>
+  </div>
+
+  <script type="module" src="/src/auth.js"></script>
+  <script type="module" src="/src/entries/battlechoose.js"></script>
+</body>
+</html>

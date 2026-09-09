@@ -1,5 +1,6 @@
 import { t } from '../i18n/index.js';
 import { values } from '../config/index.js';
+import { campaigns, saveProgress } from '../entries/battlechoose-data.js';
 
 // HUD（DOM 实现，gdd.md §11 布局）：编队列表、城市状态、任务进度、事件日志、
 // 顶栏控制与胜利结算。文案全部走 i18n；按 performance.hudRefreshMs 节流刷新。
@@ -54,7 +55,22 @@ export function createHud(scene, world, controller, selection, orders) {
       window.location.reload();
     }
   }
-  els.restartButton.addEventListener('click', returnFromGame);
+  function continueAfterVictory() {
+    const currentIndex = campaigns.findIndex(campaign => campaign.id === scene.campaignId);
+    const nextCampaign = currentIndex >= 0 ? campaigns[currentIndex + 1] : null;
+    if (nextCampaign) {
+      window.location.href = `/game.html?campaign=${encodeURIComponent(nextCampaign.id)}&map=${encodeURIComponent(nextCampaign.mapPath)}`;
+      return;
+    }
+    window.location.href = '/battlechoose.html';
+  }
+  els.restartButton.addEventListener('click', () => {
+    if (world.winner === 'blue' && !scene.fromEditor) {
+      continueAfterVictory();
+      return;
+    }
+    returnFromGame();
+  });
   if (scene.fromEditor) {
     els.exitPlaytest.hidden = false;
     els.exitPlaytest.textContent = t('hud.exitPlaytest');
@@ -227,6 +243,15 @@ export function createHud(scene, world, controller, selection, orders) {
     if (!world.winner || status.victoryShown) return;
     status.victoryShown = true;
     const win = world.winner === 'blue';
+    if (win && !scene.fromEditor && scene.campaignId) {
+      saveProgress(scene.campaignId, { completed: true, wins: 1 });
+      const currentIndex = campaigns.findIndex(campaign => campaign.id === scene.campaignId);
+      els.restartButton.textContent = campaigns[currentIndex + 1]
+        ? t('victory.next')
+        : t('victory.select');
+    } else {
+      els.restartButton.textContent = t('victory.restart');
+    }
     els.overlayTitle.textContent = t(win ? 'victory.title.win' : 'victory.title.lose');
     els.overlayTitle.classList.toggle('win', win);
     els.overlayTitle.classList.toggle('lose', !win);
