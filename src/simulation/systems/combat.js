@@ -27,7 +27,8 @@ export function updateCombat(world, dt) {
     if (unit.cooldown > 0) continue;
     const stats = values.units[unit.type];
     const effects = effectsFor(unit.morale);
-    const damage = stats.damage * effects.damageMultiplier * world.terrain.defenseModifierAt(enemy.x, enemy.y);
+    const damage = (stats.damage * effects.damageMultiplier * 
+      world.terrain.defenseModifierAt(enemy.x, enemy.y) * calcDamageRatio(unit));
     const recieved_damage = damage* mode;
     enemy.hp -= recieved_damage;
     unit.cooldown = stats.attackInterval;
@@ -51,4 +52,10 @@ function resolveTarget(world, unit) {
   if (current) return current;
   return enemies.reduce((nearest, enemy) =>
     Math.hypot(enemy.x - unit.x, enemy.y - unit.y) < Math.hypot(nearest.x - unit.x, nearest.y - unit.y) ? enemy : nearest);
+}
+
+// 兰切斯特定律，并考虑有预备队，所以创造阈值
+function calcDamageRatio(unit){
+  return Math.min(unit.hp/values.units[unit.type].hp / 
+    values.combat.hp_dps_ratio,1);
 }
