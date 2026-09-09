@@ -40,7 +40,9 @@ function applyModifiers(world, unit, dt) {
     rate += m.perSecond.cityNearby + values.cities.recovery.moralePerSecond; // 城市士气修正 + 城市恢复（gdd.md §6、§7）
   }
   rate += unit.supplied ? m.perSecond.supplied : m.perSecond.unsupplied;
-  if (unit.underFire) rate += m.perSecond.inCombat;
+  const mode = (unit.route.length === 0) ? 1 : m.attack;  // 判别防守还是运动战
+  if (unit.underFire) rate += m.perSecond.inCombat * mode;
+  if (unit.state==='moving') rate += m.perSecond.moving; // 行军消耗士气
   unit.morale = clamp(unit.morale + rate * dt);
   if (unit.morale <= m.thresholds.routAt) enterRout(world, unit);
 }

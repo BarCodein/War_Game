@@ -10,14 +10,15 @@ export const values = {
   },
 
   units: {
-    light: { hp: 60, damage: 8, attackInterval: 1.0, range: 40, speed: 90, radius: 10, vision: 140 },
-    heavy: { hp: 120, damage: 16, attackInterval: 1.6, range: 55, speed: 55, radius: 14, vision: 160 },
+    light: { hp: 60, damage: 0.8, attackInterval: 0.2, range: 40, speed: 40, radius: 14, vision: 140 },
+    heavy: { hp: 80, damage: 1, attackInterval: 0.2, range: 40, speed: 40, radius: 14, vision: 160 },
   },
 
   combat: {
     firstStrikeImmediate: true,        // 首次接触立即攻击
     targetPriority: 'currentUntilDead', // 优先当前目标直至死亡，否则取最近（暂定）
     contactTolerance: 2,               // 交战接触判定额外容忍（px）：圆点距离 ≤ 半径和 + 此值即触发交战
+    defend: 0.75, //防守一方遭受伤害系数
   },
 
   terrain: {
@@ -35,7 +36,9 @@ export const values = {
       cityNearby: 5,      // 附近己方城市（≤ ranges.city）
       supplied: 1,
       unsupplied: -2,
-      inCombat: -1, // 持续交战的士气损耗（过低会使围攻不可行，见 gdd.md §6）
+      inCombat: -10, // 持续交战的士气损耗（过低会使围攻不可行，见 gdd.md §6）
+      moving: -5,
+      attack: 1.3, // 进攻 士气消耗放大因子
     },
     ranges: { friendly: 60, city: 120, allyDeath: 100 },
     onAllyDeath: -10,     // 附近友军阵亡瞬间
@@ -50,7 +53,7 @@ export const values = {
   cities: {
     capture: { radius: 60, perUnitPerSecond: 0.05, capPerSecond: 0.15, decayPerSecond: 0.03 },
     production: { interval: 12, unitType: 'light', pauseWhenSupplyFull: true },
-    recovery: { radius: 120, hpPerSecond: 3, moralePerSecond: 5 },
+    recovery: { radius: 100, hpPerSecond: 3, moralePerSecond: 5 },
     vision: 180,
   },
 
