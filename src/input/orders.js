@@ -1,4 +1,6 @@
-import { attackCommand, attackMoveCommand, moveCommand } from '../simulation/commands.js';
+import {
+  attackCommand, attackMoveCommand, moveCommand, appendRouteCommand, enqueueRouteCommand,
+} from '../simulation/commands.js';
 import { isSpotted } from '../simulation/systems/fog.js';
 import { values } from '../config/index.js';
 
@@ -21,10 +23,11 @@ export function createOrders(scene, world, selection) {
     }
     // 命中已选单位 → 开始轨迹绘制
     const p = { x: pointer.worldX, y: pointer.worldY };
+    const shiftHeld = pointer.event?.shiftKey || pointer.shiftKey;
     const hit = world.units.find(unit => unit.state !== 'dead' && unit.faction === 'blue'
       && selection.isSelected(unit.id)
       && Math.hypot(unit.x - p.x, unit.y - p.y) <= values.input.clickHitRadius);
-    if (hit) {
+    if (hit || (shiftHeld && selection.selected.size > 0)) {
       routeMode = true;
       currentRoute = [p];
       selection.setRouteBlocked(true);
@@ -44,19 +47,49 @@ export function createOrders(scene, world, selection) {
     selection.setRouteBlocked(false);
     if (currentRoute.length > 1) {
       const offset = values.input.routeUnitOffset;
+      const commandFactory = pointer.event?.shiftKey || pointer.shiftKey
+        ? appendRouteCommand
+        : moveCommand;
       [...selection.selected].forEach((id, index) => {
         const shift = index * offset;
-        world.issueCommands([id], moveCommand(currentRoute.map(point => ({ x: point.x + shift, y: point.y + shift }))));
+        const unit = world.units.find(candidate => candidate.id === id);
+        if (!unit || unit.state === 'dead' || unit.state === 'rout') return;
+        const anchor = getRouteAnchor(unit);
+        const drawnRoute = currentRoute.map(point => ({
+          x: point.x + shift,
+          y: point.y + shift,
+        }));
+        const path = commandFactory === appendRouteCommand
+          ? [anchor, ...drawnRoute]
+          : drawnRoute;
+        world.issueCommands([id], commandFactory(
+          path,
+        ));
       });
-      notify('route');
+      notify(commandFactory === appendRouteCommand ? 'queueAppend' : 'route');
     }
     currentRoute = [];
   });
+
+  function getRouteAnchor(unit) {
+    if (unit.pendingQueue?.length > 0) {
+      const lastSegment = unit.pendingQueue[unit.pendingQueue.length - 1];
+      if (lastSegment?.length > 0) return lastSegment[lastSegment.length - 1];
+    }
+    if (unit.route.length > unit.routeIndex) return unit.route[unit.route.length - 1];
+    return { x: unit.x, y: unit.y };
+  }
 
   function handleRightClick(pointer) {
     const ids = [...selection.selected];
     if (ids.length === 0) return;
     const p = { x: pointer.worldX, y: pointer.worldY };
+
+    if (pointer.event?.shiftKey || pointer.shiftKey) {
+      ids.forEach(id => world.issueCommands([id], enqueueRouteCommand(p)));
+      notify('queueQueue');
+      return;
+    }
     const enemy = world.units.find(unit => unit.state !== 'dead' && unit.faction !== 'blue'
       && isSpotted(world, unit, 'blue')
       && Math.hypot(unit.x - p.x, unit.y - p.y) <= values.input.clickHitRadius + unit.radius);

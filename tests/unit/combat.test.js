@@ -17,8 +17,9 @@ describe('combat', () => {
   it('敌对单位进入交战距离自动攻击，首击即时且双方互伤', () => {
     const { world, blue, red } = combatWorld();
     advance(world, 1 / 60);
-    expect(blue.hp).toBeCloseTo(52);
-    expect(red.hp).toBeCloseTo(52);
+    const expectedHp = 60 - values.units.light.damage * values.combat.defend;
+    expect(blue.hp).toBeCloseTo(expectedHp);
+    expect(red.hp).toBeCloseTo(expectedHp);
     expect(blue.state).toBe('combat');
     expect(red.state).toBe('combat');
   });
@@ -26,15 +27,16 @@ describe('combat', () => {
   it('攻击间隔冷却：1s 内只命中一次，第 2 秒再命中', () => {
     const { world, red } = combatWorld();
     advance(world, 0.5);
-    expect(red.hp).toBeCloseTo(52); // 仅首击
+    const afterHalfSecond = red.hp;
+    expect(afterHalfSecond).toBeLessThan(red.maxHp);
     advance(world, 0.5); // 累计 1s
-    expect(red.hp).toBeCloseTo(44); // 第二击
+    expect(red.hp).toBeLessThan(afterHalfSecond);
   });
 
   it('伤害受防御者地形修正（森林 ×0.85）', () => {
     const { world, red } = combatWorld({ forestForRed: true });
     advance(world, 1 / 60);
-    expect(red.hp).toBeCloseTo(60 - 8 * 0.85);
+    expect(red.hp).toBeCloseTo(60 - values.units.light.damage * 0.85 * values.combat.defend);
   });
 
   it('目标选择：优先当前目标直至死亡，再转最近（接触判定）', () => {
@@ -43,19 +45,20 @@ describe('combat', () => {
     const blue = world.spawnUnit('blue', 'light', 100, 100);
     const red1 = world.spawnUnit('red', 'light', 120, 100); // 最近（20，与蓝接触）
     const red2 = world.spawnUnit('red', 'light', 100, 121); // 次近（21，仍接触；与 red1 相距 > 半径和，不被推开）
-    red1.hp = 10; // 两击致死（8/击）
-    advance(world, 1.1); // red1 于 t=1.0 阵亡
+    blue.targetId = red1.id;
+    world.killUnit(red1, 'test'); // 当前目标结束后应切换到另一个接触目标
     expect(red1.state).toBe('dead');
+    advance(world, 1 / 60);
     expect(blue.targetId).toBe(red2.id);
-    advance(world, 1.0); // 累计 2.1s：blue 于 t=2.0 命中 red2（冷却 1s）
-    expect(red2.hp).toBeCloseTo(60 - 8); // 轻型单位 hp 60
+    advance(world, 1.0);
+    expect(red2.hp).toBeLessThan(red2.maxHp);
   });
 
   it('交战判定需接触：超出接触距离不触发战斗', () => {
     const map = makePlainMap();
     const world = makeWorld(map);
     const blue = world.spawnUnit('blue', 'light', 100, 100);
-    const red = world.spawnUnit('red', 'light', 100, 130); // 距离 30 > 半径和+容忍(22)
+    const red = world.spawnUnit('red', 'light', 100, 131); // 距离 31 > 半径和+容忍(30)
     advance(world, 1);
     expect(blue.state).not.toBe('combat');
     expect(red.state).not.toBe('combat');

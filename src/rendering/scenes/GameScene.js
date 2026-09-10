@@ -26,6 +26,42 @@ function drawArrow(graphics, x0, y0, x1, y1, color) {
   );
 }
 
+function drawDashedPath(graphics, points, dashLength = 12, gapLength = 8) {
+  if (points.length < 2) return;
+  let drawing = true;
+  let remaining = dashLength;
+  for (let i = 1; i < points.length; i += 1) {
+    let x0 = points[i - 1].x;
+    let y0 = points[i - 1].y;
+    const x1 = points[i].x;
+    const y1 = points[i].y;
+    const dx = x1 - x0;
+    const dy = y1 - y0;
+    const length = Math.hypot(dx, dy);
+    if (length === 0) continue;
+    const ux = dx / length;
+    const uy = dy / length;
+    let travelled = 0;
+    while (travelled < length) {
+      const step = Math.min(remaining, length - travelled);
+      const x = x0 + ux * step;
+      const y = y0 + uy * step;
+      if (drawing) {
+        graphics.moveTo(x0, y0);
+        graphics.lineTo(x, y);
+      }
+      x0 = x;
+      y0 = y;
+      travelled += step;
+      remaining -= step;
+      if (remaining <= 0) {
+        drawing = !drawing;
+        remaining = drawing ? dashLength : gapLength;
+      }
+    }
+  }
+}
+
 // 游戏主场景：组装模拟层 + 渲染层 + 输入层 + 控制器（architecture.md §3 数据流）。
 // 渲染只读世界状态；输入只产命令；模拟由固定步长 loop 推进。
 export class GameScene extends Phaser.Scene {
@@ -145,23 +181,37 @@ export class GameScene extends Phaser.Scene {
     // 行军/攻击前进轨迹（move 与 attackMove 均持续显示，含末端箭头）：
     // 未到达终点前不消失，直到单位到达/命令结束；已走过/阵亡/溃逃/到达自然消失。
     const routeColor = 0x1f2b24; // 加深轨迹颜色（截图效果）
+    const queueColor = 0x3a4a3d;
     this.overlayGraphics.lineStyle(3, routeColor, 0.9);
     for (const unit of this.world.units) {
       if (unit.faction !== 'blue' || unit.state === 'dead' || unit.state === 'rout') continue;
-      const cmd = unit.command?.type;
-      if (cmd !== 'move' && cmd !== 'attackMove') continue;
-      if (unit.route.length === 0 || unit.routeIndex >= unit.route.length) continue;
-      this.overlayGraphics.beginPath();
-      this.overlayGraphics.moveTo(unit.x, unit.y);
-      for (let i = unit.routeIndex; i < unit.route.length; i += 1) {
-        this.overlayGraphics.lineTo(unit.route[i].x, unit.route[i].y);
+      if (unit.route.length > 0 && unit.routeIndex < unit.route.length) {
+        this.overlayGraphics.beginPath();
+        this.overlayGraphics.moveTo(unit.x, unit.y);
+        for (let i = unit.routeIndex; i < unit.route.length; i += 1) {
+          this.overlayGraphics.lineTo(unit.route[i].x, unit.route[i].y);
+        }
+        this.overlayGraphics.strokePath();
+        const lastIndex = unit.route.length - 1;
+        const beforeIndex = lastIndex - 1;
+        const end = unit.route[lastIndex];
+        const start = beforeIndex >= unit.routeIndex ? unit.route[beforeIndex] : { x: unit.x, y: unit.y };
+        drawArrow(this.overlayGraphics, start.x, start.y, end.x, end.y, routeColor);
       }
-      this.overlayGraphics.strokePath();
-      const lastIndex = unit.route.length - 1;
-      const beforeIndex = lastIndex - 1;
-      const end = unit.route[lastIndex];
-      const start = beforeIndex >= unit.routeIndex ? unit.route[beforeIndex] : { x: unit.x, y: unit.y };
-      drawArrow(this.overlayGraphics, start.x, start.y, end.x, end.y, routeColor);
+      if (!unit.pendingQueue?.length) continue;
+      this.overlayGraphics.lineStyle(2, queueColor, 0.75);
+      let tail = unit.route.length > unit.routeIndex
+        ? unit.route[unit.route.length - 1]
+        : { x: unit.x, y: unit.y };
+      for (const segment of unit.pendingQueue) {
+        if (!segment.length) continue;
+        const points = [tail, ...segment];
+        this.overlayGraphics.beginPath();
+        drawDashedPath(this.overlayGraphics, points);
+        this.overlayGraphics.strokePath();
+        tail = segment[segment.length - 1];
+      }
+      this.overlayGraphics.lineStyle(3, routeColor, 0.9);
     }
   }
 }

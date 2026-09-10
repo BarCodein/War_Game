@@ -21,6 +21,7 @@ export function makeUnit({ id, faction, type, x, y }) {
     route: [],           // 世界坐标路径点
     routeIndex: 0,       // 下一个目标路径点下标
     pathDirty: true,     // 路径变更标记（触发水域绕行检查）
+    pendingQueue: [],    // Shift 追加的待执行路径段
     targetId: null,
     cooldown: 0,         // 攻击冷却剩余（s）
     underFire: false,    // 本 tick 是否被攻击（combat 置位，morale 消费）

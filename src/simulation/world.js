@@ -9,6 +9,7 @@ import { updateSupply } from './systems/supply.js';
 import { updateCapture } from './systems/capture.js';
 import { updateFog, createFogGrid } from './systems/fog.js';
 import { updateVictory } from './systems/victory.js';
+import { values } from '../config/index.js';
 
 // tick 内系统执行顺序固定，保证确定性（architecture.md §4）：
 // movement → combat → morale → supply → capture → fog → victory
@@ -63,6 +64,7 @@ export class World {
     unit.deadAt = this.time;
     unit.route = [];
     unit.routeIndex = 0;
+    unit.pendingQueue = [];
     unit.command = null;
     unit.targetId = null;
     this.events.push({
@@ -101,9 +103,11 @@ function applyCommand(world, unit, command) {
     unit.route = [];
     unit.routeIndex = 0;
     unit.state = 'hold';
+    unit.pendingQueue = [];
     return;
   }
   if (command.type === 'move' || command.type === 'attackMove') {
+    unit.pendingQueue = [];
     const waypoints = command.type === 'move' ? command.path : [command.target];
     // 下令时整条规划最短路径（A* 绕开水域），使 move 与 attackMove 轨迹显示真实路径；
     // 中途接敌停下交战，敌军清空后沿该路线继续（attack-forward，gdd.md §4）。
@@ -114,6 +118,49 @@ function applyCommand(world, unit, command) {
     return;
   }
   if (command.type === 'attack') {
+    unit.pendingQueue = [];
+    const target = world.units.find(candidate => candidate.id === command.targetId);
+    const route = target && target.state !== 'dead'
+      ? planRoute(world.terrain, unit.x, unit.y, [{ x: target.x, y: target.y }])
+      : [];
+    unit.route = route;
+    unit.routeIndex = 0;
+    unit.pathDirty = true;
     unit.targetId = command.targetId;
+    unit.state = route.length > 0 ? 'moving' : 'hold';
+    return;
+  }
+  if (command.type === 'appendRoute') {
+    if (unit.pendingQueue.length < values.queue.maxSegments) {
+      unit.pendingQueue.push(command.path);
+      if (unit.routeIndex >= unit.route.length) activateNextQueuedRoute(world, unit);
+    }
+    return;
+  }
+  if (command.type === 'enqueueRoute') {
+    if (unit.pendingQueue.length < values.queue.maxSegments) {
+      unit.pendingQueue.push([{ x: command.target.x, y: command.target.y }]);
+      if (unit.routeIndex >= unit.route.length) activateNextQueuedRoute(world, unit);
+    }
+  }
+}
+
+function activateNextQueuedRoute(world, unit) {
+  while (unit.pendingQueue.length > 0 && unit.routeIndex >= unit.route.length) {
+    const segment = unit.pendingQueue.shift();
+    const route = planRoute(world.terrain, unit.x, unit.y, segment);
+    if (route.length === 0) continue;
+    unit.route = route;
+    unit.routeIndex = 0;
+    unit.pathDirty = true;
+    unit.state = 'moving';
+    unit.command = { type: 'move', path: route };
+    return;
+  }
+  if (unit.routeIndex >= unit.route.length) {
+    unit.route = [];
+    unit.routeIndex = 0;
+    unit.state = 'hold';
+    unit.command = null;
   }
 }

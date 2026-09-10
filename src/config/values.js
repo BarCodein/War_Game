@@ -88,6 +88,10 @@ export const values = {
     routeUnitOffset: 18,    // 多单位轨迹错开间距
   },
 
+  queue: {
+    maxSegments: 50,
+  },
+
   ui: {
     toastDurationMs: 2200,
     timerRefreshMs: 1000,
