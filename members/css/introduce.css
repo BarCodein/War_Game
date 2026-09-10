@@ -1,0 +1,171 @@
+
+html, body {
+  margin: 0;
+  padding: 0;
+  min-height: 100%;
+  background-color: #d9cfbc;
+
+  background-image: url("../images/introduce.jpeg");
+  background-size: cover;
+  background-position: center top;
+  background-repeat: no-repeat;
+  background-attachment: fixed;
+
+  font-family: "Microsoft YaHei", sans-serif;
+  color: #302418;
+}
+
+.home-hero {
+  padding-bottom: 60px !important;
+}
+
+.intro-content {
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 0 80px; 
+  position: relative;
+}
+
+
+.intro-section {
+  background: rgba(244, 241, 233, 0.979);
+  border: 2px solid #443322;
+  padding: 28px 32px;
+  margin-bottom: 20px;
+  box-shadow: 0 4px 12px rgba(40,30,20,0.25);
+  border-radius: 12px;
+  backdrop-filter: blur(2px);
+}
+
+.intro-section h2 {
+  font-size: 22px;
+  font-weight: 600;
+  margin: 0 0 16px;
+  padding-bottom: 10px;
+  border-bottom: 2px solid #882222;
+  color: #302418;
+}
+
+.intro-section p {
+  font-size: 15px;
+  line-height: 1.9;
+  color: #302418;
+  margin: 0 0 12px;
+  text-align: justify;
+}
+
+.key-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 14px;
+}
+
+.key-table th,
+.key-table td {
+  text-align: left;
+  padding: 10px 14px;
+  border-bottom: 1px solid #ddcdb8;
+  font-size: 14px;
+}
+
+.key-table th {
+  font-weight: 600;
+  color: #302418;
+  background: #e8ddc9;
+}
+
+.key-table td:first-child {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 13px;
+  color: #882222;
+  white-space: nowrap;
+  font-weight:bold;
+}
+
+.key-table td {
+  color: #302418;
+}
+
+.tip-box {
+  background: rgba(54, 40, 27, 0.95);
+  color: #e9dfcf;
+  padding: 20px 24px;
+  margin: 20px 0;
+  border-radius:12px;
+  border:1px solid #594632;
+}
+
+.tip-box h3 {
+  font-size: 15px;
+  font-weight: 600;
+  margin: 0 0 12px;
+  color: #d64040;
+  letter-spacing: 1px;
+}
+
+.tip-box p {
+  font-size: 14px;
+  line-height: 1.8;
+  color: #d4c8b7;
+  margin: 0 0 8px;
+}
+
+.tip-box p:last-child {
+  margin-bottom: 0;
+}
+
+.ui-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-top: 14px;
+}
+
+.ui-item {
+  background: #e8ddc9;
+  padding: 16px;
+  border-left: 4px solid #882222;
+  border-radius: 6px;
+}
+
+.ui-item h4 {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0 0 6px;
+  color: #302418;
+}
+
+.ui-item p {
+  font-size: 13px;
+  margin: 0;
+  color: #5c4b3a;
+}
+
+.back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #f1e9d2; 
+  font-size: 13px;
+  text-decoration: none;
+  margin-bottom: 20px;
+  transition: color .15s;
+}
+
+.back-link:hover {
+  color: #d64040;
+}
+.topbar.home-topbar {
+  background-color: rgba(54, 35, 23, 0.85); 
+  border-bottom: 2px solid #594632;
+  padding:12px 24px;
+}
+.topbar.home-topbar .brand strong {
+  color: #f1e9d2;
+}
+.topbar.home-topbar .brand small {
+  color: #d4c8b7;
+}
+.topbar.home-topbar .brand-mark {
+  color: #d64040;
+}
