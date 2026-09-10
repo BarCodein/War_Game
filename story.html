@@ -4,104 +4,116 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>沙盘战争 - 剧情</title>
-  <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="./members/css/introduce.css">
   <style>
-    .story-content {
-      max-width: 860px;
-      margin: 0 auto;
-      padding: 0 24px;
-    }
-    .story-section {
-      background: var(--panel);
-      border: 1px solid var(--line);
-      padding: 28px 32px;
-      margin-bottom: 20px;
-      box-shadow: 0 4px 13px #9bb1a50d;
-    }
-    .story-section h2 {
-      font-size: 22px;
-      font-weight: 600;
-      margin: 0 0 16px;
-      padding-bottom: 10px;
-      border-bottom: 2px solid var(--lime);
-      color: var(--ink);
-    }
-    .story-section p {
-      font-size: 15px;
-      line-height: 1.9;
-      color: #3a5350;
-      margin: 0 0 14px;
-      text-align: justify;
-    }
-    .story-section p:last-child {
-      margin-bottom: 0;
-    }
-    .timeline-box {
-      background: #102a2b;
-      color: #d6e7df;
-      padding: 24px 28px;
-      margin: 20px 0;
-    }
-    .timeline-box h3 {
-      font-size: 16px;
-      font-weight: 600;
-      margin: 0 0 16px;
-      color: var(--lime);
-      letter-spacing: 1px;
-    }
-    .timeline-item {
-      display: flex;
-      gap: 14px;
-      padding: 10px 0;
-      border-bottom: 1px solid #294746;
-      font-size: 14px;
-    }
-    .timeline-item:last-child {
-      border-bottom: none;
-    }
-    .timeline-date {
-      font-family: 'IBM Plex Mono', monospace;
-      font-size: 12px;
-      color: var(--lime);
-      min-width: 90px;
-      flex-shrink: 0;
-    }
-    .timeline-desc {
-      color: #b8ccc5;
-    }
-    .game-intro {
-      background: linear-gradient(135deg, #102a2b 0%, #1a3d3c 100%);
-      border: 1px solid #46625f;
-      padding: 28px 32px;
-      margin: 20px 0;
-    }
-    .game-intro h3 {
-      font-size: 18px;
-      font-weight: 600;
-      margin: 0 0 14px;
-      color: var(--lime);
-    }
-    .game-intro p {
-      font-size: 15px;
-      line-height: 1.9;
-      color: #b8ccc5;
-      margin: 0;
-      text-align: justify;
-    }
-    .back-link {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      color: var(--muted);
-      font-size: 13px;
-      text-decoration: none;
-      margin-bottom: 20px;
-      transition: color .15s;
-    }
-    .back-link:hover {
-      color: var(--ink);
-    }
-  </style>
+.story-content {
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 0 80px;
+  position: relative;
+}
+.story-content::before,
+.story-content::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 50px;
+  background-repeat: repeat-y;
+  background-size: contain;
+  pointer-events: none;
+}
+.story-content::before {
+  left: 0;
+  background-image: url("/members/images/left_wave.png");
+}
+.story-content::after {
+  right: 0;
+  background-image: url("/members/images/right_wave.png");
+}
+
+.story-section,
+.timeline-box,
+.game-intro {
+  background: rgba(241, 233, 210, 0.93);
+  border: 2px solid #443322;
+  padding: 28px 32px;
+  margin-bottom: 20px;
+  box-shadow: 0 4px 12px rgba(40,30,20,0.25);
+  border-radius: 12px;
+  backdrop-filter: blur(2px);
+}
+
+.story-section h2,
+.timeline-box h3,
+.game-intro h3 {
+  font-size: 22px;
+  font-weight: 600;
+  margin: 0 0 16px;
+  padding-bottom: 10px;
+  border-bottom: 2px solid #882222;
+  color: #302418;
+}
+.timeline-box h3,
+.game-intro h3 {
+  font-size:18px;
+}
+
+.story-section p,
+.game-intro p {
+  font-size: 15px;
+  line-height: 1.9;
+  color: #302418;
+  margin: 0 0 12px;
+  text-align: justify;
+}
+
+.timeline-item {
+  display:flex;
+  gap:16px;
+  padding:10px 0;
+  border-bottom: 1px solid #ddcdb8;
+}
+.timeline-item:last-child {
+  border-bottom:none;
+}
+.timeline-date {
+  font-family: 'IBM Plex Mono', monospace;
+  color:#882222;
+  font-weight:bold;
+  white-space:nowrap;
+  min-width:110px;
+}
+.timeline-desc {
+  color:#302418;
+}
+
+.back-link:link,
+.back-link:visited {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  background: rgba(241, 233, 210, 0.93) !important;
+  color: #302418 !important;
+  border:2px solid #443322 !important;
+  border-radius:8px !important;
+  padding:8px 14px !important;
+  font-size: 13px !important;
+  text-decoration: none !important;
+  margin-bottom: 20px !important;
+  transition: 0.15s !important;
+}
+.back-link:hover {
+  background:#f1e9d2 !important;
+  color: #882222 !important;
+  border-color:#882222 !important;
+}
+.back-link:active {
+  background:#ddcdb8 !important;
+}
+</style>
+
+
 </head>
 <body>
   <main class="home-shell">
