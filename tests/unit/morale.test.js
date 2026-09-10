@@ -39,6 +39,25 @@ describe('morale', () => {
     expect(blue.morale).toBeCloseTo(80 - 1 + 1); // 交战 −1 + 补给 +1
   });
 
+  it('未受攻击时士气耗尽进入失序并恢复', () => {
+    const world = makeWorld(cityMap());
+    const unit = world.spawnUnit('blue', 'light', 500, 300);
+    const enemy = world.spawnUnit('red', 'light', 520, 300);
+    unit.morale = 0;
+    unit.state = 'unordered';
+
+    advance(world, 1 / 60);
+
+    expect(unit.state).toBe('unordered');
+    expect(unit.morale).toBeCloseTo(10 / 60);
+
+    world.killUnit(enemy, 'test');
+    advance(world, 2);
+
+    expect(unit.state).toBe('hold');
+    expect(unit.morale).toBeGreaterThanOrEqual(20);
+  });
+
   it('附近友军阵亡瞬间 −10', () => {
     const world = makeWorld(cityMap());
     const a = world.spawnUnit('blue', 'light', 300, 300);

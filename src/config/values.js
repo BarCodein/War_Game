@@ -49,6 +49,7 @@ export const values = {
       shaken: { damageMultiplier: 0.5, speedMultiplier: 0.7 },
     },
     rout: { recoverPerSecond: 8, stopAt: 20, stuckSeconds: 5 },
+    unordered: { recoverPerSecond: 10, stopAt: 20, stuckSeconds: 5 }
   },
 
   cities: {
