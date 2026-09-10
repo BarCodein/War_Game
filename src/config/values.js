@@ -92,6 +92,22 @@ export const values = {
     maxSegments: 50,
   },
 
+  transition: {
+    checkRadius: 40,
+    transitionPoints: 12,
+    minConnectionDistance: 2,
+    mergeTolerance: 1,
+  },
+
+  movement: {
+    stuckThresholdSeconds: 0.35,
+    minDisplacement: 0.25,
+    unitSeparation: 2,
+    formationOffset: 28,
+    maxRerouteAttempts: 3,
+    localRerouteRadius: 112,
+  },
+
   ui: {
     toastDurationMs: 2200,
     timerRefreshMs: 1000,

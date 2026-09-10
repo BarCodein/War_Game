@@ -2,7 +2,7 @@ import { makeUnit, makeCity } from './entities.js';
 import { parseMap } from './map.js';
 import { SpatialGrid } from './spatial.js';
 import { validateCommand } from './commands.js';
-import { updateMovement, planRoute } from './systems/movement.js';
+import { updateMovement, planRoute, transitionToNewRoute } from './systems/movement.js';
 import { updateCombat } from './systems/combat.js';
 import { updateMorale } from './systems/morale.js';
 import { updateSupply } from './systems/supply.js';
@@ -111,7 +111,17 @@ function applyCommand(world, unit, command) {
     const waypoints = command.type === 'move' ? command.path : [command.target];
     // 下令时整条规划最短路径（A* 绕开水域），使 move 与 attackMove 轨迹显示真实路径；
     // 中途接敌停下交战，敌军清空后沿该路线继续（attack-forward，gdd.md §4）。
-    unit.route = planRoute(world.terrain, unit.x, unit.y, waypoints);
+    const newRoute = planRoute(world.terrain, unit.x, unit.y, waypoints);
+    if (newRoute.length === 0) {
+      unit.route = [];
+      unit.routeIndex = 0;
+      unit.state = 'hold';
+      return;
+    }
+    const hasRemainingRoute = unit.state === 'moving' && unit.routeIndex < unit.route.length;
+    unit.route = hasRemainingRoute
+      ? transitionToNewRoute(unit, newRoute, world)
+      : newRoute;
     unit.routeIndex = 0;
     unit.pathDirty = true;
     unit.state = 'moving';
