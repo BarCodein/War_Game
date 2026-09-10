@@ -16,7 +16,7 @@ export function makeUnit({ id, faction, type, x, y }) {
     maxHp: stats.hp,
     morale: values.morale.initial,
     radius: stats.radius,
-    state: 'hold',       // hold | moving | combat | rout | dead
+    state: 'hold',       // hold | moving | combat | rout | dead | unordered
     command: null,       // 最近一次指令（commands.js 格式）
     route: [],           // 世界坐标路径点
     routeIndex: 0,       // 下一个目标路径点下标
