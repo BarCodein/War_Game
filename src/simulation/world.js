@@ -47,12 +47,12 @@ export class World {
   }
 
   // 统一命令入口（architecture.md §5）：人类、脚本敌军、未来 AI 共用；
-  // 溃逃与阵亡单位不受指挥。
+  // 溃逃、失序与阵亡单位不受指挥。
   issueCommands(unitIds, command) {
     validateCommand(command);
     const ids = new Set(unitIds);
     for (const unit of this.units) {
-      if (unit.state === 'dead' || unit.state === 'rout' || !ids.has(unit.id)) continue;
+      if (unit.state === 'dead' || unit.state === 'rout' || unit.state === 'unordered' || !ids.has(unit.id)) continue;
       applyCommand(this, unit, command);
     }
   }
