@@ -11,7 +11,7 @@ export function updateMorale(world, dt) {
       continue;
     }
     if (unit.state === 'unordered') {
-      unorderedRecovery(unit, dt);
+      unorderedRecovery(world,unit, dt);
       continue;
     }
     
@@ -77,7 +77,9 @@ function enterRout(world, unit) {
 }
 
 
-function unorderedRecovery(unit, dt) {
+function unorderedRecovery(world,unit, dt) {
+  if (unit.underFire)
+      enterRout(world,unit);
   const m = values.morale;
 
   unit.morale = clamp(unit.morale + (m.unordered.recoverPerSecond ) * dt);
