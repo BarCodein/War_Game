@@ -10,10 +10,11 @@ export function updateMorale(world, dt) {
       routRecovery(unit, dt);
       continue;
     }
-    if (unit.morale <= values.morale.thresholds.routAt) { // 归零即溃逃（gdd.md §6）
-      enterRout(world, unit);
+    if (unit.state === 'unordered') {
+      unorderedRecovery(unit, dt);
       continue;
     }
+    
     applyModifiers(world, unit, dt);
     applyEffects(unit);
   }
@@ -42,20 +43,50 @@ function applyModifiers(world, unit, dt) {
   rate += unit.supplied ? m.perSecond.supplied : m.perSecond.unsupplied;
   const mode = (unit.route.length === 0) ? 1 : m.perSecond.attack;  // 判别防守还是运动战
   if (unit.underFire) rate += m.perSecond.inCombat * mode;
-  if (unit.state==='moving') rate += m.perSecond.moving; // 行军消耗士气
+  if (unit.state === 'moving') rate += m.perSecond.moving; // 行军消耗士气
   unit.morale = clamp(unit.morale + rate * dt);
-  if (unit.morale <= m.thresholds.routAt) enterRout(world, unit);
+  //if (unit.morale <= m.thresholds.routAt) enterRout(world, unit);
+  if (unit.morale <= values.morale.thresholds.routAt) {
+      if (unit.underFire)
+        enterRout(world, unit); // 归零受攻击即溃逃（gdd.md §6）
+      else
+        enterUnordered(unit); // 不受攻击则原地不动
+    }
 }
 
-function enterRout(world, unit) {
-  unit.state = 'rout';
+// 士气耗尽对unit moving 的影响
+function outOfMoraleToMove(unit) {
   unit.route = [];
   unit.routeIndex = 0;
   unit.targetId = null;
   unit.command = null;
   unit.stuckTime = 0;
   unit.pathDirty = true;
+}
+
+
+function enterUnordered(unit) {
+  unit.state = 'unordered';
+  //outOfMoraleToMove(unit);
+}
+
+function enterRout(world, unit) {
+  unit.state = 'rout';
+  outOfMoraleToMove(unit);
   if (!world.nearestOwnCity(unit)) world.killUnit(unit, 'surrender'); // 无城可退立即投降
+}
+
+
+function unorderedRecovery(unit, dt) {
+  const m = values.morale;
+
+  unit.morale = clamp(unit.morale + (m.unordered.recoverPerSecond ) * dt);
+  if (unit.morale >= m.unordered.stopAt) {
+    unit.state = 'moving';
+    if (unit.route.length === 0)
+      unit.state = 'hold';
+    applyEffects(unit);
+  }
 }
 
 // 溃逃恢复：+8/s，受击 −3/s 仍生效；恢复至 stopAt 停止溃逃（gdd.md §6）

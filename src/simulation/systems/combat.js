@@ -12,7 +12,7 @@ export function updateCombat(world, dt) {
     unit.cooldown = Math.max(0, unit.cooldown - dt);
   }
   for (const unit of world.units) {
-    if (unit.state === 'dead' || unit.state === 'rout') continue; // 溃逃单位不攻击
+    if (unit.state === 'dead' || unit.state === 'rout' || unit.state === 'unordered') continue; // 溃逃/失序单位不攻击
     const enemy = resolveTarget(world, unit);
     if (!enemy) {
       unit.targetId = null;
