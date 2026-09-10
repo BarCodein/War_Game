@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { makePlainMap, makeWorld } from './helpers.js';
-import { planRoute } from '../../src/simulation/systems/movement.js';
+import { planRoute, transitionToNewRoute } from '../../src/simulation/systems/movement.js';
 import { values } from '../../src/config/index.js';
 
 function riverWorldWithBridge() {
@@ -37,5 +37,74 @@ describe('planRoute（最短路径规划）', () => {
     const world = makeWorld(makePlainMap({ terrainCells: cells }));
     const route = planRoute(world.terrain, 600, 360, [{ x: 900, y: 360 }]);
     expect(route).toEqual([{ x: 900, y: 360 }]);
+  });
+});
+
+describe('移动轨迹衔接', () => {
+  it('半径 40px 内命中新轨迹时从覆盖点继续，不返回轨迹起点', () => {
+    const world = makeWorld(makePlainMap());
+    const unit = world.spawnUnit('blue', 'light', 100, 100);
+    unit.route = [{ x: 200, y: 100 }, { x: 300, y: 100 }];
+    unit.routeIndex = 0;
+    unit.state = 'moving';
+    const newRoute = [{ x: 300, y: 180 }, { x: 220, y: 100 }, { x: 400, y: 100 }];
+    const result = transitionToNewRoute(unit, newRoute, world);
+    expect(result[0]).toEqual({ x: 100, y: 100 });
+    expect(result.length).toBeLessThan(newRoute.length + unit.route.length);
+    expect(result).not.toContainEqual({ x: 300, y: 180 });
+  });
+
+  it('远离新轨迹时生成平滑过渡点而不是直接折返', () => {
+    const world = makeWorld(makePlainMap());
+    const unit = world.spawnUnit('blue', 'light', 100, 100);
+    const result = transitionToNewRoute(unit, [{ x: 400, y: 300 }, { x: 500, y: 300 }], world);
+    expect(result.length).toBeGreaterThan(1);
+    expect(result[0]).not.toEqual({ x: 400, y: 300 });
+    expect(result.at(-1)).toEqual({ x: 500, y: 300 });
+  });
+
+  it('水域阻挡时过渡路径使用可通行路径点', () => {
+    const world = riverWorldWithBridge();
+    const unit = world.spawnUnit('blue', 'light', 200, 360);
+    const result = transitionToNewRoute(unit, [{ x: 400, y: 360 }], world);
+    expect(result.every(point => world.terrain.passableAt(point.x, point.y))).toBe(true);
+  });
+
+  it('使用旧路径与新路径之间的最近线段连接点', () => {
+    const world = makeWorld(makePlainMap());
+    const unit = world.spawnUnit('blue', 'light', 100, 100);
+    unit.route = [{ x: 200, y: 100 }, { x: 300, y: 100 }];
+    unit.routeIndex = 0;
+    unit.state = 'moving';
+    const result = transitionToNewRoute(unit, [{ x: 220, y: 140 }, { x: 320, y: 140 }], world);
+    expect(result.some(point => Math.abs(point.x - 220) < 1 && Math.abs(point.y - 100) < 1)).toBe(true);
+    expect(result.some(point => Math.abs(point.x - 220) < 1 && Math.abs(point.y - 140) < 1)).toBe(true);
+    expect(result.at(-1)).toEqual({ x: 320, y: 140 });
+  });
+});
+
+describe('多单位移动分离', () => {
+  it('相同目标的单位不会因重复碰撞分离而卡在原地', () => {
+    const world = makeWorld(makePlainMap());
+    const first = world.spawnUnit('blue', 'light', 100, 100);
+    const second = world.spawnUnit('blue', 'light', 100, 100);
+    world.issueCommands([first.id, second.id], { type: 'move', path: [{ x: 400, y: 100 }] });
+    const initialDistance = Math.hypot(second.x - first.x, second.y - first.y);
+    for (let tick = 0; tick < 120; tick += 1) world.tick(1 / 60);
+    expect(Math.max(first.x, second.x)).toBeGreaterThan(150);
+    expect(Math.hypot(second.x - first.x, second.y - first.y)).toBeGreaterThan(initialDistance);
+  });
+
+  it('被静态己方单位阻挡后会生成稳定的侧向绕行路线', () => {
+    const world = makeWorld(makePlainMap());
+    const moving = world.spawnUnit('blue', 'light', 100, 100);
+    world.spawnUnit('blue', 'light', 140, 100);
+    world.issueCommands([moving.id], { type: 'move', path: [{ x: 400, y: 100 }] });
+    moving.stuckTime = values.movement.stuckThresholdSeconds;
+    world.tick(0);
+    expect(moving.route.some(point => Math.abs(point.y - 100) > 1)).toBe(true);
+    for (let tick = 0; tick < 360; tick += 1) world.tick(1 / 60);
+    expect(moving.x).toBeGreaterThan(180);
+    expect(moving.rerouteAttempts).toBeLessThanOrEqual(values.movement.maxRerouteAttempts);
   });
 });

@@ -28,6 +28,9 @@ export function makeUnit({ id, faction, type, x, y }) {
     supplied: true,      // supply 系统每 tick 重算
     effects: { damageMultiplier: 1, speedMultiplier: 1 }, // morale 系统每 tick 重算
     stuckTime: 0,        // 溃逃被困累计（s）
+    rerouteAttempts: 0,  // 当前路径连续重规划次数
+    lastMoveX: x,
+    lastMoveY: y,
     lastSeen: { blue: null, red: null }, // 敌方目视记录 { x, y, time }（fog 系统维护）
     deadAt: null,
   };

@@ -10,6 +10,7 @@ const pathCache = new Map();
 const PATH_CACHE_MAX = 512;
 
 export function updateMovement(world, dt) {
+  const previousPositions = new Map();
   for (const unit of world.units) {
     if (unit.state === 'dead') continue;
     if (unit.state === 'rout') {
@@ -22,9 +23,208 @@ export function updateMovement(world, dt) {
       activateNextQueuedRoute(world, unit);
       if (unit.route.length === 0 || unit.routeIndex >= unit.route.length) continue;
     }
+    previousPositions.set(unit, { x: unit.x, y: unit.y });
     moveAlongRoute(world, unit, dt);
   }
   separateOverlaps(world);
+  updateBlockedUnits(world, previousPositions, dt);
+}
+
+function updateBlockedUnits(world, previousPositions, dt) {
+  for (const [unit, previous] of previousPositions) {
+    if (unit.state !== 'moving' || unit.routeIndex >= unit.route.length) {
+      unit.stuckTime = 0;
+      unit.rerouteAttempts = 0;
+      continue;
+    }
+    const displacement = Math.hypot(unit.x - previous.x, unit.y - previous.y);
+    if (displacement >= values.movement.minDisplacement) {
+      unit.stuckTime = 0;
+      unit.rerouteAttempts = 0;
+      continue;
+    }
+    unit.stuckTime += dt;
+    if (unit.stuckTime < values.movement.stuckThresholdSeconds) continue;
+    unit.stuckTime = 0;
+    if (tryRerouteBlockedUnit(world, unit)) continue;
+    unit.rerouteAttempts += 1;
+    if (unit.rerouteAttempts >= values.movement.maxRerouteAttempts) {
+      // Stop only the blocked segment. The queued segments remain available.
+      unit.route = [];
+      unit.routeIndex = 0;
+      unit.state = 'hold';
+    }
+  }
+}
+
+function tryRerouteBlockedUnit(world, unit) {
+  const remaining = unit.route.slice(unit.routeIndex);
+  if (remaining.length === 0) return false;
+  const target = remaining[0];
+  const dx = target.x - unit.x;
+  const dy = target.y - unit.y;
+  const length = Math.hypot(dx, dy);
+  if (length < values.movement.minDisplacement) return false;
+  const normalX = -dy / length;
+  const normalY = dx / length;
+  const lane = (unit.id % 5) - 2;
+  const baseOffset = Math.min(
+    Math.max(1, Math.abs(lane)) * values.movement.formationOffset,
+    values.movement.localRerouteRadius,
+  );
+  const signs = lane === 0 ? [1, -1] : [Math.sign(lane), -Math.sign(lane)];
+  for (const sign of signs) {
+    const offset = baseOffset * sign;
+    const candidate = {
+      x: Math.max(0, Math.min(world.size.width, unit.x + normalX * offset)),
+      y: Math.max(0, Math.min(world.size.height, unit.y + normalY * offset)),
+    };
+    if (!world.terrain.passableAt(candidate.x, candidate.y)) continue;
+    if (!hasSpaceForUnit(world, unit, candidate)) continue;
+    const route = planRoute(world.terrain, unit.x, unit.y, [candidate, ...remaining]);
+    if (route.length === 0) continue;
+    unit.route = route;
+    unit.routeIndex = 0;
+    unit.pathDirty = true;
+    unit.state = 'moving';
+    return true;
+  }
+  return false;
+}
+
+function hasSpaceForUnit(world, unit, point) {
+  for (const other of world.units) {
+    if (other === unit || other.state === 'dead') continue;
+    const required = unit.radius + other.radius + values.movement.unitSeparation;
+    if (Math.hypot(other.x - point.x, other.y - point.y) < required) return false;
+  }
+  return true;
+}
+
+export function findNearbyRouteIndex(unit, route) {
+  let nearestIndex = null;
+  let nearestDistance = Infinity;
+  for (let index = 0; index < route.length; index += 1) {
+    const distance = Math.hypot(route[index].x - unit.x, route[index].y - unit.y);
+    if (distance < nearestDistance) nearestDistance = distance;
+    if (distance <= values.transition.checkRadius && nearestIndex === null) nearestIndex = index;
+  }
+  return { nearbyIndex: nearestIndex, nearestDistance };
+}
+
+function closestPointOnSegment(point, start, end) {
+  const dx = end.x - start.x;
+  const dy = end.y - start.y;
+  const lengthSquared = dx * dx + dy * dy;
+  if (lengthSquared === 0) return { x: start.x, y: start.y, ratio: 0 };
+  const ratio = Math.max(0, Math.min(1,
+    ((point.x - start.x) * dx + (point.y - start.y) * dy) / lengthSquared));
+  return { x: start.x + dx * ratio, y: start.y + dy * ratio, ratio };
+}
+
+function closestRoutePair(oldRoute, newRoute) {
+  let best = null;
+  for (let oldIndex = 0; oldIndex < oldRoute.length - 1; oldIndex += 1) {
+    const oldStart = oldRoute[oldIndex];
+    const oldEnd = oldRoute[oldIndex + 1];
+    for (let newIndex = 0; newIndex < newRoute.length - 1; newIndex += 1) {
+      const newStart = newRoute[newIndex];
+      const newEnd = newRoute[newIndex + 1];
+      const oldPoint = closestPointOnSegment(newStart, oldStart, oldEnd);
+      const newPoint = closestPointOnSegment(oldPoint, newStart, newEnd);
+      const refinedOldPoint = closestPointOnSegment(newPoint, oldStart, oldEnd);
+      const distance = Math.hypot(refinedOldPoint.x - newPoint.x, refinedOldPoint.y - newPoint.y);
+      if (!best || distance < best.distance) {
+        best = {
+          oldIndex,
+          newIndex,
+          oldPoint: refinedOldPoint,
+          newPoint,
+          distance,
+        };
+      }
+    }
+  }
+  return best;
+}
+
+export function catmullRomSpline(points, numPoints) {
+  if (points.length < 2) return [];
+  if (points.length === 2) {
+    return Array.from({ length: numPoints }, (_, index) => {
+      const ratio = (index + 1) / numPoints;
+      return {
+        x: points[0].x + (points[1].x - points[0].x) * ratio,
+        y: points[0].y + (points[1].y - points[0].y) * ratio,
+      };
+    });
+  }
+  const result = [];
+  const segments = points.length - 1;
+  for (let index = 0; index < segments; index += 1) {
+    const p0 = points[Math.max(0, index - 1)];
+    const p1 = points[index];
+    const p2 = points[Math.min(points.length - 1, index + 1)];
+    const p3 = points[Math.min(points.length - 1, index + 2)];
+    for (let step = 1; step <= numPoints; step += 1) {
+      const t = step / numPoints;
+      const t2 = t * t;
+      const t3 = t2 * t;
+      result.push({
+        x: 0.5 * (2 * p1.x + (-p0.x + p2.x) * t
+          + (2 * p0.x - 5 * p1.x + 4 * p2.x - p3.x) * t2
+          + (-p0.x + 3 * p1.x - 3 * p2.x + p3.x) * t3),
+        y: 0.5 * (2 * p1.y + (-p0.y + p2.y) * t
+          + (2 * p0.y - 5 * p1.y + 4 * p2.y - p3.y) * t2
+          + (-p0.y + 3 * p1.y - 3 * p2.y + p3.y) * t3),
+      });
+    }
+  }
+  return result;
+}
+
+export function transitionToNewRoute(unit, newRoute, world) {
+  if (!newRoute?.length) return [];
+  const oldTail = unit.route.slice(unit.routeIndex);
+  if (oldTail.length === 0) {
+    const first = newRoute[0];
+    if (segmentBlocked(world.terrain, unit.x, unit.y, first.x, first.y)) {
+      const detour = findPath(world.terrain, unit.x, unit.y, first.x, first.y);
+      return detour?.length ? simplify([...detour, ...newRoute.slice(1)]) : newRoute;
+    }
+    const middle = { x: (unit.x + first.x) / 2, y: (unit.y + first.y) / 2 };
+    const transition = catmullRomSpline([
+      { x: unit.x, y: unit.y }, middle, first,
+    ], values.transition.transitionPoints);
+    return simplify([...transition, ...newRoute.slice(1)]);
+  }
+
+  const oldPolyline = [{ x: unit.x, y: unit.y }, ...oldTail];
+  const newPolyline = newRoute.filter(point => Number.isFinite(point.x) && Number.isFinite(point.y));
+  if (newPolyline.length === 0) return [];
+  if (newPolyline.length === 1) return planRoute(world.terrain, unit.x, unit.y, newPolyline);
+
+  const pair = closestRoutePair(oldPolyline, newPolyline);
+  if (!pair) return planRoute(world.terrain, unit.x, unit.y, newPolyline);
+
+  const oldPrefix = oldPolyline.slice(0, pair.oldIndex + 1);
+  oldPrefix.push(pair.oldPoint);
+  const connectionStart = oldPrefix[oldPrefix.length - 1];
+  const connectionEnd = pair.newPoint;
+  let connection = [];
+  if (Math.hypot(connectionStart.x - connectionEnd.x, connectionStart.y - connectionEnd.y)
+    >= values.transition.minConnectionDistance) {
+    if (segmentBlocked(world.terrain, connectionStart.x, connectionStart.y,
+      connectionEnd.x, connectionEnd.y)) {
+      connection = findPath(world.terrain, connectionStart.x, connectionStart.y,
+        connectionEnd.x, connectionEnd.y) ?? [];
+    } else {
+      connection = [connectionEnd];
+    }
+  }
+
+  const newSuffix = [connectionEnd, ...newPolyline.slice(pair.newIndex + 1)];
+  return simplify([...oldPrefix, ...connection, ...newSuffix]);
 }
 
 function unitStats(unit) {
@@ -138,25 +338,36 @@ function skipImpassableWaypoints(world, unit) {
 // 软排斥：重叠单位相互推开一半（单趟处理，确定性）
 function separateOverlaps(world) {
   const maxRadius = values.units.heavy.radius;
-  for (const unit of world.units) {
+  const activeUnits = world.units.filter(unit => unit.state !== 'dead');
+  const unitIndexes = new Map(activeUnits.map((unit, index) => [unit, index]));
+  for (let index = 0; index < activeUnits.length; index += 1) {
+    const unit = activeUnits[index];
     if (unit.state === 'dead') continue;
     const neighbors = world.spatial.query(unit.x, unit.y, unit.radius + maxRadius);
     for (const other of neighbors) {
       if (other === unit || other.state === 'dead') continue;
+      // Each pair is resolved once. Processing both directions cancels the push
+      // and leaves units permanently overlapping.
+      const otherIndex = unitIndexes.get(other);
+      if (otherIndex <= index) continue;
       const dx = unit.x - other.x;
       const dy = unit.y - other.y;
       const dist = Math.hypot(dx, dy);
-      const min = unit.radius + other.radius;
+      const min = unit.radius + other.radius + values.movement.unitSeparation;
       if (dist >= min) continue;
       if (dist < 0.001) {
-        unit.x += 1; // 完全重叠时给确定性的最小分离
+        const offset = unit.id < other.id ? 1 : -1;
+        unit.x += offset;
+        other.x -= offset;
         continue;
       }
-      const push = (min - dist) / 2;
-      unit.x += dx / dist * push;
-      unit.y += dy / dist * push;
-      other.x -= dx / dist * push;
-      other.y -= dy / dist * push;
+      const push = min - dist;
+      const nx = dx / dist;
+      const ny = dy / dist;
+      unit.x += nx * push / 2;
+      unit.y += ny * push / 2;
+      other.x -= nx * push / 2;
+      other.y -= ny * push / 2;
     }
   }
 }
@@ -279,6 +490,7 @@ function simplify(points) {
   for (const point of points) {
     const last = simplified[simplified.length - 1];
     const before = simplified[simplified.length - 2];
+    if (last && Math.hypot(point.x - last.x, point.y - last.y) <= values.transition.mergeTolerance) continue;
     if (before && last && (last.x - before.x) * (point.y - before.y) === (last.y - before.y) * (point.x - before.x)) {
       simplified.pop();
     }
