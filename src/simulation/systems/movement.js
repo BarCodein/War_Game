@@ -16,6 +16,7 @@ export function updateMovement(world, dt) {
       routMovement(world, unit, dt);
       continue;
     }
+    if (unit.state === 'unordered') continue;
     if (unit.state === 'combat') continue; // 交战中冻结
     if (unit.route.length === 0 || unit.routeIndex >= unit.route.length) continue;
     moveAlongRoute(world, unit, dt);

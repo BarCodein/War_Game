@@ -18,7 +18,8 @@ export const values = {
     firstStrikeImmediate: true,        // 首次接触立即攻击
     targetPriority: 'currentUntilDead', // 优先当前目标直至死亡，否则取最近（暂定）
     contactTolerance: 2,               // 交战接触判定额外容忍（px）：圆点距离 ≤ 半径和 + 此值即触发交战
-    defend: 0.75, //防守一方遭受伤害系数
+    defend: 0.75, // 防守一方遭受伤害系数
+    hp_dps_ratio: 0.8, // 血量阈值，往下攻击力与血量成正比
   },
 
   terrain: {
@@ -36,7 +37,7 @@ export const values = {
       cityNearby: 5,      // 附近己方城市（≤ ranges.city）
       supplied: 1,
       unsupplied: -2,
-      inCombat: -10, // 持续交战的士气损耗（过低会使围攻不可行，见 gdd.md §6）
+      inCombat: -8, // 持续交战的士气损耗（过低会使围攻不可行，见 gdd.md §6）
       moving: -5,
       attack: 1.3, // 进攻 士气消耗放大因子
     },
@@ -48,6 +49,7 @@ export const values = {
       shaken: { damageMultiplier: 0.5, speedMultiplier: 0.7 },
     },
     rout: { recoverPerSecond: 8, stopAt: 20, stuckSeconds: 5 },
+    unordered: { recoverPerSecond: 10, stopAt: 20, stuckSeconds: 5 }
   },
 
   cities: {
