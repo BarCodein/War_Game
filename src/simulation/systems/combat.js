@@ -15,6 +15,13 @@ export function updateCombat(world, dt) {
     if (unit.state === 'dead' || unit.state === 'rout' || unit.state === 'unordered') continue; // 溃逃/失序单位不攻击
     const enemy = resolveTarget(world, unit);
     if (!enemy) {
+      const commandedTarget = unit.command?.type === 'attack'
+        ? world.units.find(candidate => candidate.id === unit.targetId && candidate.state !== 'dead')
+        : null;
+      if (commandedTarget) {
+        unit.state = unit.route.length > 0 ? 'moving' : 'hold';
+        continue;
+      }
       unit.targetId = null;
       unit.state = unit.route.length > 0 ? 'moving' : 'hold';
       continue;

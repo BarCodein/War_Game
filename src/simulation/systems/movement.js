@@ -18,7 +18,10 @@ export function updateMovement(world, dt) {
     }
     if (unit.state === 'unordered') continue;
     if (unit.state === 'combat') continue; // 交战中冻结
-    if (unit.route.length === 0 || unit.routeIndex >= unit.route.length) continue;
+    if (unit.route.length === 0 || unit.routeIndex >= unit.route.length) {
+      activateNextQueuedRoute(world, unit);
+      if (unit.route.length === 0 || unit.routeIndex >= unit.route.length) continue;
+    }
     moveAlongRoute(world, unit, dt);
   }
   separateOverlaps(world);
@@ -47,8 +50,7 @@ function moveAlongRoute(world, unit, dt, ignoreMoraleEffects = false) {
     if (unit.routeIndex >= unit.route.length) {
       unit.route = [];
       unit.routeIndex = 0;
-      unit.state = 'hold';
-      unit.command = null;
+      activateNextQueuedRoute(world, unit);
     }
     return;
   }
@@ -73,6 +75,26 @@ function moveAlongRoute(world, unit, dt, ignoreMoraleEffects = false) {
   if (step > 0) {
     unit.x += (target.x - unit.x) / remaining * step;
     unit.y += (target.y - unit.y) / remaining * step;
+  }
+}
+
+function activateNextQueuedRoute(world, unit) {
+  while (unit.pendingQueue?.length > 0 && unit.routeIndex >= unit.route.length) {
+    const segment = unit.pendingQueue.shift();
+    const route = planRoute(world.terrain, unit.x, unit.y, segment);
+    if (route.length === 0) continue;
+    unit.route = route;
+    unit.routeIndex = 0;
+    unit.pathDirty = true;
+    unit.state = 'moving';
+    unit.command = { type: 'move', path: route };
+    return;
+  }
+  if (unit.routeIndex >= unit.route.length) {
+    unit.route = [];
+    unit.routeIndex = 0;
+    unit.state = 'hold';
+    if (unit.command?.type !== 'attack') unit.command = null;
   }
 }
 
