@@ -46,3 +46,16 @@ export function makeCity({ id, x, y, faction }) {
     productionTimer: 0,
   };
 }
+
+// 占领点：可被占领（中立起点，或初始归某方）。
+// 与城市的关键区别：被占领后**仅提供视野**——不提供补给容量、不提供士气加成、
+// 不生产、不恢复，也不计入胜负（gdd.md §7.1）。因此没有 productionTimer 字段。
+export function makeCapturePoint({ id, x, y, faction }) {
+  return {
+    id,
+    x,
+    y,
+    faction,            // 'neutral' | 'blue' | 'red'
+    captureProgress: 0, // 0..100（由在场单位积累）
+  };
+}

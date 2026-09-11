@@ -11,7 +11,21 @@ describe('map json', () => {
     expect(map.terrain.rows).toBe(72);  // 720 / 10
     expect(map.cities.map(c => c.faction).sort()).toEqual(['blue', 'red']);
     expect(map.spawns.map(s => s.faction).sort()).toEqual(['blue', 'red']);
+    expect(map.capturePoints).toEqual([]); // 教学地图未放置占领点 → 缺省空数组
     expect(map.objectives[0]).toMatchObject({ type: 'captureCity', cityId: 'c2' });
+  });
+
+  it('占领点：解析 neutral/blue/red 三种归属，非法阵营被校验拦截', () => {
+    const map = parseMap(makePlainMap({
+      capturePoints: [
+        { id: 'p1', x: 300, y: 300, faction: 'neutral' },
+        { id: 'p2', x: 900, y: 400, faction: 'red' },
+      ],
+    }));
+    expect(map.capturePoints.map(p => p.faction)).toEqual(['neutral', 'red']);
+
+    const bad = makePlainMap({ capturePoints: [{ id: 'p1', x: 300, y: 300, faction: 'green' }] });
+    expect(validateMap(bad)).toContainEqual(expect.stringContaining('invalid capturePoint'));
   });
 
   it('地形访问：河流为可减速水域，桥梁可通行，森林修正生效', () => {
@@ -19,7 +33,7 @@ describe('map json', () => {
     const terrain = map.terrain;
     expect(terrain.terrainAt(100, 360)).toBe(values.terrain.codes.water);  // 河流
     expect(terrain.passableAt(100, 360)).toBe(true);
-    expect(terrain.moveMultiplierAt(100, 360)).toBe(0.5);
+    expect(terrain.moveMultiplierAt(100, 360)).toBe(0.4);
     expect(terrain.terrainAt(640, 360)).toBe(values.terrain.codes.bridge); // 桥梁
     expect(terrain.passableAt(640, 360)).toBe(true);
     expect(terrain.terrainAt(120, 500)).toBe(values.terrain.codes.forest); // 森林

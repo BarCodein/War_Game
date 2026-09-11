@@ -4,12 +4,8 @@ import { planRoute, transitionToNewRoute, updateMovement } from '../../src/simul
 import { values } from '../../src/config/index.js';
 
 function riverWorldWithBridge() {
-<<<<<<< HEAD
-  // 第 15 列（x=300~320）一整列水域，第 16 行放一座桥。
-=======
-  // 第 30–31 列（x=300~320）一整列水域，第 32–33 行放一座桥（唯一可通行缺口）
+  // 第 30–31 列（x=300~320）为水域，第 32–33 行放一座桥（水域可通行，桥用于验证桥梁通行）。
   // 10px 网格下，原 20px 的 (15,16) 对应 2×2 块 (30~31, 32~33)，桥仍在 (310, 330)。
->>>>>>> e16aad694b43e3cd002c5db7e4f3ccecf50c14b4
   const cells = {};
   for (let cy = 0; cy < 72; cy += 1) {
     cells[`30,${cy}`] = values.terrain.codes.water;
@@ -33,11 +29,10 @@ describe('planRoute（最短路径规划）', () => {
     expect(route[route.length - 1]).toEqual({ x: 400, y: 360 });
   });
 
-<<<<<<< HEAD
   it('水域中的单位按水域速度倍率移动', () => {
     const plainWorld = makeWorld(makePlainMap());
     const waterWorld = makeWorld(makePlainMap({
-      terrainCells: { '5,5': values.terrain.codes.water },
+      terrainCells: { '10,11': values.terrain.codes.water }, // 10px 网格下单位 (100,110) 所在格
     }));
     const plainUnit = plainWorld.spawnUnit('blue', 'light', 100, 110);
     const waterUnit = waterWorld.spawnUnit('blue', 'light', 100, 110);
@@ -51,11 +46,8 @@ describe('planRoute（最短路径规划）', () => {
   });
 
   it('路径目标始终保留，即使水域没有桥梁', () => {
-=======
-  it('无路可达时回退为直线（保留目标点）', () => {
-    // 第 80–81 列（x=800~820）一整列水域、无桥梁 → 不可达
+    // 第 80–81 列（x=800~820）为水域；水域可通行，因此直线路径直达目标
     // （坐标与其它用例不同，避免共用全局 pathCache 的格子键被复用）
->>>>>>> e16aad694b43e3cd002c5db7e4f3ccecf50c14b4
     const cells = {};
     for (let cy = 0; cy < 72; cy += 1) {
       cells[`80,${cy}`] = values.terrain.codes.water;

@@ -23,12 +23,16 @@ export function createNewMap(name, width, height) {
       { id: 's1', faction: 'blue', x: Math.round(width * 0.15), y: Math.round(height * 0.75) },
       { id: 's2', faction: 'red', x: Math.round(width * 0.85), y: Math.round(height * 0.25) },
     ],
+    // 占领点：可被占领，被占领后仅提供视野（不提供补给/士气）；默认留空
+    capturePoints: [],
     objectives: [],
   };
 }
 
 export function createEditorStore(initialMap = createNewMap('新地图', 1280, 720)) {
   const state = { mapData: JSON.parse(JSON.stringify(initialMap)) };
+  // 旧存档/旧地图没有 capturePoints 字段：补齐为空数组，避免新增操作崩溃
+  if (!Array.isArray(state.mapData.capturePoints)) state.mapData.capturePoints = [];
   let nextId = 3; // c1/c2、s1/s2 已占用
 
   function cellAt(x, y) {
@@ -106,12 +110,34 @@ export function createEditorStore(initialMap = createNewMap('新地图', 1280, 7
       }
     },
 
+    // 占领点：faction 为 'neutral' | 'blue' | 'red'
+    addCapturePoint(x, y, faction = 'neutral') {
+      if (!cellAt(x, y)) return null;
+      const id = `p${nextId}`;
+      nextId += 1;
+      state.mapData.capturePoints.push({ id, x, y, faction });
+      return id;
+    },
+
+    removeCapturePoint(id) {
+      state.mapData.capturePoints = state.mapData.capturePoints.filter(point => point.id !== id);
+    },
+
+    moveCapturePoint(id, x, y) {
+      const point = state.mapData.capturePoints.find(item => item.id === id);
+      if (point && cellAt(x, y)) {
+        point.x = x;
+        point.y = y;
+      }
+    },
+
     rename(name) {
       state.mapData.name = name;
     },
 
     loadMapData(data) {
       state.mapData = JSON.parse(JSON.stringify(data));
+      if (!Array.isArray(state.mapData.capturePoints)) state.mapData.capturePoints = [];
     },
   };
 }
