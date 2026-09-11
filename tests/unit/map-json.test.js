@@ -7,8 +7,8 @@ describe('map json', () => {
   it('教学地图解析成功：版本、地形尺寸、双阵营城市与出生点', () => {
     const map = parseMap(loadTutorialMap());
     expect(map.version).toBe(MAP_VERSION);
-    expect(map.terrain.cols).toBe(64);
-    expect(map.terrain.rows).toBe(36);
+    expect(map.terrain.cols).toBe(128); // 10px 网格：1280 / 10
+    expect(map.terrain.rows).toBe(72);  // 720 / 10
     expect(map.cities.map(c => c.faction).sort()).toEqual(['blue', 'red']);
     expect(map.spawns.map(s => s.faction).sort()).toEqual(['blue', 'red']);
     expect(map.objectives[0]).toMatchObject({ type: 'captureCity', cityId: 'c2' });

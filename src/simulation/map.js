@@ -32,6 +32,10 @@ export function validateMap(data) {
     errors.push('invalid size');
   }
   if (typeof gridCellSize !== 'number' || gridCellSize <= 0) errors.push('invalid gridCellSize');
+  // background 可选：填了就必须是非空字符串（背景图 URL）
+  if (data.background !== undefined && (typeof data.background !== 'string' || data.background.length === 0)) {
+    errors.push('invalid background');
+  }
   if (!terrain || typeof terrain.width !== 'number' || typeof terrain.height !== 'number' || !Array.isArray(terrain.cells)) {
     errors.push('missing terrain grid');
   } else {
@@ -105,6 +109,7 @@ export function parseMap(data) {
     size: migrated.size,
     gridCellSize: migrated.gridCellSize,
     terrain: makeTerrain(migrated),
+    background: migrated.background ?? null, // 背景地图图片 URL（可选）；渲染层据此改用图片显示
     cities: migrated.cities,
     spawns: migrated.spawns,
     objectives: migrated.objectives ?? [],

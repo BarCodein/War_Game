@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { UNIT_TEXTURES } from '../unitRenderer.js';
 
 // 游戏页启动场景（architecture.md §10）：
 // 1. ?fromEditor=1 → 从 sessionStorage 取地图（编辑器试玩）
@@ -8,6 +9,14 @@ import Phaser from 'phaser';
 export class BootScene extends Phaser.Scene {
   constructor() {
     super({ key: 'Boot' });
+  }
+
+  // 单位贴图（美术资源，见 assets/texture/）：按阵营 × 档次（普通/精英）各一张。
+  // 加载失败不阻塞启动，unitRenderer 检测不到贴图时会回退到圆形绘制。
+  preload() {
+    for (const faction of Object.values(UNIT_TEXTURES)) {
+      for (const { key, url } of Object.values(faction)) this.load.image(key, url);
+    }
   }
 
   async create() {

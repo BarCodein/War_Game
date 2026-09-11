@@ -39,9 +39,17 @@ describe('fog', () => {
   });
 
   it('森林中的敌军仅 60px 内可目视', () => {
-    const world = makeWorld(makePlainMap({ terrainCells: { '32,18': values.terrain.codes.forest } }));
+    // 红单位所在 (640,360) 一带设为森林：10px 网格下的 2×2 块，对应原 20px 的 (32,18)
+    const world = makeWorld(makePlainMap({
+      terrainCells: {
+        '64,36': values.terrain.codes.forest,
+        '65,36': values.terrain.codes.forest,
+        '64,37': values.terrain.codes.forest,
+        '65,37': values.terrain.codes.forest,
+      },
+    }));
     const blue = world.spawnUnit('blue', 'light', 700, 360);
-    const red = world.spawnUnit('red', 'light', 640, 360); // 森林格 (32,18)
+    const red = world.spawnUnit('red', 'light', 640, 360); // 森林格 (64,36)
     advance(world, 1 / 60);
     expect(isSpotted(world, red, 'blue')).toBe(true); // 距 60 ≤ 60
     blue.x = 710;
