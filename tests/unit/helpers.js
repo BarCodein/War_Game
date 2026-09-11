@@ -5,7 +5,7 @@ import { values } from '../../src/config/index.js';
 
 // 全平原测试地图：默认含双阵营城市与出生点（满足可玩性校验），
 // 需要无城/单阵营场景的测试可显式覆盖或运行时剔除城市。
-export function makePlainMap({ width = 1280, height = 720, gridCellSize = 20, cities, spawns, terrainCells = {} } = {}) {
+export function makePlainMap({ width = 1280, height = 720, gridCellSize = values.terrain.gridCellSize, cities, spawns, terrainCells = {} } = {}) {
   const cols = width / gridCellSize;
   const rows = height / gridCellSize;
   const cells = new Array(cols * rows).fill(0);
