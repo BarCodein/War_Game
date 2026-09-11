@@ -1,0 +1,713 @@
+/* =====================================================================
+   War_Game 战役流程页 — 红色纪实沙盘做旧风格
+   覆盖页面：battlechoose.html / battlebackground.html / loading.html
+   设计基调：解放战争纪实风，参考《大决战》《江山如此多娇》
+   主色：暗红 / 军绿 / 暖米黄做旧；字体 SimHei + Microsoft YaHei
+   ===================================================================== */
+
+:root {
+    /* 主色系 — 复古暗沉版（与 members/css/style.css 保持一致） */
+    --dark-red:            #8B0000;
+    --dark-red-light:      #A52A2A;
+    --dark-red-deep:       #5C0F0F;
+    --military-green:      #2E4A2E;
+    --military-green-light:#3D6B3D;
+    --military-green-deep: #1A2A1A;
+
+    /* 沙盘底色 — 暖米黄做旧 */
+    --cream:               #F5F0E8;
+    --cream-dark:          #E8E0D0;
+    --cream-deep:          #D9CFBC;
+    --paper:               #F4F1E9;
+    --paper-warm:          #ECE3D0;
+
+    /* 文本 */
+    --text-dark:           #2A1F12;
+    --text-mid:            #5C4B3A;
+    --text-muted:          #8B7A65;
+    --text-light:          #FFFFFF;
+
+    /* 木/铜色 — 装饰边框 */
+    --wood-dark:           #4A2E1A;
+    --wood-mid:            #6B4423;
+    --brass:               #A67C00;
+
+    /* 阴影 */
+    --shadow-sm:           0 2px 6px rgba(40, 25, 12, 0.18);
+    --shadow:              0 4px 12px rgba(40, 25, 12, 0.28);
+    --shadow-lg:           0 8px 24px rgba(40, 25, 12, 0.4);
+    --shadow-xl:           0 14px 40px rgba(40, 25, 12, 0.5);
+
+    /* 复古纹理图（项目内已有资源） */
+    --texture-paper:       url('../../assets/texture/retro.png');
+    --texture-map:         url('../../assets/texture/index.png');
+    --texture-btn:         url('../../assets/texture/but1.png');
+
+    /* ★ 背景地图接口 — 中国军事地图（暂用旧纸地图占位，可替换） */
+    --battle-map-bg:       url('../../assets/texture/index.png');
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+html, body {
+    height: 100%;
+}
+
+body {
+    font-family: "Microsoft YaHei", "PingFang SC", sans-serif;
+    color: var(--text-dark);
+    background-color: var(--cream-deep);
+    /* 暖米黄底 + 径向光晕做旧 */
+    background-image:
+        radial-gradient(circle at 30% 20%, rgba(255, 248, 230, 0.6) 0%, transparent 60%),
+        radial-gradient(circle at 80% 90%, rgba(180, 140, 90, 0.18) 0%, transparent 55%);
+    -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3, h4 {
+    font-family: "SimHei", "Microsoft YaHei", sans-serif;
+    letter-spacing: 2px;
+}
+
+/* =====================================================================
+   通用：顶部导航条
+   ===================================================================== */
+.battle-nav {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: linear-gradient(180deg, var(--dark-red-deep) 0%, #4a0d0d 100%);
+    background-image: var(--texture-paper), linear-gradient(180deg, var(--dark-red-deep) 0%, #4a0d0d 100%);
+    background-blend-mode: multiply;
+    border-bottom: 3px solid var(--brass);
+    box-shadow: var(--shadow-lg);
+}
+.battle-nav-inner {
+    max-width: 1280px;
+    margin: 0 auto;
+    height: 64px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 24px;
+}
+.battle-nav-brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--cream);
+    text-decoration: none;
+    font-family: "SimHei", sans-serif;
+    letter-spacing: 3px;
+    font-size: 1.1rem;
+}
+.battle-nav-brand .nav-mark {
+    font-size: 1.4rem;
+    color: var(--brass);
+}
+.battle-nav-back {
+    color: var(--cream);
+    text-decoration: none;
+    font-size: 0.85rem;
+    letter-spacing: 1px;
+    padding: 8px 16px;
+    border: 1px solid rgba(245, 240, 232, 0.4);
+    border-radius: 2px;
+    transition: all .2s ease;
+}
+.battle-nav-back:hover {
+    border-color: var(--brass);
+    color: var(--brass);
+    background: rgba(0, 0, 0, 0.25);
+}
+
+/* =====================================================================
+   通用：页面标题区（Hero 紧凑版）
+   ===================================================================== */
+.battle-hero {
+    text-align: center;
+    padding: 44px 24px 24px;
+    position: relative;
+}
+.battle-hero .hero-eyebrow {
+    display: block;
+    font-size: 0.72rem;
+    letter-spacing: 4px;
+    color: var(--dark-red);
+    text-transform: uppercase;
+    margin-bottom: 10px;
+}
+.battle-hero h1 {
+    font-size: 2.1rem;
+    color: var(--dark-red-deep);
+    text-shadow: 0 1px 0 rgba(255, 255, 255, 0.6);
+    letter-spacing: 4px;
+    position: relative;
+    display: inline-block;
+}
+.battle-hero h1::before,
+.battle-hero h1::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    width: 56px;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--brass));
+}
+.battle-hero h1::before { left: -72px; }
+.battle-hero h1::after  { right: -72px; transform: scaleX(-1); }
+.battle-hero .hero-subtitle {
+    margin-top: 12px;
+    color: var(--text-mid);
+    font-size: 0.95rem;
+    letter-spacing: 1px;
+}
+
+/* =====================================================================
+   通用：立体做旧按钮
+   ===================================================================== */
+.battle-btn {
+    display: inline-block;
+    padding: 14px 40px;
+    font-family: "SimHei", sans-serif;
+    font-size: 1rem;
+    letter-spacing: 3px;
+    color: var(--cream);
+    background: linear-gradient(180deg, var(--dark-red) 0%, var(--dark-red-deep) 100%);
+    background-image: var(--texture-btn), linear-gradient(180deg, var(--dark-red) 0%, var(--dark-red-deep) 100%);
+    background-blend-mode: multiply;
+    background-size: cover;
+    border: 2px solid var(--brass);
+    border-radius: 3px;
+    text-decoration: none;
+    cursor: pointer;
+    box-shadow:
+        inset 0 0 0 1px rgba(255, 255, 255, 0.15),
+        inset 0 -3px 6px rgba(0, 0, 0, 0.4),
+        0 4px 12px rgba(40, 25, 12, 0.35);
+    transition: all .2s ease;
+}
+.battle-btn:hover {
+    transform: translateY(-2px);
+    box-shadow:
+        inset 0 0 0 1px rgba(255, 255, 255, 0.25),
+        inset 0 -3px 6px rgba(0, 0, 0, 0.4),
+        0 8px 20px rgba(40, 25, 12, 0.5);
+    color: #fff;
+}
+.battle-btn:active {
+    transform: translateY(0);
+    box-shadow:
+        inset 0 3px 8px rgba(0, 0, 0, 0.5),
+        0 2px 6px rgba(40, 25, 12, 0.3);
+}
+
+/* =====================================================================
+   通用：接口占位（未填素材时显示）
+   ===================================================================== */
+.interface-slot {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    color: var(--text-muted);
+    background:
+        repeating-linear-gradient(45deg,
+            rgba(140, 110, 70, 0.08) 0, rgba(140, 110, 70, 0.08) 12px,
+            rgba(140, 110, 70, 0.02) 12px, rgba(140, 110, 70, 0.02) 24px),
+        var(--paper-warm);
+    border: 2px dashed var(--wood-mid);
+    border-radius: 4px;
+    font-size: 0.85rem;
+    letter-spacing: 2px;
+}
+.interface-slot .slot-tag {
+    position: absolute;
+    top: 8px;
+    right: 10px;
+    font-size: 0.68rem;
+    color: var(--dark-red);
+    letter-spacing: 1px;
+    opacity: 0.7;
+}
+
+/* =====================================================================
+   页面一：battlechoose — 关卡选择（地图 + 点位）
+   ===================================================================== */
+
+/* 过场动画遮罩 */
+.cutscene-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 300;
+    background: #0a0c0a;
+    background-image: radial-gradient(circle at 50% 40%, #2a1a10 0%, #0a0c0a 70%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: opacity .7s ease;
+}
+.cutscene-overlay.fade-out {
+    opacity: 0;
+    pointer-events: none;
+}
+.cutscene-content {
+    text-align: center;
+    color: var(--cream);
+    padding: 24px;
+}
+.cutscene-content .cut-eyebrow {
+    display: block;
+    font-size: 0.72rem;
+    letter-spacing: 5px;
+    color: var(--brass);
+    margin-bottom: 16px;
+}
+.cutscene-content h1 {
+    font-size: 3rem;
+    letter-spacing: 8px;
+    color: #fff;
+    text-shadow: 0 0 24px rgba(166, 124, 0, 0.5);
+    margin-bottom: 14px;
+}
+.cutscene-content p {
+    font-size: 0.95rem;
+    color: #c8b8a0;
+    max-width: 460px;
+    line-height: 1.9;
+    margin: 0 auto;
+}
+.cutscene-skip {
+    margin-top: 32px;
+    padding: 10px 26px;
+    background: transparent;
+    border: 1px solid rgba(245, 240, 232, 0.4);
+    color: var(--cream);
+    font-size: 0.8rem;
+    letter-spacing: 2px;
+    cursor: pointer;
+    transition: all .2s ease;
+    border-radius: 2px;
+}
+.cutscene-skip:hover {
+    border-color: var(--brass);
+    color: var(--brass);
+}
+
+/* 地图主区 */
+.map-shell {
+    position: relative;
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 0 24px 40px;
+}
+.map-viewport {
+    position: relative;
+    width: 100%;
+    height: 620px;
+    overflow: hidden;
+    border-radius: 6px;
+    border: 4px solid var(--wood-dark);
+    box-shadow:
+        inset 0 0 0 2px var(--brass),
+        var(--shadow-xl);
+    background: var(--cream-deep);
+    cursor: grab;
+    touch-action: none;
+}
+.map-viewport.dragging {
+    cursor: grabbing;
+}
+
+/* 地图画布（可缩放/平移，用 transform 控制）
+   容器：透明、绝对定位、撑满 viewport；内部 <img.map-img> 渲染真实地图 */
+.map-canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    transform-origin: 0 0;
+    will-change: transform;
+    transition: transform .18s ease-out;
+}
+.map-canvas.no-transition {
+    transition: none;
+}
+/* 真实地图图片 — 初始就比 viewport 大（width:220%），形成「初始放大」效果 */
+.map-img {
+    /* 默认比 viewport 大 2.2 倍，正好覆盖你截图里那种「地图满满、细节清晰」的初始视觉 */
+    width: 220%;
+    height: 220%;
+    object-fit: cover;
+    object-position: center;
+    display: block;
+    pointer-events: none;        /* 让 canvas 接收鼠标事件 */
+    user-select: none;
+}
+/* 地图不做任何额外滤镜/暗角叠加 —— 保持地图原色，避免出现黑斑 */
+.map-canvas::after {
+    content: none;
+}
+
+/* 关卡点（绝对定位在地图画布内） */
+.battle-pin {
+    position: absolute;
+    transform: translate(-50%, -50%);
+    cursor: pointer;
+    z-index: 5;
+}
+.battle-pin .pin-dot {
+    display: block;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: var(--dark-red);
+    border: 3px solid #fff;
+    box-shadow:
+        0 0 0 2px var(--dark-red-deep),
+        0 2px 8px rgba(0, 0, 0, 0.5);
+    margin: 0 auto;
+    transition: all .2s ease;
+    position: relative;
+}
+/* 已解锁关卡：军绿描边 */
+.battle-pin.unlocked .pin-dot {
+    background: var(--military-green);
+    box-shadow:
+        0 0 0 2px var(--military-green-deep),
+        0 2px 8px rgba(0, 0, 0, 0.5);
+}
+/* 当前/选中关卡：金色光环脉动 */
+.battle-pin.current .pin-dot {
+    background: var(--brass);
+    border-color: #ffe9a8;
+    box-shadow:
+        0 0 0 3px var(--dark-red),
+        0 0 16px rgba(166, 124, 0, 0.9);
+    animation: pin-pulse 1.6s ease-in-out infinite;
+}
+/* 锁定关卡：灰暗 */
+.battle-pin.locked .pin-dot {
+    background: #6b6b6b;
+    border-color: #9a9a9a;
+    box-shadow: 0 0 0 2px #4a4a4a, 0 2px 8px rgba(0, 0, 0, 0.4);
+    opacity: 0.7;
+}
+@keyframes pin-pulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.25); }
+}
+
+/* 关卡点气球标签 */
+.battle-pin .pin-label {
+    position: absolute;
+    left: 50%;
+    top: 28px;
+    transform: translateX(-50%);
+    white-space: nowrap;
+    background: var(--paper-warm);
+    background-image: var(--texture-btn);
+    background-blend-mode: multiply;
+    border: 1px solid var(--wood-mid);
+    box-shadow: var(--shadow);
+    color: var(--dark-red-deep);
+    font-family: "SimHei", sans-serif;
+    font-size: 0.82rem;
+    letter-spacing: 2px;
+    padding: 5px 12px;
+    border-radius: 2px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .2s ease;
+}
+.battle-pin:hover .pin-label,
+.battle-pin.current .pin-label {
+    opacity: 1;
+}
+
+/* 缩放/复位控件 */
+.map-controls {
+    position: absolute;
+    right: 16px;
+    bottom: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    z-index: 10;
+}
+.map-controls button {
+    width: 42px;
+    height: 42px;
+    border: 1px solid var(--wood-mid);
+    background: var(--paper-warm);
+    background-image: var(--texture-btn);
+    background-blend-mode: multiply;
+    color: var(--dark-red-deep);
+    font-size: 1.4rem;
+    font-weight: bold;
+    cursor: pointer;
+    border-radius: 3px;
+    box-shadow: var(--shadow);
+    transition: all .15s ease;
+    line-height: 1;
+}
+.map-controls button:hover {
+    border-color: var(--brass);
+    transform: translateY(-1px);
+}
+.map-controls button:active {
+    transform: translateY(0);
+    box-shadow: var(--shadow-sm);
+}
+
+/* 关卡预览卡（右侧浮层） */
+.battle-preview {
+    position: absolute;
+    right: 24px;
+    top: 24px;
+    width: 280px;
+    background: var(--paper);
+    background-image: var(--texture-paper);
+    background-blend-mode: multiply;
+    border: 2px solid var(--wood-dark);
+    box-shadow: var(--shadow-xl);
+    padding: 20px;
+    z-index: 8;
+    opacity: 0;
+    transform: translateX(20px);
+    pointer-events: none;
+    transition: all .3s ease;
+}
+.battle-preview.show {
+    opacity: 1;
+    transform: translateX(0);
+    pointer-events: auto;
+}
+.battle-preview h3 {
+    font-size: 1.2rem;
+    color: var(--dark-red-deep);
+    margin-bottom: 4px;
+}
+.battle-preview .preview-date {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    letter-spacing: 1px;
+    margin-bottom: 10px;
+}
+.battle-preview p {
+    font-size: 0.85rem;
+    color: var(--text-mid);
+    line-height: 1.7;
+    margin-bottom: 16px;
+}
+.battle-preview .battle-btn {
+    width: 100%;
+    text-align: center;
+    padding: 11px 20px;
+    font-size: 0.9rem;
+}
+
+/* =====================================================================
+   页面二：battlebackground — 战役背景
+   ===================================================================== */
+.bbg-shell {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 0 24px 60px;
+}
+.bbg-video {
+    margin-bottom: 32px;
+}
+.bbg-video .video-frame {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    border-radius: 4px;
+    overflow: hidden;
+    border: 3px solid var(--wood-dark);
+    box-shadow: var(--shadow-lg);
+}
+.bbg-video .video-frame video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+.bbg-section {
+    margin-bottom: 36px;
+}
+.bbg-section h2 {
+    font-size: 1.35rem;
+    color: var(--dark-red-deep);
+    margin-bottom: 16px;
+    padding-left: 14px;
+    border-left: 4px solid var(--dark-red);
+    letter-spacing: 2px;
+}
+.bbg-img-box {
+    width: 100%;
+    border-radius: 4px;
+    overflow: hidden;
+    border: 3px solid var(--wood-dark);
+    box-shadow: var(--shadow-lg);
+    margin-bottom: 20px;
+}
+.bbg-img-box img {
+    width: 100%;
+    display: block;
+}
+.bbg-text {
+    background: var(--paper);
+    background-image: var(--texture-paper);
+    background-blend-mode: multiply;
+    border: 1px solid var(--wood-mid);
+    border-radius: 4px;
+    padding: 26px 30px;
+    box-shadow: var(--shadow);
+    color: var(--text-mid);
+    font-size: 0.95rem;
+    line-height: 2;
+}
+.bbg-text strong {
+    color: var(--dark-red-deep);
+}
+.bbg-start {
+    text-align: center;
+    margin-top: 8px;
+}
+.bbg-start .battle-btn {
+    font-size: 1.15rem;
+    padding: 16px 56px;
+    letter-spacing: 4px;
+}
+
+/* =====================================================================
+   页面三：loading — 加载过渡页
+   ===================================================================== */
+.loading-screen {
+    position: fixed;
+    inset: 0;
+    z-index: 200;
+    background: #0a0c0a;
+    background-image: radial-gradient(circle at 50% 38%, #26160c 0%, #0a0c0a 72%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+}
+.loading-image {
+    width: min(560px, 82vw);
+    aspect-ratio: 16 / 9;
+    margin-bottom: 40px;
+    border-radius: 4px;
+    overflow: hidden;
+    border: 2px solid rgba(166, 124, 0, 0.5);
+    box-shadow: 0 0 40px rgba(166, 124, 0, 0.25);
+}
+.loading-image img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+.loading-image .interface-slot {
+    width: 100%;
+    height: 100%;
+}
+.loading-progress {
+    width: min(560px, 82vw);
+    margin-bottom: 28px;
+}
+.loading-progress .track {
+    width: 100%;
+    height: 16px;
+    background: #1a1a14;
+    border: 1px solid var(--wood-mid);
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.6);
+}
+.loading-progress .fill {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, var(--dark-red) 0%, var(--brass) 100%);
+    border-radius: 10px;
+    box-shadow: 0 0 12px rgba(166, 124, 0, 0.5);
+    transition: width .2s ease;
+}
+.loading-progress .progress-tip {
+    margin-top: 10px;
+    text-align: center;
+    color: #c8b8a0;
+    font-size: 0.78rem;
+    letter-spacing: 3px;
+}
+.loading-quote {
+    text-align: center;
+    max-width: 560px;
+}
+.loading-quote p {
+    font-family: "SimHei", "KaiTi", serif;
+    font-size: 1.1rem;
+    color: var(--cream);
+    letter-spacing: 2px;
+    line-height: 1.9;
+    opacity: 0;
+    animation: quote-fade 1.2s ease forwards 0.4s;
+}
+.loading-quote cite {
+    display: block;
+    margin-top: 12px;
+    font-style: normal;
+    color: #a89980;
+    font-size: 0.8rem;
+    letter-spacing: 2px;
+    opacity: 0;
+    animation: quote-fade 1.2s ease forwards 0.8s;
+}
+@keyframes quote-fade {
+    from { opacity: 0; transform: translateY(10px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+/* =====================================================================
+   响应式
+   ===================================================================== */
+@media (max-width: 768px) {
+    .battle-hero h1 { font-size: 1.6rem; letter-spacing: 2px; }
+    .battle-hero h1::before,
+    .battle-hero h1::after { width: 32px; }
+    .battle-hero h1::before { left: -42px; }
+    .battle-hero h1::after  { right: -42px; }
+    .map-viewport { height: 460px; }
+    .battle-preview {
+        right: 12px;
+        top: 12px;
+        width: 220px;
+        padding: 14px;
+    }
+    .battle-preview p { display: none; }
+    .bbg-text { padding: 20px 18px; }
+}
+@media (max-width: 480px) {
+    .cutscene-content h1 { font-size: 2rem; letter-spacing: 4px; }
+    .map-viewport { height: 380px; }
+    .battle-preview {
+        position: static;
+        width: 100%;
+        margin-top: 16px;
+        transform: none;
+        opacity: 1;
+        pointer-events: auto;
+    }
+    .battle-preview p { display: block; }
+    .battle-hero h1::before,
+    .battle-hero h1::after { display: none; }
+}

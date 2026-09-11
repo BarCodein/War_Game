@@ -5,7 +5,7 @@ html, body {
   min-height: 100%;
   background-color: #d9cfbc;
 
-  background-image: url("../images/introduce.jpeg");
+  background-image: url("../../assets/texture/introduce.jpeg");
   background-size: cover;
   background-position: center top;
   background-repeat: no-repeat;

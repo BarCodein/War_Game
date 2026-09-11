@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>沙盘战争 — 战役背景</title>
+  <link rel="stylesheet" href="./members/css/battlepages.css">
+</head>
+<body>
+
+  <!-- ==================== 导航条 ==================== -->
+  <nav class="battle-nav">
+    <div class="battle-nav-inner">
+      <a class="battle-nav-back" href="./battlechoose.html">&larr; 返回关卡</a>
+      <a class="battle-nav-brand" href="./index.html">
+        <span class="nav-mark">&#9876;</span> 沙盘战争
+      </a>
+    </div>
+  </nav>
+
+  <!-- ==================== 页面标题 ==================== -->
+  <section class="battle-hero">
+    <span class="hero-eyebrow">CAMPAIGN BACKGROUND</span>
+    <h1>淮海战役</h1>
+    <p class="hero-subtitle">1948年11月 — 1949年1月 · 徐州地区</p>
+  </section>
+
+  <div class="bbg-shell">
+
+    <!-- ==================== 战役背景视频（接口） ====================
+         进入页面先播放，介绍该战役背景。
+         接入视频：把下方接口占位替换为
+         <video autoplay muted playsinline src="./assets/video/huaihai.mp4"></video>
+    =============================================================== -->
+    <section class="bbg-video">
+      <div class="video-frame" id="battleVideoFrame">
+        <video autoplay muted playsinline id="battleVideo">
+          <!-- ★ 视频接口（占位，无素材时不显示） -->
+        </video>
+        <div class="interface-slot" id="videoSlot">
+          <div>
+            战役背景视频接口<br>
+            <span style="font-size:0.72rem; letter-spacing:1px;">参考《大决战 · 淮海战役》开头旁白</span>
+          </div>
+          <span class="slot-tag">接口</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== 敌我情况 ==================== -->
+    <section class="bbg-section">
+      <h2>敌我情况</h2>
+      <div class="bbg-img-box">
+        <!-- ★ 敌我态势图接口 -->
+        <img id="battleSituation" src="./assets/texture/background2.png" alt="敌我态势图">
+      </div>
+      <div class="bbg-text">
+        <strong>我方部队：</strong>华东野战军与中原野战军主力，兵力约60万，装备精良、士气高昂，采取"穿插分割、各个歼灭"的战术方针。<br><br>
+        <strong>敌方部队：</strong>国民党徐州剿总所辖约80万军队，依托陇海、津浦铁路沿线工事布防，呈"一点两线"的防御态势。
+      </div>
+    </section>
+
+    <!-- ==================== 战役目标 ==================== -->
+    <section class="bbg-section">
+      <h2>战役目标</h2>
+      <div class="bbg-text">
+        集中优势兵力，在运动中歼灭国民党军主力于长江以北，解放华东广大地区，为渡江作战、解放全中国奠定基础。
+      </div>
+    </section>
+
+    <!-- ==================== 历史背景（接口补充） ==================== -->
+    <section class="bbg-section">
+      <h2>历史背景</h2>
+      <div class="bbg-text" id="battleContext">
+        <!-- ★ 历史背景文字接口：此处可由 JS/数据源填充 -->
+        1948年秋，解放战争进入战略决战阶段。淮海战役是三大战役中规模最大、歼敌数量最多的决定性战役，其胜利为解放全国创造了极为有利的条件。
+      </div>
+    </section>
+
+    <!-- ==================== 开始战斗 ==================== -->
+    <div class="bbg-start">
+      <a class="battle-btn" id="startBattleBtn" href="./loading.html">&#9876; 开始指挥</a>
+    </div>
+
+  </div>
+
+  <script>
+    // 开始指挥 → 进入加载页（loading.html）
+    var startBtn = document.getElementById('startBattleBtn');
+    if (startBtn) {
+      startBtn.addEventListener('click', function (e) {
+        // 若有真实视频需先播完/跳过，可在此加判断
+        // 默认直接进入加载页
+        e.preventDefault();
+        window.location.href = './loading.html';
+      });
+    }
+
+    // 视频接口：若未来接入真实视频，监听 ended 后隐藏占位
+    var video = document.getElementById('battleVideo');
+    var videoSlot = document.getElementById('videoSlot');
+    if (video) {
+      video.addEventListener('loadeddata', function () {
+        if (videoSlot) videoSlot.style.display = 'none';
+      });
+    }
+  </script>
+</body>
+</html>

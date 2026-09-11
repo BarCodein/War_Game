@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>沙盘战争 — 加载中</title>
+  <link rel="stylesheet" href="./members/css/battlepages.css">
+</head>
+<body>
+
+  <!-- ==================== 加载过渡页 ====================
+       中间画面 + 进度条 + 名人名言（均为接口）
+       加载完成后自动跳转 game.html
+  ======================================================== -->
+  <div class="loading-screen">
+
+    <!-- 中央画面（接口） -->
+    <figure class="loading-image">
+      <img id="loadingScene" src="" alt="" style="display:none;">
+      <!-- ★ 画面接口占位：接入后隐藏下方占位 -->
+      <div class="interface-slot" id="loadingSceneSlot" style="height:100%;">
+        <div>
+          加载画面接口<br>
+          <span style="font-size:0.72rem; letter-spacing:1px;">参考：战役插画 / 电影截图</span>
+        </div>
+        <span class="slot-tag">接口</span>
+      </div>
+    </figure>
+
+    <!-- 进度条 -->
+    <div class="loading-progress">
+      <div class="track">
+        <div class="fill" id="loadingFill" style="width:0%;"></div>
+      </div>
+      <div class="progress-tip" id="loadingTip">正在集结部队…</div>
+    </div>
+
+    <!-- 名人名言（接口） -->
+    <blockquote class="loading-quote">
+      <p id="loadingQuoteText">"宜将剩勇追穷寇，不可沽名学霸王。"</p>
+      <cite id="loadingQuoteAuthor">—— 毛泽东《七律 · 人民解放军占领南京》</cite>
+    </blockquote>
+
+  </div>
+
+  <script>
+    (function () {
+      var fill = document.getElementById('loadingFill');
+      var tip = document.getElementById('loadingTip');
+      var sceneImg = document.getElementById('loadingScene');
+      var sceneSlot = document.getElementById('loadingSceneSlot');
+
+      // ★ 画面接口：若 src 已填写真实图片，则显示图片、隐藏占位
+      // （当前 src 为空，占位自动显示）
+      if (sceneImg && sceneImg.getAttribute('src')) {
+        sceneImg.style.display = 'block';
+        if (sceneSlot) sceneSlot.style.display = 'none';
+      }
+
+      var tips = ['正在集结部队…', '正在部署兵力…', '正在侦察敌情…', '即将进入战场…'];
+      var progress = 0;
+      var timer = setInterval(function () {
+        progress += Math.random() * 8 + 3;
+        if (progress >= 100) {
+          progress = 100;
+          clearInterval(timer);
+          tip.textContent = '准备就绪';
+          // 加载完成后跳转 game.html
+          setTimeout(function () {
+            window.location.href = './game.html';
+          }, 500);
+        } else {
+          tip.textContent = tips[Math.floor(progress / 25) % tips.length];
+        }
+        fill.style.width = progress + '%';
+      }, 200);
+    })();
+  </script>
+</body>
+</html>

@@ -3,239 +3,383 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>沙盘战争 — 战役选择</title>
-  <link rel="stylesheet" href="/styles.css">
-  <style>
-    /* 战役选择页专用样式 */
-
-    /* 过场遮罩：全屏，默认显示，动画完成后移除 */
-    .cutscene-overlay {
-      position: fixed;
-      inset: 0;
-      z-index: 200;
-      background: #0a1816;
-      display: grid;
-      place-items: center;
-      transition: opacity .6s ease;
-    }
-    .cutscene-overlay.fade-out {
-      opacity: 0;
-      pointer-events: none;
-    }
-    .cutscene-content {
-      text-align: center;
-      color: #d6e7df;
-    }
-    .cutscene-content .eyebrow {
-      font: 10px 'IBM Plex Mono', monospace;
-      color: var(--lime);
-      letter-spacing: 3px;
-      display: block;
-      margin-bottom: 16px;
-    }
-    .cutscene-content h1 {
-      font-size: 48px;
-      letter-spacing: 6px;
-      margin: 0 0 12px;
-      font-weight: 700;
-      color: #f8fff7;
-    }
-    .cutscene-content p {
-      font-size: 15px;
-      color: #8da29d;
-      margin: 0;
-      max-width: 480px;
-      line-height: 1.8;
-    }
-
-    /* 战役列表区 */
-    .battlechoose-shell {
-      min-height: 100vh;
-      background: var(--paper);
-      display: flex;
-      flex-direction: column;
-    }
-    .battlechoose-topbar {
-      flex-shrink: 0;
-      background: #102a2b;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 0 34px;
-      height: 74px;
-    }
-    .back-link {
-      color: #8da29d;
-      font: 11px 'IBM Plex Mono', monospace;
-      text-decoration: none;
-      letter-spacing: 1px;
-      transition: color .15s;
-    }
-    .back-link:hover { color: var(--lime); }
-
-    .battlechoose-hero {
-      padding: 40px 24px 20px;
-      text-align: center;
-    }
-    .battlechoose-hero .eyebrow {
-      font: 10px 'IBM Plex Mono', monospace;
-      color: var(--muted);
-      letter-spacing: 3px;
-    }
-    .battlechoose-hero h1 {
-      font-size: 36px;
-      margin: 8px 0 0;
-      letter-spacing: 3px;
-      font-weight: 700;
-    }
-
-    .battle-card-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-      gap: 20px;
-      max-width: 1100px;
-      margin: 0 auto;
-      padding: 0 24px 60px;
-      /* 初始隐藏，过场动画结束后由 JS 显示 */
-      opacity: 0;
-      transform: translateY(16px);
-      transition: opacity .5s ease, transform .5s ease;
-      pointer-events: none;
-    }
-    .battle-card-grid.visible {
-      opacity: 1;
-      transform: translateY(0);
-      pointer-events: auto;
-    }
-
-    .battle-card {
-      background: var(--panel);
-      border: 1px solid var(--line);
-      box-shadow: 0 4px 13px #9bb1a50d;
-      padding: 24px;
-      transition: transform .12s, border-color .12s, box-shadow .12s;
-      display: flex;
-      flex-direction: column;
-      gap: 14px;
-    }
-    .battle-card:hover {
-      transform: translateY(-2px);
-      border-color: var(--lime);
-      box-shadow: 0 10px 22px #9bb1a51a;
-    }
-    .battle-card-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-    }
-    .battle-card-number {
-      font: 20px 'IBM Plex Mono', monospace;
-      color: #a4b7b0;
-    }
-    .battle-card-status {
-      font: 9px 'IBM Plex Mono', monospace;
-      padding: 3px 8px;
-      border: 1px solid #afc0b9;
-      color: var(--muted);
-      letter-spacing: 1px;
-    }
-    .battle-card-status.available {
-      color: #5b9e70;
-      border-color: #94c888;
-      background: #edf8dd;
-    }
-    .battle-card-status.completed {
-      color: #47885e;
-      border-color: #8cb972;
-      background: #edf8dd;
-    }
-    .battle-card h2 {
-      font-size: 18px;
-      margin: 0;
-      font-weight: 600;
-      letter-spacing: 1px;
-    }
-    .battle-card .eyebrow-sub {
-      font: 9px 'IBM Plex Mono', monospace;
-      color: var(--muted);
-      letter-spacing: 1.5px;
-    }
-    .battle-card p {
-      font-size: 13px;
-      color: #5a726d;
-      line-height: 1.7;
-      margin: 0;
-      flex: 1;
-    }
-    .battle-card-footer {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-    }
-    .battle-card-btn {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 8px 18px;
-      border: 1px solid #46625f;
-      background: #102a2b;
-      color: #d6e7df;
-      font: inherit;
-      font-size: 13px;
-      letter-spacing: 1px;
-      cursor: pointer;
-      text-decoration: none;
-      transition: background .12s;
-    }
-    .battle-card-btn:hover {
-      background: #294746;
-      border-color: var(--lime);
-      color: var(--lime);
-    }
-    .battle-card-btn:disabled {
-      opacity: .4;
-      cursor: not-allowed;
-      pointer-events: none;
-    }
-  </style>
+  <title>沙盘战争 — 关卡选择</title>
+  <link rel="stylesheet" href="./members/css/battlepages.css">
 </head>
 <body>
-  <!-- 过场动画遮罩：进入页面时播放，完成后自动淡出 -->
+
+  <!-- ==================== 过场动画遮罩 ====================
+       进入页面时先播放；此处为「视频接口」占位。
+       接入视频：把下方 <div class="cutscene-video"> 内的注释替换为
+       <video autoplay muted src="你的视频地址"></video>
+       即可。动画结束后调用 endCutscene() 淡出遮罩。
+  ======================================================== -->
   <div class="cutscene-overlay" id="cutsceneOverlay">
     <div class="cutscene-content">
-      <span class="eyebrow" data-i18n="battlechoose.cutscene.eyebrow">CAMPAIGN SELECT</span>
-      <h1 data-i18n="battlechoose.cutscene.title">沙盘战争</h1>
-      <p data-i18n="battlechoose.cutscene.desc">选择战役，开始你的指挥之旅。</p>
-    </div>
-  </div>
-
-  <div class="battlechoose-shell">
-    <!-- 顶栏 -->
-    <header class="battlechoose-topbar">
-      <a class="back-link" href="/index.html">← 返回首页</a>
-      <div class="brand">
-        <span class="brand-mark">+</span>
-        <div>
-          <strong data-i18n="hud.brand.title">沙盘战争</strong>
-          <small data-i18n="hud.brand.subtitle">FRONTLINE COMMAND</small>
-        </div>
+      <span class="cut-eyebrow">解放战争 · 烽火岁月</span>
+      <h1>沙盘战争</h1>
+      <p>选择一场战役，重返那段决定民族命运的烽火岁月。<br>运筹帷幄，决胜千里。</p>
+      <!-- ★ 过场视频接口（占位） -->
+      <div class="cutscene-video" id="cutsceneVideo">
+        <!-- <video autoplay muted playsinline src="./assets/video/intro.mp4"></video> -->
       </div>
-    </header>
-
-    <!-- 标题区 -->
-    <section class="battlechoose-hero">
-      <span class="eyebrow" data-i18n="battlechoose.hero.eyebrow">SELECT YOUR CAMPAIGN</span>
-      <h1 data-i18n="battlechoose.hero.title">战役选择</h1>
-    </section>
-
-    <!-- 关卡卡片网格：过场完成后显示 -->
-    <div class="battle-card-grid" id="battleCardGrid">
-      <!-- 卡片由 battlechoose.js 动态生成 -->
+      <button class="cutscene-skip" id="cutsceneSkip">跳过 ▶</button>
     </div>
   </div>
 
-  <script type="module" src="/src/auth.js"></script>
-  <script type="module" src="/src/entries/battlechoose.js"></script>
+  <!-- ==================== 导航条 ==================== -->
+  <nav class="battle-nav">
+    <div class="battle-nav-inner">
+      <a class="battle-nav-back" href="./index.html">&larr; 返回首页</a>
+      <a class="battle-nav-brand" href="./index.html">
+        <span class="nav-mark">&#9876;</span> 沙盘战争
+      </a>
+    </div>
+  </nav>
+
+  <!-- ==================== 页面标题 ==================== -->
+  <section class="battle-hero">
+    <span class="hero-eyebrow">SELECT YOUR CAMPAIGN</span>
+    <h1>关卡选择</h1>
+    <p class="hero-subtitle">中国军事地图 · 点击战役节点进入战场</p>
+  </section>
+
+  <!-- ==================== 地图主区 ====================
+       核心交互：缩放（滚轮/双指）、平移（拖拽）、自动放大（点击关卡）。
+       背景地图为「接口」，当前用旧纸地图占位，替换方式见 battlepages.css
+       里的 --battle-map-bg 变量。
+  ======================================================== -->
+  <section class="map-shell">
+    <div class="map-viewport" id="mapViewport">
+      <!-- 地图画布：<img.map-img> 渲染真实地图；关卡点绝对定位。
+           地图初始 width/height = 220%（CSS），再叠加 transform scale，
+           形成「初始放大、细节清晰」的视觉效果。
+      -->
+      <div class="map-canvas" id="mapCanvas">
+
+        <!-- ★ 背景地图接口（替换 src 即可换图） -->
+        <img class="map-img" id="mapImg" src="./assets/texture/index.png" alt="中国军事地图" draggable="false">
+
+        <!-- 关卡点（绝对定位在 canvas 上，坐标 = img 元素自身的百分比；
+             为了和放大后的图片"贴紧"，坐标按 220% 画布基准设定，
+             并由 JS 缩放后自动重新位置化） -->
+        <div class="battle-pin unlocked" data-level="1" style="left:40%; top:18%;">
+          <span class="pin-dot"></span>
+          <span class="pin-label">辽沈战役</span>
+        </div>
+        <div class="battle-pin current" data-level="2" style="left:80%; top:38%;">
+          <span class="pin-dot"></span>
+          <span class="pin-label">淮海战役</span>
+        </div>
+        <div class="battle-pin unlocked" data-level="3" style="left:102%; top:24%;">
+          <span class="pin-dot"></span>
+          <span class="pin-label">平津战役</span>
+        </div>
+        <div class="battle-pin locked" data-level="4" style="left:62%; top:56%;">
+          <span class="pin-dot"></span>
+          <span class="pin-label">渡江战役</span>
+        </div>
+
+      </div>
+
+      <!-- 缩放/复位控件 -->
+      <div class="map-controls">
+        <button id="zoomIn" title="放大">+</button>
+        <button id="zoomOut" title="缩小">&minus;</button>
+        <button id="zoomReset" title="复位">&#8962;</button>
+      </div>
+
+      <!-- 关卡预览卡 -->
+      <aside class="battle-preview" id="battlePreview">
+        <h3 id="previewName">淮海战役</h3>
+        <div class="preview-date" id="previewDate">1948年11月 — 1949年1月</div>
+        <p id="previewDesc">华东野战军与中原野战军联合，在以徐州为中心的广大地区，对国民党军展开战略性进攻。</p>
+        <a class="battle-btn" id="previewEnter" href="./battlebackground.html">进入战役 &rarr;</a>
+      </aside>
+    </div>
+  </section>
+
+  <script>
+    /* =========================================================
+       关卡选择页交互逻辑
+       - 过场动画：默认 2.6s 后自动淡出（若接入视频，改为视频 ended 后淡出）
+       - 地图缩放：滚轮 / 双指（0.6x ~ 3x）
+       - 地图平移：鼠标拖拽 / 单指拖动
+       - 自动放大：点击关卡，平滑聚焦到该点并高亮
+       - 关卡预览卡：点击关卡显示对应战役信息
+       ========================================================= */
+
+    (function () {
+      var overlay = document.getElementById('cutsceneOverlay');
+      var skipBtn = document.getElementById('cutsceneSkip');
+
+      function endCutscene() {
+        if (!overlay) return;
+        overlay.classList.add('fade-out');
+        // 淡出动画结束后移除遮罩，释放交互
+        setTimeout(function () {
+          if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+        }, 700);
+      }
+      // 过场时长：有视频则跟随视频，无视频则 2.6s 后自动结束
+      setTimeout(endCutscene, 2600);
+      if (skipBtn) skipBtn.addEventListener('click', endCutscene);
+
+      /* ---------- 地图缩放 / 平移 ---------- */
+      var viewport = document.getElementById('mapViewport');
+      var canvas = document.getElementById('mapCanvas');
+      if (!viewport || !canvas) return;
+
+      var scale = 1;
+      var tx = 0, ty = 0;
+      // ★ 缩放边界放宽（让地图初始就大、且能放大到能看清地图细节）
+      var MIN = 0.8, MAX = 4.0;
+      var dragging = false;
+      var startX = 0, startY = 0, startTx = 0, startTy = 0;
+      // 双指缩放起始
+      var pinchStartDist = 0, pinchStartScale = 1;
+
+      function applyTransform(animate) {
+        if (animate === false) {
+          canvas.classList.add('no-transition');
+        } else {
+          canvas.classList.remove('no-transition');
+        }
+        canvas.style.transform = 'translate(' + tx + 'px,' + ty + 'px) scale(' + scale + ')';
+        if (animate === false) {
+          requestAnimationFrame(function () { canvas.classList.remove('no-transition'); });
+        }
+      }
+
+      function clampScale(s) {
+        return Math.min(MAX, Math.max(MIN, s));
+      }
+
+      /* =====================================================================
+         关键：边界 clamp —— 保证地图任何时刻都不能被拖出 viewport 之外
+         计算依据：地图图实际尺寸 = viewport.w * scale（因为 .map-img 的
+         width/height = 220%，且 transform-origin: 0 0）
+         平移 tx 的合法范围：让图右边界不超出 viewport 右边界、图左边界不超出 viewport 左边界
+         ===================================================================== */
+      function clampPan() {
+        var rect = viewport.getBoundingClientRect();
+        var vw = rect.width, vh = rect.height;
+        // .map-img 在没有 transform 时大小 = viewport 的 220%
+        var imgW = vw * 2.2 * scale;
+        var imgH = vh * 2.2 * scale;
+        // 上下/左右边界：保证 img 完全覆盖 viewport
+        // tx 必须位于 [vw - imgW, 0]，ty 类似
+        if (imgW > vw) {
+          tx = Math.min(0, Math.max(vw - imgW, tx));
+        } else {
+          // img 比 viewport 还小 → 居中（极少发生，因 MIN=0.8 且图初始 220%）
+          tx = (vw - imgW) / 2;
+        }
+        if (imgH > vh) {
+          ty = Math.min(0, Math.max(vh - imgH, ty));
+        } else {
+          ty = (vh - imgH) / 2;
+        }
+      }
+
+      // 滚轮缩放（以鼠标位置为锚点 + 边界 clamp）
+      viewport.addEventListener('wheel', function (e) {
+        e.preventDefault();
+        var rect = viewport.getBoundingClientRect();
+        var mx = e.clientX - rect.left;
+        var my = e.clientY - rect.top;
+        var factor = e.deltaY < 0 ? 1.1 : 1 / 1.1;
+        var newScale = clampScale(scale * factor);
+
+        // 以鼠标位置为中心缩放：调整平移量
+        tx = mx - (mx - tx) * (newScale / scale);
+        ty = my - (my - ty) * (newScale / scale);
+        scale = newScale;
+        clampPan();
+        applyTransform();
+      }, { passive: false });
+
+      // 鼠标拖拽平移（带边界 clamp）
+      viewport.addEventListener('mousedown', function (e) {
+        dragging = true;
+        startX = e.clientX; startY = e.clientY;
+        startTx = tx; startTy = ty;
+        viewport.classList.add('dragging');
+        applyTransform(false);
+      });
+      window.addEventListener('mousemove', function (e) {
+        if (!dragging) return;
+        tx = startTx + (e.clientX - startX);
+        ty = startTy + (e.clientY - startY);
+        clampPan();
+        applyTransform(false);
+      });
+      window.addEventListener('mouseup', function () {
+        dragging = false;
+        viewport.classList.remove('dragging');
+      });
+
+      // 触屏：单指平移 / 双指缩放（带边界 clamp）
+      viewport.addEventListener('touchstart', function (e) {
+        if (e.touches.length === 1) {
+          dragging = true;
+          startX = e.touches[0].clientX;
+          startY = e.touches[0].clientY;
+          startTx = tx; startTy = ty;
+          applyTransform(false);
+        } else if (e.touches.length === 2) {
+          dragging = false;
+          var dx = e.touches[0].clientX - e.touches[1].clientX;
+          var dy = e.touches[0].clientY - e.touches[1].clientY;
+          pinchStartDist = Math.sqrt(dx * dx + dy * dy);
+          pinchStartScale = scale;
+        }
+      }, { passive: false });
+      viewport.addEventListener('touchmove', function (e) {
+        e.preventDefault();
+        if (e.touches.length === 1 && dragging) {
+          tx = startTx + (e.touches[0].clientX - startX);
+          ty = startTy + (e.touches[0].clientY - startY);
+          clampPan();
+          applyTransform(false);
+        } else if (e.touches.length === 2) {
+          var dx = e.touches[0].clientX - e.touches[1].clientX;
+          var dy = e.touches[0].clientY - e.touches[1].clientY;
+          var dist = Math.sqrt(dx * dx + dy * dy);
+          scale = clampScale(pinchStartScale * (dist / pinchStartDist));
+          clampPan();
+          applyTransform(false);
+        }
+      }, { passive: false });
+      viewport.addEventListener('touchend', function () {
+        dragging = false;
+      });
+
+      // 缩放/复位控件（带边界 clamp）
+      document.getElementById('zoomIn').addEventListener('click', function () {
+        var rect = viewport.getBoundingClientRect();
+        var mx = rect.width / 2, my = rect.height / 2;
+        var newScale = clampScale(scale * 1.2);
+        tx = mx - (mx - tx) * (newScale / scale);
+        ty = my - (my - ty) * (newScale / scale);
+        scale = newScale;
+        clampPan();
+        applyTransform();
+      });
+      document.getElementById('zoomOut').addEventListener('click', function () {
+        var rect = viewport.getBoundingClientRect();
+        var mx = rect.width / 2, my = rect.height / 2;
+        var newScale = clampScale(scale / 1.2);
+        tx = mx - (mx - tx) * (newScale / scale);
+        ty = my - (my - ty) * (newScale / scale);
+        scale = newScale;
+        clampPan();
+        applyTransform();
+      });
+      // ★ 复位：恢复到「初始放大+居中」状态（不是 1:1）
+      document.getElementById('zoomReset').addEventListener('click', function () {
+        resetMap();
+      });
+
+      /* =====================================================================
+         初始化：地图一进入页面就放到「比 viewport 大」的状态（参照你截图）。
+         这里把 scale 设为 1.0（在 MIN/MAX 内）、图片本身 = 220%，再通过
+         clampPan 让图中心对齐 viewport 中心，最终视觉 = 截图里那种「地图
+         满满、细节可见」的初始状态。
+         ===================================================================== */
+      function resetMap() {
+        scale = 1.0;
+        var rect = viewport.getBoundingClientRect();
+        // 让地图图（vw*2.2）居中显示
+        var imgW = rect.width * 2.2;
+        var imgH = rect.height * 2.2;
+        tx = (rect.width - imgW) / 2;
+        ty = (rect.height - imgH) / 2;
+        applyTransform();
+      }
+
+      // 等 map-img 加载完成后再 reset（避免未加载时尺寸异常）
+      var mapImg = document.getElementById('mapImg');
+      if (mapImg && mapImg.complete) {
+        resetMap();
+      } else if (mapImg) {
+        mapImg.addEventListener('load', resetMap);
+        mapImg.addEventListener('error', resetMap);
+      } else {
+        resetMap();
+      }
+
+      // 窗口尺寸变化时，重新 clamp 防越界
+      window.addEventListener('resize', function () {
+        clampPan();
+        applyTransform();
+      });
+
+      /* ---------- 关卡点交互 ---------- */
+      // 战役数据（可扩展，作为接口由后端/JS 数据源填充）
+      var battleData = {
+        1: { name: '辽沈战役', date: '1948年9月 — 1948年11月', desc: '东北野战军发起辽沈战役，解放东北全境，奠定全国胜利基础。', href: './battlebackground.html' },
+        2: { name: '淮海战役', date: '1948年11月 — 1949年1月', desc: '华东野战军与中原野战军联合，在以徐州为中心的广大地区展开战略性进攻。', href: './battlebackground.html' },
+        3: { name: '平津战役', date: '1948年11月 — 1949年1月', desc: '东北野战军与华北军区部队联合，和平解放北平，结束华北战事。', href: './battlebackground.html' },
+        4: { name: '渡江战役', date: '1949年4月', desc: '百万雄师过大江，解放南京，宣告国民党反动统治的覆灭。', href: './battlebackground.html' }
+      };
+
+      var preview = document.getElementById('battlePreview');
+      var previewName = document.getElementById('previewName');
+      var previewDate = document.getElementById('previewDate');
+      var previewDesc = document.getElementById('previewDesc');
+      var previewEnter = document.getElementById('previewEnter');
+
+      var pins = document.querySelectorAll('.battle-pin');
+      pins.forEach(function (pin) {
+        pin.addEventListener('click', function (e) {
+          e.stopPropagation();
+          var lv = pin.getAttribute('data-level');
+          if (pin.classList.contains('locked')) return; // 锁定关卡不可进入
+
+          // 高亮当前 pin
+          pins.forEach(function (p) { p.classList.remove('current'); });
+          pin.classList.add('current');
+
+          // 填充预览卡
+          var data = battleData[lv] || { name: '未知战役', date: '', desc: '', href: './battlebackground.html' };
+          previewName.textContent = data.name;
+          previewDate.textContent = data.date;
+          previewDesc.textContent = data.desc;
+          previewEnter.href = data.href;
+          preview.classList.add('show');
+
+          // 自动放大聚焦到该关卡
+          autoFocusPin(pin);
+        });
+      });
+
+      function autoFocusPin(pin) {
+        var rect = viewport.getBoundingClientRect();
+        var pinRect = pin.getBoundingClientRect();
+        // pin 中心相对视口的坐标
+        var pinCenterX = pinRect.left - rect.left + pinRect.width / 2;
+        var pinCenterY = pinRect.top - rect.top + pinRect.height / 2;
+
+        var targetScale = 2.0; // 自动聚焦目标缩放
+        // 计算平移，让 pin 居中
+        var newTx = rect.width / 2 - pinCenterX * (targetScale / scale);
+        var newTy = rect.height / 2 - pinCenterY * (targetScale / scale);
+        // 简化：直接以 pin 为中心
+        tx = rect.width / 2 - pinCenterX * targetScale / scale + tx;
+        ty = rect.height / 2 - pinCenterY * targetScale / scale + ty;
+        scale = targetScale;
+
+        applyTransform();
+      }
+
+      // 点击地图空白处关闭预览卡
+      viewport.addEventListener('click', function (e) {
+        if (e.target === canvas || e.target === viewport) {
+          preview.classList.remove('show');
+        }
+      });
+    })();
+  </script>
 </body>
 </html>

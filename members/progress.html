@@ -31,7 +31,7 @@
     </nav>
 
     <!-- ==================== 开发进度横幅 ==================== -->
-    <section class="hero" style="padding: 3rem 2rem;">
+    <section class="hero hero-compact">
         <div class="hero-content">
             <h1>&#9876; 开发进度 &#9876;</h1>
             <p class="subtitle">稳步推进，每一步都脚踏实地</p>
@@ -43,40 +43,40 @@
         <h2 class="section-title">总体进度</h2>
         <p class="section-desc">截至2026年9月</p>
 
-        <div style="max-width: 700px; margin: 0 auto;">
-            <div style="display:flex; align-items:center; gap:1rem; margin-bottom:2rem;">
-                <div style="flex:1; background:#ddd; border-radius:20px; overflow:hidden; height:28px;">
-                    <div style="width:45%; height:100%; background: linear-gradient(90deg, var(--dark-red), var(--military-green)); border-radius:20px; display:flex; align-items:center; justify-content:center; color:#fff; font-size:0.9rem; font-weight:bold;">45%</div>
+        <div class="container-narrow">
+            <div class="progress-bar">
+                <div class="track">
+                    <div class="fill" style="width:45%;">45%</div>
                 </div>
-                <span style="font-weight:bold; color:var(--dark-red); font-size:1.2rem;">总体进度：45%</span>
+                <span class="label">总体进度：45%</span>
             </div>
 
-            <div class="card-grid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));">
-                <div class="card" style="text-align:center;">
+            <div class="progress-card-grid">
+                <div class="card progress-card">
                     <div class="card-body">
                         <h3>策划设计</h3>
-                        <div style="width:70px; height:70px; border-radius:50%; border:4px solid var(--military-green); display:flex; align-items:center; justify-content:center; margin:0.8rem auto; color:var(--military-green); font-weight:bold; font-size:1.2rem;">80%</div>
+                        <div class="progress-ring">80%</div>
                         <p>核心玩法、兵种设计、关卡规划已完成</p>
                     </div>
                 </div>
-                <div class="card" style="text-align:center;">
+                <div class="card progress-card">
                     <div class="card-body">
                         <h3>美术设计</h3>
-                        <div style="width:70px; height:70px; border-radius:50%; border:4px solid var(--dark-red); display:flex; align-items:center; justify-content:center; margin:0.8rem auto; color:var(--dark-red); font-weight:bold; font-size:1.2rem;">50%</div>
+                        <div class="progress-ring progress-ring--red">50%</div>
                         <p>角色原画、UI界面设计进行中</p>
                     </div>
                 </div>
-                <div class="card" style="text-align:center;">
+                <div class="card progress-card">
                     <div class="card-body">
                         <h3>程序开发</h3>
-                        <div style="width:70px; height:70px; border-radius:50%; border:4px solid var(--military-green-light); display:flex; align-items:center; justify-content:center; margin:0.8rem auto; color:var(--military-green-light); font-weight:bold; font-size:1.2rem;">30%</div>
+                        <div class="progress-ring progress-ring--green-light">30%</div>
                         <p>核心引擎和基础框架搭建中</p>
                     </div>
                 </div>
-                <div class="card" style="text-align:center;">
+                <div class="card progress-card">
                     <div class="card-body">
                         <h3>音效制作</h3>
-                        <div style="width:70px; height:70px; border-radius:50%; border:4px solid var(--dark-red-light); display:flex; align-items:center; justify-content:center; margin:0.8rem auto; color:var(--dark-red-light); font-weight:bold; font-size:1.2rem;">20%</div>
+                        <div class="progress-ring progress-ring--red-light">20%</div>
                         <p>背景音乐和基础音效开始制作</p>
                     </div>
                 </div>
