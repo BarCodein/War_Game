@@ -5,7 +5,7 @@ html, body {
   padding: 0;
   overflow: hidden; 
   background-color: #fffdfb;
-  background-image: url("/members/images/command_room_bg.png");
+  background-image: url("../../assets/texture/background1.png");
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;

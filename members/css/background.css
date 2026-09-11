@@ -1,0 +1,80 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+.battlebg-shell {
+  min-height: 100vh;
+  /* 替换为深色纯色背景，移除背景图片 */
+  background-color: #0c1418;
+  position: relative;
+  padding: 60px 24px;
+}
+.battlebg-shell::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-color: rgba(10, 14, 18, 0.78);
+  z-index: 1;
+}
+.content-wrap {
+  max-width: 900px;
+  margin: 0 auto;
+  position: relative;
+  z-index: 2;
+}
+.battle-img-box {
+  width: 100%;
+  overflow: hidden;
+  border-radius: 4px;
+  /* 图片外发光，在深色纯色背景上凸显图片 */
+  box-shadow: 0 0 24px rgba(180, 200, 210, 0.35);
+  margin-bottom: 28px;
+}
+.battle-img-box img {
+  width: 100%;
+  display: block;
+}
+.battle-text {
+  /* 半透明白色背景文字面板 */
+  background-color: rgba(255,255,255,0.14);
+  padding: 28px 32px;
+  border-radius: 4px;
+  border: 1px solid rgba(255,255,255,0.22);
+  margin-bottom:40px;
+}
+.battle-text h2 {
+  color:#ffffff;
+  margin: 20px 0 8px;
+  font-size:20px;
+  letter-spacing:1px;
+}
+.battle-text p {
+  font-size:15px;
+  line-height:1.8;
+  color:#f0f2f4;
+}
+.battle-text h2:first-child {
+  margin-top: 0;
+}
+.start-btn-wrap {
+  text-align:center;
+}
+.start-command-btn {
+  padding:14px 40px;
+  border: 1px solid rgba(220, 230, 235, 0.4);
+  background: rgba(12, 22, 26, 0.75);
+  color: #e6edf0;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size:16px;
+  letter-spacing:2px;
+  cursor:pointer;
+  transition: all .2s ease;
+  border-radius: 2px;
+}
+.start-command-btn:hover {
+  background: rgba(60, 110, 90, 0.6);
+  border-color: rgba(140, 210, 160, 0.7);
+  box-shadow: 0 0 14px rgba(110, 200, 130, 0.4);
+  color: #eaffef;
+}
