@@ -203,20 +203,23 @@
 
 | config 路径 | 值 |
 |---|---|
-| units.light：hp / damage / attackInterval / range / speed / radius / vision | 60 / 8 / 1.0 s / 40 / 90 / 10 / 140 |
-| units.heavy：hp / damage / attackInterval / range / speed / radius / vision | 120 / 16 / 1.6 s / 55 / 55 / 14 / 160 |
+| units.light：hp / damage / attackInterval / range / speed / radius / vision | 60 / 0.8 / 0.2 s / 40 / 40 / 14 / 140 |
+| units.heavy：hp / damage / attackInterval / range / speed / radius / vision | 80 / 1 / 0.2 s / 40 / 40 / 14 / 160 |
+| combat.defend | 0.75（防守方承受伤害系数） |
+| combat.hp_dps_ratio | 0.8（血量低于该比例后攻击力随血量线性下降） |
 | morale.initial / min / max | 80 / 0 / 100 |
-| morale.perSecond：friendlyNearby / cityNearby / supplied / unsupplied / inCombat | +2 / +5 / +1 / −2 / −1（/s） |
+| morale.perSecond：friendlyNearby / cityNearby / supplied / unsupplied / inCombat / moving / attack | +2 / +5 / +1 / −2 / −8 / −5 / ×1.3（/s） |
 | morale.ranges：friendly / city / allyDeath | 60 / 120 / 100（px） |
 | morale.onAllyDeath | −10 |
 | morale.thresholds：weakenedBelow / shakenBelow / routAt | 60 / 30 / 0 |
 | morale.effects.weakened：damage / speed | ×0.75 / ×0.85 |
 | morale.effects.shaken：damage / speed | ×0.5 / ×0.7 |
 | morale.rout：recoverPerSecond / stopAt / stuckSeconds | +8 /s / 20 / 5 s |
+| morale.unordered：recoverPerSecond / stopAt / stuckSeconds | +10 /s / 20 / 5 s |
 | movement.routSpeedMultiplier | 0.6 |
 | cities.capture：radius / perUnitPerSecond / capPerSecond / decayPerSecond | 60 / 5% / 15% / 3% |
 | cities.production：interval / unitType / pauseWhenSupplyFull | 12 s / light / true |
-| cities.recovery：radius / hpPerSecond / moralePerSecond | 120 / +3 /s / +5 /s |
+| cities.recovery：radius / hpPerSecond / moralePerSecond | 100 / +3 /s / +5 /s |
 | cities.vision | 180 |
 | capturePoints.vision | 180 |
 | capturePoints.capture：radius / perUnitPerSecond / capPerSecond / decayPerSecond | 60 / 5% / 15% / 3% |

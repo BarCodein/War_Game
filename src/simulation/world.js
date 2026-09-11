@@ -127,6 +127,8 @@ function applyCommand(world, unit, command) {
       : newRoute;
     unit.routeIndex = 0;
     unit.pathDirty = true;
+    // 下达行军命令即视为「主动脱离战斗」：置为 moving，交由 movement 推进；
+    // 若下一 tick 仍在接触范围内，combat 会重新置回 combat（见 gdd.md §4）。
     unit.state = 'moving';
     return;
   }
