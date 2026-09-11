@@ -1,4 +1,4 @@
-import { makeUnit, makeCity } from './entities.js';
+import { makeUnit, makeCity, makeCapturePoint } from './entities.js';
 import { parseMap } from './map.js';
 import { SpatialGrid } from './spatial.js';
 import { validateCommand } from './commands.js';
@@ -25,6 +25,9 @@ export class World {
     this.terrain = map.terrain;
     this.size = map.size;
     this.cities = map.cities.map(city => makeCity(city));
+    // 占领点独立于 cities：supply / morale / production / victory 只读 cities，
+    // 因此占领点天然不提供补给、士气、生产与胜负影响，仅 fog 额外读取它提供视野。
+    this.capturePoints = map.capturePoints.map(point => makeCapturePoint(point));
     this.units = [];
     this.fog = { blue: createFogGrid(map.terrain), red: createFogGrid(map.terrain) };
     this.events = [];   // 本 tick 产生的事件（morale 消费 unitDied 后于 tick 末清空）
