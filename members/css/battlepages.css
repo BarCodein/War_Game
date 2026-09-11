@@ -256,7 +256,24 @@ h1, h2, h3, h4 {
     opacity: 0;
     pointer-events: none;
 }
+/* 过场视频：铺满整个遮罩作为背景 */
+.cutscene-video {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    overflow: hidden;
+    background: #000;
+}
+.cutscene-video video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+/* 文字内容浮在视频上层 */
 .cutscene-content {
+    position: relative;
+    z-index: 2;
     text-align: center;
     color: var(--cream);
     padding: 24px;
@@ -283,9 +300,15 @@ h1, h2, h3, h4 {
     margin: 0 auto;
 }
 .cutscene-skip {
-    margin-top: 32px;
+    /* 固定在视频右上角 */
+    position: absolute;
+    top: 24px;
+    right: 28px;
+    z-index: 3;
     padding: 10px 26px;
-    background: transparent;
+    background: rgba(20, 12, 6, 0.55);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
     border: 1px solid rgba(245, 240, 232, 0.4);
     color: var(--cream);
     font-size: 0.8rem;
@@ -293,10 +316,21 @@ h1, h2, h3, h4 {
     cursor: pointer;
     transition: all .2s ease;
     border-radius: 2px;
+    font-family: inherit;
 }
 .cutscene-skip:hover {
     border-color: var(--brass);
     color: var(--brass);
+    background: rgba(20, 12, 6, 0.75);
+}
+/* 开场文字标题的渐隐动画（视频播 5 秒后触发） */
+.cutscene-content {
+    transition: opacity 1.2s ease, transform 1.2s ease;
+}
+.cutscene-content.fade-out {
+    opacity: 0;
+    transform: translateY(-12px);
+    pointer-events: none;
 }
 
 /* 地图主区 */
@@ -516,6 +550,149 @@ h1, h2, h3, h4 {
 /* =====================================================================
    页面二：battlebackground — 战役背景
    ===================================================================== */
+
+/* ----- 入场动画（全屏覆盖层） ----- */
+.bbg-intro-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 200;
+    background: #000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    transition: opacity .8s ease;
+}
+.bbg-intro-overlay.fade-out {
+    opacity: 0;
+    pointer-events: none;
+}
+/* 视频层：铺满遮罩 */
+.bbg-intro-video {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    overflow: hidden;
+    background: #000;
+}
+.bbg-intro-video video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+/* 开场标题：视频开头显示，5 秒后渐隐 */
+.bbg-intro-content {
+    position: relative;
+    z-index: 2;
+    text-align: center;
+    color: var(--cream);
+    padding: 24px;
+    transition: opacity 1.2s ease, transform 1.2s ease;
+}
+.bbg-intro-content.fade-out {
+    opacity: 0;
+    transform: translateY(-12px);
+    pointer-events: none;
+}
+.bbg-intro-content .cut-eyebrow {
+    display: block;
+    font-size: 0.72rem;
+    letter-spacing: 5px;
+    color: var(--brass);
+    margin-bottom: 16px;
+}
+.bbg-intro-content h1 {
+    font-size: 3rem;
+    letter-spacing: 8px;
+    color: #fff;
+    text-shadow: 0 0 24px rgba(166, 124, 0, 0.5);
+    margin-bottom: 14px;
+}
+.bbg-intro-content p {
+    font-size: 0.95rem;
+    color: #c8b8a0;
+    line-height: 1.9;
+    margin: 0 auto;
+}
+/* 加载中的小点点 */
+.bbg-intro-loading {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    display: flex;
+    gap: 14px;
+    color: var(--brass);
+    align-items: center;
+    font-size: 0.85rem;
+    letter-spacing: 3px;
+}
+.bbg-intro-loading p {
+    margin: 14px 0 0;
+    width: 100%;
+    text-align: center;
+}
+.bbg-intro-loading .loading-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--brass);
+    animation: bbg-intro-pulse 1.4s ease-in-out infinite;
+}
+.bbg-intro-loading .loading-dot:nth-child(2) { animation-delay: 0.2s; }
+.bbg-intro-loading .loading-dot:nth-child(3) { animation-delay: 0.4s; }
+@keyframes bbg-intro-pulse {
+    0%, 100% { transform: scale(0.6); opacity: 0.4; }
+    50%      { transform: scale(1);   opacity: 1; }
+}
+/* 跳过按钮 — 右上角 */
+.bbg-intro-skip {
+    position: absolute;
+    top: 24px;
+    right: 24px;
+    padding: 10px 22px;
+    background: rgba(0, 0, 0, 0.55);
+    border: 1px solid rgba(255, 255, 255, 0.4);
+    color: var(--cream);
+    font-family: "SimHei", sans-serif;
+    font-size: 0.85rem;
+    letter-spacing: 2px;
+    cursor: pointer;
+    border-radius: 2px;
+    transition: all .2s ease;
+    z-index: 5;
+}
+.bbg-intro-skip:hover {
+    border-color: var(--brass);
+    color: var(--brass);
+    background: rgba(0, 0, 0, 0.8);
+}
+/* 入场标题 — 屏中央底部 */
+.bbg-intro-title {
+    position: absolute;
+    bottom: 8%;
+    left: 0;
+    right: 0;
+    text-align: center;
+    color: var(--cream);
+    z-index: 4;
+    pointer-events: none;
+    text-shadow: 0 2px 12px rgba(0, 0, 0, 0.8);
+}
+.bbg-intro-title h1 {
+    font-size: 2.4rem;
+    letter-spacing: 6px;
+    color: var(--brass);
+    text-shadow: 0 0 20px rgba(166, 124, 0, 0.5), 0 2px 12px rgba(0, 0, 0, 0.8);
+    animation: bbg-intro-title-fade 1.6s ease-out;
+    margin: 0;
+}
+@keyframes bbg-intro-title-fade {
+    from { opacity: 0; transform: translateY(20px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
 .bbg-shell {
     max-width: 900px;
     margin: 0 auto;

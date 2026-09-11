@@ -5,74 +5,240 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>沙盘战争 — 加载中</title>
   <link rel="stylesheet" href="./members/css/battlepages.css">
+  <style>
+    /* loading 页专属：直接覆盖 battlepages.css 同名类，做全屏三段式 */
+    body { margin: 0; background: #000; overflow: hidden; font-family: "Microsoft YaHei", sans-serif; color: #fff; }
+    /* 覆盖父容器 battlepages.css 里的居中布局，让子元素铺满 */
+    .loading-screen {
+      position: relative !important;
+      width: 100vw !important;
+      height: 100vh !important;
+      display: block !important;
+      align-items: stretch !important;
+      justify-content: stretch !important;
+      padding: 0 !important;
+      overflow: hidden;
+    }
+
+    /* 中央画面 = 全屏背景（覆盖 battlepages.css 的同名 .loading-image 卡片样式） */
+    .loading-image {
+      position: absolute !important;
+      inset: 0 !important;
+      width: 100% !important;
+      max-width: none !important;
+      aspect-ratio: auto !important;
+      margin: 0 !important;
+      border: none !important;
+      border-radius: 0 !important;
+      box-shadow: none !important;
+      background: #0a0a0a;
+      overflow: hidden;
+    }
+    .loading-image img {
+      width: 100% !important;
+      height: 100% !important;
+      object-fit: cover;
+      display: block;
+      filter: brightness(0.78) contrast(1.08) saturate(0.9);
+    }
+    /* 占位（接口未填时显示） */
+    .loading-image .interface-slot {
+      width: 100%;
+      height: 100%;
+    }
+
+    /* 顶部进度条面板（铜色边框，参考图风格） */
+    .loading-top {
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      padding: 18px 28px 14px;
+      z-index: 5;
+      background: linear-gradient(180deg, rgba(8,5,2,0.78) 0%, rgba(8,5,2,0.55) 70%, rgba(0,0,0,0) 100%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+    }
+    .loading-task {
+      font-size: 0.78rem;
+      letter-spacing: 4px;
+      color: #d8b97a;
+      text-shadow: 0 2px 6px rgba(0,0,0,0.9);
+      font-family: "SimHei", "Microsoft YaHei", sans-serif;
+    }
+    .loading-progress {
+      width: 100%;
+      max-width: 720px;
+    }
+    .loading-progress .track {
+      width: 100%;
+      height: 14px;
+      border: 1.5px solid #6b4a1a;
+      border-radius: 1px;
+      background: linear-gradient(180deg, #1a1208 0%, #2a1d0c 100%);
+      box-shadow:
+        inset 0 1px 2px rgba(0,0,0,0.7),
+        inset 0 -1px 1px rgba(255,200,100,0.05);
+      overflow: hidden;
+      position: relative;
+    }
+    .loading-progress .fill {
+      height: 100%;
+      background:
+        linear-gradient(180deg,
+          rgba(255,225,140,0.95) 0%,
+          #d8a447 30%,
+          #a67427 60%,
+          #6b4a1a 100%);
+      box-shadow:
+        inset 0 1px 0 rgba(255,255,255,0.4),
+        0 0 10px rgba(216, 164, 71, 0.5);
+      transition: width .25s ease;
+    }
+
+    /* 底部名言面板（铜色边框面板，参考图风格） */
+    .loading-bottom {
+      position: absolute;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 5;
+      max-width: 640px;
+      width: calc(100% - 80px);
+      padding: 14px 24px 16px;
+      background:
+        linear-gradient(180deg, rgba(20,12,4,0.92) 0%, rgba(10,6,2,0.92) 100%);
+      border: 2px solid #6b4a1a;
+      box-shadow:
+        inset 0 0 0 1px #2a1d0c,
+        inset 0 0 18px rgba(0,0,0,0.6),
+        0 4px 18px rgba(0,0,0,0.6);
+      text-align: center;
+    }
+    .loading-quote {
+      margin: 0;
+      font-size: 0.95rem;
+      letter-spacing: 1px;
+      color: #f0e3c4;
+      line-height: 1.6;
+      text-shadow: 0 1px 2px rgba(0,0,0,0.8);
+    }
+    .loading-quote p { margin: 0; }
+    .loading-quote cite {
+      display: block;
+      margin-top: 8px;
+      font-size: 0.72rem;
+      letter-spacing: 2px;
+      color: #b89a64;
+      font-style: normal;
+    }
+
+    /* 四角铜钉装饰（参考图风格） */
+    .loading-bottom::before,
+    .loading-bottom::after {
+      content: "";
+      position: absolute;
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: radial-gradient(circle at 30% 30%, #f0d088, #8c6b2c 60%, #4a3210);
+      box-shadow: 0 0 4px rgba(0,0,0,0.6);
+    }
+    .loading-bottom::before { top: -4px; left: -4px; }
+    .loading-bottom::after  { top: -4px; right: -4px; }
+  </style>
 </head>
 <body>
 
-  <!-- ==================== 加载过渡页 ====================
-       中间画面 + 进度条 + 名人名言（均为接口）
-       加载完成后自动跳转 game.html
-  ======================================================== -->
+  <!-- ==================== 加载过渡页（参考 RTS 加载画面） ====================
+       三段式布局：
+         - 顶部：当前加载任务 + 进度条（铜色面板）
+         - 中央：战场实景 / 战役插画（全屏背景）
+         - 底部：名人名言 + 署名（铜色面板）
+       ★ 接口：
+         - 加载画面：把下方 <img id="loadingScene"> 的 src 改为你的图片路径
+         - 名人名言：替换 #loadingQuoteText 和 #loadingQuoteAuthor 的文字
+         - 加载任务：JS 里 tips 数组可扩展
+       =================================================================== -->
+
   <div class="loading-screen">
 
-    <!-- 中央画面（接口） -->
+    <!-- 中央画面（★ 接口：替换 src） -->
     <figure class="loading-image">
-      <img id="loadingScene" src="" alt="" style="display:none;">
-      <!-- ★ 画面接口占位：接入后隐藏下方占位 -->
+      <img id="loadingScene" src="./assets/texture/background1.png" alt="战场实景">
+      <!-- ★ 画面接口占位（未填 src 时显示） -->
       <div class="interface-slot" id="loadingSceneSlot" style="height:100%;">
         <div>
           加载画面接口<br>
-          <span style="font-size:0.72rem; letter-spacing:1px;">参考：战役插画 / 电影截图</span>
+          <span style="font-size:0.72rem; letter-spacing:1px;">参考：战役插画 / 电影截图 / 战场实景</span>
         </div>
         <span class="slot-tag">接口</span>
       </div>
     </figure>
 
-    <!-- 进度条 -->
-    <div class="loading-progress">
-      <div class="track">
-        <div class="fill" id="loadingFill" style="width:0%;"></div>
+    <!-- 顶部：加载任务 + 进度条 -->
+    <div class="loading-top">
+      <div class="loading-task" id="loadingTask">正在集结部队…</div>
+      <div class="loading-progress">
+        <div class="track">
+          <div class="fill" id="loadingFill" style="width:0%;"></div>
+        </div>
       </div>
-      <div class="progress-tip" id="loadingTip">正在集结部队…</div>
     </div>
 
-    <!-- 名人名言（接口） -->
-    <blockquote class="loading-quote">
-      <p id="loadingQuoteText">"宜将剩勇追穷寇，不可沽名学霸王。"</p>
-      <cite id="loadingQuoteAuthor">—— 毛泽东《七律 · 人民解放军占领南京》</cite>
-    </blockquote>
+    <!-- 底部：名人名言 + 署名 -->
+    <div class="loading-bottom">
+      <blockquote class="loading-quote">
+        <p id="loadingQuoteText">"宜将剩勇追穷寇，不可沽名学霸王。"</p>
+        <cite id="loadingQuoteAuthor">—— 毛泽东《七律 · 人民解放军占领南京》</cite>
+      </blockquote>
+    </div>
 
   </div>
 
   <script>
     (function () {
       var fill = document.getElementById('loadingFill');
-      var tip = document.getElementById('loadingTip');
+      var task = document.getElementById('loadingTask');
       var sceneImg = document.getElementById('loadingScene');
       var sceneSlot = document.getElementById('loadingSceneSlot');
 
       // ★ 画面接口：若 src 已填写真实图片，则显示图片、隐藏占位
-      // （当前 src 为空，占位自动显示）
       if (sceneImg && sceneImg.getAttribute('src')) {
         sceneImg.style.display = 'block';
         if (sceneSlot) sceneSlot.style.display = 'none';
       }
 
-      var tips = ['正在集结部队…', '正在部署兵力…', '正在侦察敌情…', '即将进入战场…'];
+      // 加载任务文案池（可扩展）
+      var tasks = [
+        '正在集结部队…',
+        '正在部署兵力…',
+        '正在侦察敌情…',
+        '正在绘制战场…',
+        '即将进入战场…'
+      ];
+
       var progress = 0;
+      var lastTaskIdx = -1;
       var timer = setInterval(function () {
-        progress += Math.random() * 8 + 3;
+        progress += Math.random() * 6 + 2;
         if (progress >= 100) {
           progress = 100;
           clearInterval(timer);
-          tip.textContent = '准备就绪';
+          if (task) task.textContent = '准备就绪';
           // 加载完成后跳转 game.html
           setTimeout(function () {
             window.location.href = './game.html';
-          }, 500);
+          }, 600);
         } else {
-          tip.textContent = tips[Math.floor(progress / 25) % tips.length];
+          // 按进度阶段切换任务文字
+          var idx = Math.floor(progress / (100 / tasks.length));
+          if (idx >= tasks.length) idx = tasks.length - 1;
+          if (idx !== lastTaskIdx && task) {
+            task.textContent = tasks[idx];
+            lastTaskIdx = idx;
+          }
         }
-        fill.style.width = progress + '%';
+        if (fill) fill.style.width = progress + '%';
       }, 200);
     })();
   </script>
