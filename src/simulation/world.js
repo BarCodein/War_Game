@@ -36,6 +36,9 @@ export class World {
     this.endTime = null;
     this.spatial = new SpatialGrid(map.size.width, map.size.height);
     this.nextUnitId = 1;
+    this.mess = {};
+    for (const point of this.capturePoints)
+      mess.points.push(point);
   }
 
   spawnUnit(faction, type = 'light', x, y) {

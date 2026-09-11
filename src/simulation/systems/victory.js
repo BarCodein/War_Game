@@ -13,4 +13,53 @@ export function updateVictory(world) {
       return;
     }
   }
+  const mess = world.mess;
+  //defendVictory(world,mess);
+  //attackVictory(world, mess);
 }
+
+// 防守胜利判定 faction 指防守方
+function defendVictory(world,mess) {
+  if (world.winner) return;
+  const fac = mess.faction;
+  if (world.time > mess.time){
+    const winner = fac;
+    world.winner = winner;
+    world.endTime = world.time;
+    world.events.push({ type: 'victory', winner, at:world.time});
+    return;
+  }
+
+  for (const point of mess.points) {
+    if (point.faction !== fac){
+      const winner = point.faction;
+      world.winner = winner;
+      world.endTime = world.time;
+      world.events.push({ type: 'victory', winner, at:world.time});
+      return;
+    }
+  }
+}
+
+
+// 进攻胜利判定 faction 指的是进攻方
+function attackVictory(world,mess) {
+  if (world.winner) return;
+  const fac = mess.faction;
+  if (world.time > mess.time){
+    const winner = mess.faction==='blue'? 'red':'blue';
+    world.winner = winner;
+    world.endTime = world.time;
+    world.events.push({ type: 'victory', winner, at:world.time});
+  }
+
+  for (const point of mess.points) {
+    if (point.faction !== fac)return;
+  }
+  const winner = mess.faction;
+  world.winner = winner;
+  world.endTime = world.time;
+  world.events.push({ type: 'victory', winner, at:world.time});
+  return;
+}
+
