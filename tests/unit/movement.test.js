@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { makePlainMap, makeWorld } from './helpers.js';
-import { planRoute, transitionToNewRoute } from '../../src/simulation/systems/movement.js';
+import { planRoute, transitionToNewRoute, updateMovement } from '../../src/simulation/systems/movement.js';
 import { values } from '../../src/config/index.js';
 
 function riverWorldWithBridge() {
-  // 第 15 列（x=300~320）一整列水域，第 16 行放一座桥（唯一可通行缺口）
+  // 第 15 列（x=300~320）一整列水域，第 16 行放一座桥。
   const cells = {};
   for (let cy = 0; cy < 36; cy += 1) cells[`15,${cy}`] = values.terrain.codes.water;
   cells['15,16'] = values.terrain.codes.bridge; // 桥位于 (310, 330)
@@ -18,20 +18,30 @@ describe('planRoute（最短路径规划）', () => {
     expect(route).toEqual([{ x: 200, y: 100 }, { x: 300, y: 100 }]);
   });
 
-  it('水域间规划出绕行路径：所有路径点可通行，且经过桥梁', () => {
+  it('水域可以通行，路径不再强制绕行到桥梁', () => {
     const world = riverWorldWithBridge();
     const route = planRoute(world.terrain, 200, 360, [{ x: 400, y: 360 }]);
-    // 不穿过任何水域格
-    for (const p of route) expect(world.terrain.passableAt(p.x, p.y)).toBe(true);
-    // 绕行经过桥所在格子中心附近 (310, 330)
-    expect(route.some(p => Math.hypot(p.x - 310, p.y - 330) <= 22)).toBe(true);
-    // 保留原目标点
+    expect(world.terrain.passableAt(310, 360)).toBe(true);
     expect(route[route.length - 1]).toEqual({ x: 400, y: 360 });
   });
 
-  it('无路可达时回退为直线（保留目标点）', () => {
-    // 第 40 列一整列水域、无桥梁 → 不可达
-    // （坐标与其它用例不同，避免共用全局 pathCache 的格子键被复用）
+  it('水域中的单位按水域速度倍率移动', () => {
+    const plainWorld = makeWorld(makePlainMap());
+    const waterWorld = makeWorld(makePlainMap({
+      terrainCells: { '5,5': values.terrain.codes.water },
+    }));
+    const plainUnit = plainWorld.spawnUnit('blue', 'light', 100, 110);
+    const waterUnit = waterWorld.spawnUnit('blue', 'light', 100, 110);
+    plainWorld.issueCommands([plainUnit.id], { type: 'move', path: [{ x: 200, y: 110 }] });
+    waterWorld.issueCommands([waterUnit.id], { type: 'move', path: [{ x: 200, y: 110 }] });
+    plainWorld.tick(1 / 60);
+    waterWorld.tick(1 / 60);
+    expect(waterUnit.x - 100).toBeCloseTo(
+      (plainUnit.x - 100) * values.terrain.moveMultiplier.water,
+    );
+  });
+
+  it('路径目标始终保留，即使水域没有桥梁', () => {
     const cells = {};
     for (let cy = 0; cy < 36; cy += 1) cells[`40,${cy}`] = values.terrain.codes.water;
     const world = makeWorld(makePlainMap({ terrainCells: cells }));
@@ -106,5 +116,33 @@ describe('多单位移动分离', () => {
     for (let tick = 0; tick < 360; tick += 1) world.tick(1 / 60);
     expect(moving.x).toBeGreaterThan(180);
     expect(moving.rerouteAttempts).toBeLessThanOrEqual(values.movement.maxRerouteAttempts);
+  });
+});
+
+describe('溃退移动速度', () => {
+  it('自动溃退速度低于普通移动速度', () => {
+    const routWorld = makeWorld(makePlainMap());
+    const routUnit = routWorld.spawnUnit('red', 'light', 800, 150);
+    routUnit.state = 'rout';
+    routUnit.route = [{ x: 1100, y: 100 }];
+    routUnit.routeIndex = 0;
+    routUnit.pathDirty = false;
+    routUnit.pathCheckCell = routWorld.terrain.cellIndex(40, 7);
+
+    const normalWorld = makeWorld(makePlainMap());
+    const normalUnit = normalWorld.spawnUnit('red', 'light', 800, 150);
+    normalUnit.state = 'moving';
+    normalUnit.route = [{ x: 1100, y: 100 }];
+    normalUnit.routeIndex = 0;
+    normalUnit.pathDirty = false;
+    normalUnit.pathCheckCell = normalWorld.terrain.cellIndex(40, 7);
+
+    updateMovement(routWorld, 1 / 60);
+    updateMovement(normalWorld, 1 / 60);
+
+    const routDistance = Math.hypot(routUnit.x - 800, routUnit.y - 150);
+    const normalDistance = Math.hypot(normalUnit.x - 800, normalUnit.y - 150);
+    expect(routDistance).toBeCloseTo(normalDistance * values.movement.routSpeedMultiplier);
+    expect(routDistance).toBeLessThan(normalDistance);
   });
 });

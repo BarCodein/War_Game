@@ -1,7 +1,7 @@
 import { values } from '../../config/index.js';
 import { effectsFor } from './morale.js';
 
-// 移动系统：沿命令路径点行进；直行遇水域时在逻辑网格上 A* 绕行（路径缓存共享）；
+// 移动系统：沿命令路径点行进；直行遇不可通行地形时在逻辑网格上 A* 绕行（路径缓存共享）；
 // 软排斥防止单位重叠；交战中冻结；溃逃单位不受指挥，向最近己方城市全速撤退，
 // 无路可退或被困超过时限则投降（gdd.md §4、§6）。
 
@@ -231,8 +231,8 @@ function unitStats(unit) {
   return values.units[unit.type];
 }
 
-// 向路径点行进；ignoreMoraleEffects 用于溃逃（全速，不受士气削弱）。
-function moveAlongRoute(world, unit, dt, ignoreMoraleEffects = false) {
+// 向路径点行进；ignoreMoraleEffects 用于溃逃（不受士气削弱）。
+function moveAlongRoute(world, unit, dt, ignoreMoraleEffects = false, speedMultiplier = 1) {
   skipImpassableWaypoints(world, unit);
   if (unit.routeIndex >= unit.route.length) return;
 
@@ -241,7 +241,7 @@ function moveAlongRoute(world, unit, dt, ignoreMoraleEffects = false) {
   const stats = unitStats(unit);
   const terrainMult = world.terrain.moveMultiplierAt(unit.x, unit.y);
   const moraleMult = ignoreMoraleEffects ? 1 : effectsFor(unit.morale).speedMultiplier;
-  const travel = stats.speed * terrainMult * moraleMult * dt;
+  const travel = stats.speed * terrainMult * moraleMult * speedMultiplier * dt;
 
   if (distance <= travel) {
     unit.x = target.x;
@@ -255,7 +255,7 @@ function moveAlongRoute(world, unit, dt, ignoreMoraleEffects = false) {
     return;
   }
 
-  // 直行遇水域时 A* 绕行；仅在路径变更或进入新格子时检查
+  // 仅在路径变更或进入新格子时检查不可通行地形
   const cellKey = world.terrain.cellIndex(world.terrain.cellAt(unit.x, unit.y).cx, world.terrain.cellAt(unit.x, unit.y).cy);
   if (unit.pathDirty || unit.pathCheckCell !== cellKey) {
     unit.pathDirty = false;
@@ -319,7 +319,7 @@ function routMovement(world, unit, dt) {
   }
   const beforeX = unit.x;
   const beforeY = unit.y;
-  moveAlongRoute(world, unit, dt, true);
+  moveAlongRoute(world, unit, dt, true, values.movement.routSpeedMultiplier);
   // 被困判定：位移极小则累计，超过时限投降（gdd.md §6）
   if (Math.hypot(unit.x - beforeX, unit.y - beforeY) < 0.5) unit.stuckTime += dt;
   else unit.stuckTime = 0;
@@ -384,7 +384,7 @@ function segmentBlocked(terrain, x0, y0, x1, y1) {
   return false;
 }
 
-// A*（4 方向）：代价 = 1/移动倍率（森林更贵），水域不可通行；终点不可通行时
+// A*（4 方向）：代价 = 1/移动倍率（森林和水域更贵）；终点不可通行时
 // 就近取可通行格。返回路径点（不含起点），按格中心坐标。
 export function findPath(terrain, x0, y0, x1, y1) {
   const start = terrain.cellAt(x0, y0);

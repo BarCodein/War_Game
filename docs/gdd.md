@@ -46,8 +46,8 @@
 - **目标选择**：优先攻击当前目标直至其死亡，否则选取接触范围内最近的敌人；无目标时恢复行军/驻守。
 - **伤害公式**：`最终伤害 = 基础伤害 × 防御者地形修正 × 防御者身份`（地形修正见 §5）。
 - **攻击间隔**：每单位独立冷却计时，首次接触立即攻击。
-- **碰撞规则**（暂定）：单位之间为软排斥（无硬碰撞），互不阻挡移动；单位不可进入水域。
-- **攻击前进/脱离战斗**：move 与 attackMove 均沿**预定路线**行军（下令时整条规划最短路径，绕开水域）；途中接触敌军即停下交战，敌军离开或清空后沿路线继续。红方脚本只使用 attackMove/hold，行为一致。
+- **碰撞规则**（暂定）：单位之间为软排斥（无硬碰撞），互不阻挡移动；单位可以进入水域，但进入水域范围后按水域速度倍率减速。
+- **攻击前进/脱离战斗**：move 与 attackMove 均沿**预定路线**行军（下令时整条规划最短路径，进入水域时按水域倍率减速）；途中接触敌军即停下交战，敌军离开或清空后沿路线继续。红方脚本只使用 attackMove/hold，行为一致。
 
 ## 5. 地形（§8-2、§8-5）
 
@@ -55,11 +55,11 @@
 |---|---|---|---|---|
 | 平原 | 可 | 1.0 | 1.0 | 正常 |
 | 森林 | 可 | 0.6 | 0.85 | 位于森林中的敌军，仅当己方单位距其 ≤60 时可见 |
-| 水域 | 不可 | — | — | 正常（无实体可藏） |
+| 水域 | 可 | 0.5 | — | 正常（无实体可藏） |
 | 桥梁 | 可 | 1.0 | 0.9 | 正常 |
 
 - 逻辑网格：格子 20 px，编码 `0 平原 / 1 森林 / 2 水域 / 3 桥梁`，用于通行性、寻路成本与视野阻挡。
-- **移动与寻路（暂定）**：右键指令默认直线行进，路径与水域相交时在逻辑网格上 A* 绕行并缓存路径；批量单位共享路径缓存以控制开销。
+- **移动与寻路（暂定）**：右键指令默认直线行进，单位可穿过水域并按地形倍率减速；批量单位共享路径缓存以控制开销。
 
 ## 6. 士气系统（§8-1）
 
@@ -195,6 +195,7 @@
 | morale.effects.weakened：damage / speed | ×0.75 / ×0.85 |
 | morale.effects.shaken：damage / speed | ×0.5 / ×0.7 |
 | morale.rout：recoverPerSecond / stopAt / stuckSeconds | +8 /s / 20 / 5 s |
+| movement.routSpeedMultiplier | 0.6 |
 | cities.capture：radius / perUnitPerSecond / capPerSecond / decayPerSecond | 60 / 5% / 15% / 3% |
 | cities.production：interval / unitType / pauseWhenSupplyFull | 12 s / light / true |
 | cities.recovery：radius / hpPerSecond / moralePerSecond | 120 / +3 /s / +5 /s |
@@ -202,8 +203,8 @@
 | supply：capacityPerCity / attritionHpPerSecond / attritionMoralePerSecond | 5 / −1 /s / −2 /s |
 | fog：forestSpotDistance / showLastKnownGhost | 60 / true |
 | terrain：gridCellSize / codes | 20 px / 0 平原 1 森林 2 水域 3 桥梁 |
-| terrain.passable：平原 / 森林 / 水域 / 桥梁 | 可 / 可 / 不可 / 可 |
-| terrain.moveMultiplier：平原 / 森林 / 桥梁 | 1.0 / 0.6 / 1.0 |
+| terrain.passable：平原 / 森林 / 水域 / 桥梁 | 可 / 可 / 可 / 可 |
+| terrain.moveMultiplier：平原 / 森林 / 水域 / 桥梁 | 1.0 / 0.6 / 0.5 / 1.0 |
 | terrain.defenseModifier：平原 / 森林 / 桥梁 | 1.0 / 0.85 / 0.9 |
 
 ### 交互与 UI 数值
