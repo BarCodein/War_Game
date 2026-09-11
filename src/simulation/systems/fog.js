@@ -9,6 +9,18 @@ export const FOG_VISIBLE = 2;
 
 const FACTIONS = ['blue', 'red'];
 
+// 复用可见性掩码：避免每 tick 每阵营各分配一个 Uint8Array（网格加密后分配开销可观）。
+// 两阵营顺序使用同一个缓冲区，故按长度缓存一份即可。
+const maskCache = new Map();
+function maskFor(length) {
+  let mask = maskCache.get(length);
+  if (!mask || mask.length !== length) {
+    mask = new Uint8Array(length);
+    maskCache.set(length, mask);
+  }
+  return mask;
+}
+
 export function createFogGrid(terrain) {
   return new Uint8Array(terrain.cols * terrain.rows);
 }
@@ -16,7 +28,8 @@ export function createFogGrid(terrain) {
 export function updateFog(world) {
   for (const faction of FACTIONS) {
     const grid = world.fog[faction];
-    const mask = new Uint8Array(grid.length);
+    const mask = maskFor(grid.length);
+    mask.fill(0);
     paintVision(world, faction, mask);
     for (let i = 0; i < grid.length; i += 1) {
       if (mask[i]) grid[i] = FOG_VISIBLE;
@@ -38,15 +51,30 @@ function paintVision(world, faction, mask) {
   }
 }
 
+// 逐行解析求交：格子中心 (cx*size+half, cy*size+half) 落在半径内 ⟺
+//   |dy| ≤ r 且 |centerX − x| ≤ sqrt(r² − dy²)
+// 于是每行只做一次开方，再把该行圆内的连续列区间直接填满，
+// 取代原先对包围盒内每一格调用 Math.hypot（10px 网格下这是迷雾的主要热点）。
 function paintCircle(terrain, mask, x, y, radius) {
-  const cell = terrain.cellAt(x, y);
-  const rCells = Math.ceil(radius / terrain.cellSize);
-  for (let cy = Math.max(0, cell.cy - rCells); cy <= Math.min(terrain.rows - 1, cell.cy + rCells); cy += 1) {
-    for (let cx = Math.max(0, cell.cx - rCells); cx <= Math.min(terrain.cols - 1, cell.cx + rCells); cx += 1) {
-      const centerX = cx * terrain.cellSize + terrain.cellSize / 2;
-      const centerY = cy * terrain.cellSize + terrain.cellSize / 2;
-      if (Math.hypot(centerX - x, centerY - y) <= radius) mask[terrain.cellIndex(cx, cy)] = 1;
-    }
+  const size = terrain.cellSize;
+  const half = size / 2;
+  const r2 = radius * radius;
+  const rCells = Math.ceil(radius / size);
+  const center = terrain.cellAt(x, y);
+  const rowMin = Math.max(0, center.cy - rCells);
+  const rowMax = Math.min(terrain.rows - 1, center.cy + rCells);
+  const lastCol = terrain.cols - 1;
+  for (let cy = rowMin; cy <= rowMax; cy += 1) {
+    const dy = cy * size + half - y;
+    const dy2 = dy * dy;
+    if (dy2 > r2) continue;
+    const halfWidth = Math.sqrt(r2 - dy2);
+    let cxMin = Math.ceil((x - halfWidth - half) / size);
+    let cxMax = Math.floor((x + halfWidth - half) / size);
+    if (cxMin < 0) cxMin = 0;
+    if (cxMax > lastCol) cxMax = lastCol;
+    const row = cy * terrain.cols;
+    for (let cx = cxMin; cx <= cxMax; cx += 1) mask[row + cx] = 1;
   }
 }
 

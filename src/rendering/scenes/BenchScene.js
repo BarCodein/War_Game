@@ -15,8 +15,8 @@ const BENCH_MAP = {
   version: 1,
   name: 'bench',
   size: { width: 1280, height: 720 },
-  gridCellSize: 20,
-  terrain: { width: 64, height: 36, cells: new Array(64 * 36).fill(0) },
+  gridCellSize: 10,
+  terrain: { width: 128, height: 72, cells: new Array(128 * 72).fill(0) },
   cities: [
     { id: 'c1', x: 100, y: 600, faction: 'blue' },
     { id: 'c2', x: 1100, y: 100, faction: 'red' },

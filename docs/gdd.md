@@ -58,8 +58,13 @@
 | 水域 | 可 | 0.5 | — | 正常（无实体可藏） |
 | 桥梁 | 可 | 1.0 | 0.9 | 正常 |
 
+<<<<<<< HEAD
 - 逻辑网格：格子 20 px，编码 `0 平原 / 1 森林 / 2 水域 / 3 桥梁`，用于通行性、寻路成本与视野阻挡。
 - **移动与寻路（暂定）**：右键指令默认直线行进，单位可穿过水域并按地形倍率减速；批量单位共享路径缓存以控制开销。
+=======
+- 逻辑网格：格子 10 px，编码 `0 平原 / 1 森林 / 2 水域 / 3 桥梁`，用于通行性、寻路成本与视野阻挡。
+- **移动与寻路（暂定）**：右键指令默认直线行进，路径与水域相交时在逻辑网格上 A* 绕行并缓存路径；批量单位共享路径缓存以控制开销。
+>>>>>>> e16aad694b43e3cd002c5db7e4f3ccecf50c14b4
 
 ## 6. 士气系统（§8-1）
 
@@ -202,9 +207,15 @@
 | cities.vision | 180 |
 | supply：capacityPerCity / attritionHpPerSecond / attritionMoralePerSecond | 5 / −1 /s / −2 /s |
 | fog：forestSpotDistance / showLastKnownGhost | 60 / true |
+<<<<<<< HEAD
 | terrain：gridCellSize / codes | 20 px / 0 平原 1 森林 2 水域 3 桥梁 |
 | terrain.passable：平原 / 森林 / 水域 / 桥梁 | 可 / 可 / 可 / 可 |
 | terrain.moveMultiplier：平原 / 森林 / 水域 / 桥梁 | 1.0 / 0.6 / 0.5 / 1.0 |
+=======
+| terrain：gridCellSize / codes | 10 px / 0 平原 1 森林 2 水域 3 桥梁 |
+| terrain.passable：平原 / 森林 / 水域 / 桥梁 | 可 / 可 / 不可 / 可 |
+| terrain.moveMultiplier：平原 / 森林 / 桥梁 | 1.0 / 0.6 / 1.0 |
+>>>>>>> e16aad694b43e3cd002c5db7e4f3ccecf50c14b4
 | terrain.defenseModifier：平原 / 森林 / 桥梁 | 1.0 / 0.85 / 0.9 |
 
 ### 交互与 UI 数值

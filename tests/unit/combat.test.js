@@ -5,7 +5,10 @@ import { values } from '../../src/config/index.js';
 
 function combatWorld({ forestForRed = false } = {}) {
   const cells = {};
-  if (forestForRed) cells['6,5'] = values.terrain.codes.forest; // (130, 110) 所在格
+  // (120~140, 100~120) 一带设为森林：10px 网格下的 2×2 块，对应原 20px 的 (6,5)
+  if (forestForRed) {
+    for (const key of ['12,10', '13,10', '12,11', '13,11']) cells[key] = values.terrain.codes.forest;
+  }
   const map = makePlainMap({ terrainCells: cells });
   const world = makeWorld(map);
   const blue = world.spawnUnit('blue', 'light', 100, 100);

@@ -1,3 +1,6 @@
+// 登录注册界面逻辑
+
+
 const USERS_KEY = 'war-of-dots.users';
 const SESSION_KEY = 'war-of-dots.session';
 
