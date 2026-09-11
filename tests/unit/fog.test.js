@@ -62,7 +62,9 @@ describe('fog', () => {
 
   it('敌军脱离视野后保留最后已知位置', () => {
     const world = makeWorld(makePlainMap());
-    world.spawnUnit('blue', 'light', 640, 360);
+    // 相距 60：既在视野（140）内，又大于软排斥的最小间距（半径和 28），
+    // 避免 separateOverlaps 把敌军推开导致位置与预期不符。
+    world.spawnUnit('blue', 'light', 600, 360);
     const red = world.spawnUnit('red', 'light', 660, 360);
     advance(world, 1 / 60);
     expect(red.lastSeen.blue).toMatchObject({ x: 660, y: 360 });
