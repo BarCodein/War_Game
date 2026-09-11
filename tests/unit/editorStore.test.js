@@ -16,8 +16,9 @@ describe('editor store', () => {
   it('绘制与线段采样绘制地形，越界被忽略', () => {
     const store = createEditorStore();
     store.paintTerrain(100, 100, 2);
-    const idx = (cx, cy) => cy * 64 + cx;
-    expect(store.mapData.terrain.cells[idx(5, 5)]).toBe(2);
+    // 列数从地图数据推导（10px 网格下为 128 列），避免硬编码网格尺寸
+    const idx = (cx, cy) => cy * store.mapData.terrain.width + cx;
+    expect(store.mapData.terrain.cells[idx(10, 10)]).toBe(2);
     store.paintSegment(0, 0, 200, 0, 1); // 横线采样
     expect(store.mapData.terrain.cells[idx(10, 0)]).toBe(1);
     store.paintTerrain(-10, -10, 3);

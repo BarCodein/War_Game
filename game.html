@@ -38,28 +38,20 @@
           <div id="battlefield"></div>
           <div class="canvas-tip">左键选择 · Shift 增减选 · 从已选单位拖动绘制轨迹 · 右键移动 / 攻击</div>
           <div class="toast" id="toast"></div>
+          <!-- 任务进度与战场通讯改为战场内叠加层（原右侧栏已移除），不占用横向空间 -->
+          <div class="battle-overlay mission-overlay" id="missionPanel">
+            <div class="overlay-heading"><span>任务进度</span><em id="missionPercent">0%</em></div>
+            <div class="overlay-sub">夺取北方信标 · 控制并守住高地信标</div>
+            <div class="progress"><i id="missionProgress" style="width:0%"></i></div>
+            <div id="missionList"></div>
+          </div>
+          <div class="battle-overlay feed-overlay">
+            <div class="overlay-heading"><span>战场通讯</span></div>
+            <div id="eventLog" class="event-log"><p><time>09:41</time><span class="event-tag blue">SYS</span>通讯已接通，等待战报。</p></div>
+          </div>
         </div>
         <div class="battlefield-foot"><span><i class="legend-dot friendly"></i>己方</span><span><i class="legend-dot hostile"></i>敌方</span><span><i class="legend-dot city-dot"></i>城市</span><span class="coords" id="coords">GRID 00 : 00</span></div>
       </section>
-      <aside class="right-panel">
-        <div class="panel mission-panel" id="missionPanel">
-          <div class="panel-heading"><span>任务进度</span><em>PRIMARY</em></div>
-          <div class="mission-title"><span class="mission-number">01</span><div><b>夺取北方信标</b><small>控制并守住高地信标</small></div><strong id="missionPercent">0%</strong></div>
-          <div class="progress mission-progress"><i id="missionProgress" style="width:0%"></i></div>
-          <div id="missionList"></div>
-        </div>
-        <div class="panel event-panel">
-          <div class="panel-heading"><span>战场通讯</span><em>LIVE FEED</em></div>
-          <div id="eventLog" class="event-log"><p><time>09:41</time><span class="event-tag blue">SYS</span>通讯已接通，等待战报。</p></div>
-        </div>
-        <div class="panel controls-panel">
-          <div class="panel-heading"><span>指令</span><em>HOTKEYS</em></div>
-          <div class="key-row"><kbd>左键拖动</kbd><span>从已选单位绘制行军轨迹</span></div>
-          <div class="key-row"><kbd>空格</kbd><span>暂停 / 继续</span></div>
-          <div class="key-row"><kbd>Esc</kbd><span>取消选择</span></div>
-          <div class="key-row"><kbd>1/2/3</kbd><span>切换游戏速度</span></div>
-        </div>
-      </aside>
     </div>
   </main>
   <div class="victory-overlay" id="victoryOverlay">

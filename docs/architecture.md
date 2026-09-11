@@ -120,8 +120,9 @@ world.issueCommands(unitIds, command)           // 唯一入口，附带校验
   "version": 1,
   "name": "断裂峡谷",
   "size": { "width": 1280, "height": 720 },
-  "gridCellSize": 20,
-  "terrain": { "width": 64, "height": 36, "cells": [0, 0, 2, "…"] },
+  "gridCellSize": 10,
+  "terrain": { "width": 128, "height": 72, "cells": [0, 0, 2, "…"] },
+  "background": "/assets/map_pics/mp.png",
   "cities": [ { "id": "c1", "x": 200, "y": 560, "faction": "blue" } ],
   "spawns": [ { "faction": "blue", "x": 200, "y": 560 } ],
   "objectives": [ { "id": "o1", "type": "captureCity", "cityId": "c2", "holdSeconds": 0 } ]

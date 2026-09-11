@@ -25,12 +25,12 @@ test.describe('地图编辑器', () => {
   test('绘制与擦除地形', async ({ page }) => {
     await openEditor(page);
     await page.click('[data-tool="paint-water"]');
-    await clickWorld(page, 210, 210); // 格子 (10,10) 的中心，避开格子边界取整误差
-    const water = await page.evaluate(() => window.__editor.store.mapData.terrain.cells[10 * 64 + 10]);
+    await clickWorld(page, 210, 210); // 10px 网格下格子 (21,21) 的中心，避开格子边界取整误差
+    const water = await page.evaluate(() => window.__editor.store.mapData.terrain.cells[21 * 128 + 21]);
     expect(water).toBe(2);
     await page.click('[data-tool="erase"]');
     await clickWorld(page, 210, 210);
-    const plain = await page.evaluate(() => window.__editor.store.mapData.terrain.cells[10 * 64 + 10]);
+    const plain = await page.evaluate(() => window.__editor.store.mapData.terrain.cells[21 * 128 + 21]);
     expect(plain).toBe(0);
   });
 
@@ -64,13 +64,13 @@ test.describe('地图编辑器', () => {
   test('保存到 localStorage 并载入恢复', async ({ page }) => {
     await openEditor(page);
     await page.click('[data-tool="paint-water"]');
-    await clickWorld(page, 310, 310); // 格子 (15,15) 的中心
+    await clickWorld(page, 310, 310); // 10px 网格下格子 (31,31) 的中心
     await page.click('[data-action="save"]');
     await expect(page.locator('#editorStatus')).toContainText('已保存');
     await page.reload();
     await page.waitForFunction(() => window.__editor !== undefined);
     // 重新载入后应从本地存档恢复（默认地图该格为平原）
-    expect(await page.evaluate(() => window.__editor.store.mapData.terrain.cells[15 * 64 + 15])).toBe(2);
+    expect(await page.evaluate(() => window.__editor.store.mapData.terrain.cells[31 * 128 + 31])).toBe(2);
     await page.click('[data-action="load"]');
     await expect(page.locator('#editorStatus')).toContainText('已载入');
   });

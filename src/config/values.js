@@ -23,7 +23,7 @@ export const values = {
   },
 
   terrain: {
-    gridCellSize: 20,                  // 逻辑网格边长（px）
+    gridCellSize: 10,                  // 逻辑网格边长（px）
     codes: { plain: 0, forest: 1, water: 2, bridge: 3 },
     passable: { plain: true, forest: true, water: false, bridge: true },
     moveMultiplier: { plain: 1.0, forest: 0.6, bridge: 1.0 },
