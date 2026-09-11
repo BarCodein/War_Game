@@ -14,11 +14,12 @@ describe('map json', () => {
     expect(map.objectives[0]).toMatchObject({ type: 'captureCity', cityId: 'c2' });
   });
 
-  it('地形访问：河流为水域不可通行，桥梁可通行，森林修正生效', () => {
+  it('地形访问：河流为可减速水域，桥梁可通行，森林修正生效', () => {
     const map = parseMap(loadTutorialMap());
     const terrain = map.terrain;
     expect(terrain.terrainAt(100, 360)).toBe(values.terrain.codes.water);  // 河流
-    expect(terrain.passableAt(100, 360)).toBe(false);
+    expect(terrain.passableAt(100, 360)).toBe(true);
+    expect(terrain.moveMultiplierAt(100, 360)).toBe(0.5);
     expect(terrain.terrainAt(640, 360)).toBe(values.terrain.codes.bridge); // 桥梁
     expect(terrain.passableAt(640, 360)).toBe(true);
     expect(terrain.terrainAt(120, 500)).toBe(values.terrain.codes.forest); // 森林

@@ -15,6 +15,7 @@ describe('config values', () => {
     expect(values.units.heavy).toEqual({ hp: 80, damage: 1, attackInterval: 0.2, range: 40, speed: 40, radius: 14, vision: 160 });
     expect(values.morale.initial).toBe(80);
     expect(values.morale.rout.stopAt).toBe(20);
+    expect(values.movement.routSpeedMultiplier).toBe(0.6);
     expect(values.cities.production.interval).toBe(12);
     expect(values.supply.capacityPerCity).toBe(5);
     expect(values.fog.forestSpotDistance).toBe(60);
