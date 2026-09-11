@@ -9,22 +9,25 @@
 <body>
 
   <!-- ==================== 过场动画遮罩 ====================
-       进入页面时先播放；此处为「视频接口」占位。
-       接入视频：把下方 <div class="cutscene-video"> 内的注释替换为
-       <video autoplay muted src="你的视频地址"></video>
-       即可。动画结束后调用 endCutscene() 淡出遮罩。
+       从首页「⚔战役」进入本页时先播放开场视频（带声音），
+       视频完整播完后淡出遮罩，进入关卡选择。
+       接入方式：下方 <video src="./assets/video/1.mp4"> 已配置，
+       视频文件放 assets/video/ 目录即可（命名 1.mp4）。
   ======================================================== -->
   <div class="cutscene-overlay" id="cutsceneOverlay">
-    <div class="cutscene-content">
+    <div class="cutscene-video" id="cutsceneVideo">
+      <video id="cutsceneVid" autoplay playsinline>
+        <source src="./assets/video/1.mp4" type="video/mp4">
+      </video>
+    </div>
+    <!-- 开场文字标题：视频开头显示，5 秒后渐隐 -->
+    <div class="cutscene-content" id="cutsceneContent">
       <span class="cut-eyebrow">解放战争 · 烽火岁月</span>
       <h1>沙盘战争</h1>
       <p>选择一场战役，重返那段决定民族命运的烽火岁月。<br>运筹帷幄，决胜千里。</p>
-      <!-- ★ 过场视频接口（占位） -->
-      <div class="cutscene-video" id="cutsceneVideo">
-        <!-- <video autoplay muted playsinline src="./assets/video/intro.mp4"></video> -->
-      </div>
-      <button class="cutscene-skip" id="cutsceneSkip">跳过 ▶</button>
     </div>
+    <!-- 跳过按钮：固定在视频右上角 -->
+    <button class="cutscene-skip" id="cutsceneSkip">跳过 ▶</button>
   </div>
 
   <!-- ==================== 导航条 ==================== -->
@@ -112,18 +115,56 @@
     (function () {
       var overlay = document.getElementById('cutsceneOverlay');
       var skipBtn = document.getElementById('cutsceneSkip');
+      var video = document.getElementById('cutsceneVid');
+      var content = document.getElementById('cutsceneContent');
 
+      var finished = false;
+      var titleHidden = false;
+      function hideTitle() {
+        if (titleHidden || !content) return;
+        titleHidden = true;
+        content.classList.add('fade-out');
+      }
       function endCutscene() {
-        if (!overlay) return;
+        if (finished || !overlay) return;
+        finished = true;
+        // 标题先隐藏（保险）
+        hideTitle();
         overlay.classList.add('fade-out');
         // 淡出动画结束后移除遮罩，释放交互
         setTimeout(function () {
           if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
         }, 700);
       }
-      // 过场时长：有视频则跟随视频，无视频则 2.6s 后自动结束
-      setTimeout(endCutscene, 2600);
+
       if (skipBtn) skipBtn.addEventListener('click', endCutscene);
+
+      if (video) {
+        // 视频加载失败/不存在 → 直接结束过场，不卡死
+        video.addEventListener('error', endCutscene);
+        // 视频开始播放后 5 秒 → 渐隐开场文字（视频继续）
+        video.addEventListener('play', function () {
+          setTimeout(hideTitle, 5000);
+        });
+        // 触发播放（带声音）
+        var p = video.play();
+        if (p && typeof p.catch === 'function') {
+          p.catch(function () {
+            // 浏览器拦截带声音的自动播放 → 降级为静音播放保底
+            video.muted = true;
+            var p2 = video.play();
+            if (p2 && typeof p2.catch === 'function') {
+              p2.catch(endCutscene);
+            }
+          });
+        }
+        // 视频完整播放结束后才淡出整个 overlay
+        video.addEventListener('ended', endCutscene);
+      } else {
+        // 无视频元素时兜底：5s 隐藏标题、2.6s 后结束
+        setTimeout(hideTitle, 5000);
+        setTimeout(endCutscene, 2600);
+      }
 
       /* ---------- 地图缩放 / 平移 ---------- */
       var viewport = document.getElementById('mapViewport');

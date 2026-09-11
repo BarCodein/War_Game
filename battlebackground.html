@@ -25,27 +25,31 @@
     <p class="hero-subtitle">1948年11月 — 1949年1月 · 徐州地区</p>
   </section>
 
-  <div class="bbg-shell">
+  <!-- ==================== 战役背景视频（入场动画） ====================
+       进入页面先播放战役背景视频（全屏覆盖，带声音）。
+       视频开头 5 秒显示标题，之后渐隐，视频继续播放；
+       右上角「跳过入场」按钮可随时跳过；视频完整播完后淡出，
+       进入下方敌我情况/战役目标内容。
+       ★ 接入方式：下方 <video src="./assets/video/1.mp4"> 已配置，
+         换成你的战役背景视频文件名即可（放入 assets/video/ 目录）。
+  =============================================================== -->
+  <div class="bbg-intro-overlay" id="bbgIntroOverlay">
+    <div class="bbg-intro-video">
+      <video id="bbgIntroVid" autoplay playsinline>
+        <source src="./assets/video/1.mp4" type="video/mp4">
+      </video>
+    </div>
+    <!-- 开场标题：视频开头显示，5 秒后渐隐 -->
+    <div class="bbg-intro-content" id="bbgIntroContent">
+      <span class="cut-eyebrow">CAMPAIGN BACKGROUND</span>
+      <h1>淮海战役</h1>
+      <p>1948年11月 — 1949年1月 · 徐州地区</p>
+    </div>
+    <!-- 跳过按钮：固定在右上角 -->
+    <button class="bbg-intro-skip" id="bbgIntroSkip">跳过入场 &rarr;</button>
+  </div>
 
-    <!-- ==================== 战役背景视频（接口） ====================
-         进入页面先播放，介绍该战役背景。
-         接入视频：把下方接口占位替换为
-         <video autoplay muted playsinline src="./assets/video/huaihai.mp4"></video>
-    =============================================================== -->
-    <section class="bbg-video">
-      <div class="video-frame" id="battleVideoFrame">
-        <video autoplay muted playsinline id="battleVideo">
-          <!-- ★ 视频接口（占位，无素材时不显示） -->
-        </video>
-        <div class="interface-slot" id="videoSlot">
-          <div>
-            战役背景视频接口<br>
-            <span style="font-size:0.72rem; letter-spacing:1px;">参考《大决战 · 淮海战役》开头旁白</span>
-          </div>
-          <span class="slot-tag">接口</span>
-        </div>
-      </div>
-    </section>
+  <div class="bbg-shell">
 
     <!-- ==================== 敌我情况 ==================== -->
     <section class="bbg-section">
@@ -89,21 +93,67 @@
     var startBtn = document.getElementById('startBattleBtn');
     if (startBtn) {
       startBtn.addEventListener('click', function (e) {
-        // 若有真实视频需先播完/跳过，可在此加判断
-        // 默认直接进入加载页
         e.preventDefault();
         window.location.href = './loading.html';
       });
     }
 
-    // 视频接口：若未来接入真实视频，监听 ended 后隐藏占位
-    var video = document.getElementById('battleVideo');
-    var videoSlot = document.getElementById('videoSlot');
-    if (video) {
-      video.addEventListener('loadeddata', function () {
-        if (videoSlot) videoSlot.style.display = 'none';
-      });
-    }
+    /* =========================================================
+       战役背景入场视频：
+       - play 后 5 秒 → 渐隐标题（视频继续）
+       - ended → 淡出整个 overlay，滚到内容区
+       - 右上角「跳过入场」→ 立即淡出
+       - error（视频缺失/解码失败）→ 直接结束，不卡死
+       ========================================================= */
+    (function () {
+      var overlay = document.getElementById('bbgIntroOverlay');
+      var video = document.getElementById('bbgIntroVid');
+      var content = document.getElementById('bbgIntroContent');
+      var skipBtn = document.getElementById('bbgIntroSkip');
+      if (!overlay) return;
+
+      var finished = false;
+      var titleHidden = false;
+      function hideTitle() {
+        if (titleHidden || !content) return;
+        titleHidden = true;
+        content.classList.add('fade-out');
+      }
+      function endIntro() {
+        if (finished) return;
+        finished = true;
+        hideTitle();
+        overlay.classList.add('fade-out');
+        setTimeout(function () {
+          if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+          var firstSection = document.querySelector('.bbg-shell .bbg-section');
+          if (firstSection) firstSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }, 700);
+      }
+
+      if (skipBtn) skipBtn.addEventListener('click', endIntro);
+
+      if (video) {
+        video.addEventListener('error', endIntro);
+        video.addEventListener('play', function () {
+          setTimeout(hideTitle, 5000);
+        });
+        var p = video.play();
+        if (p && typeof p.catch === 'function') {
+          p.catch(function () {
+            video.muted = true;
+            var p2 = video.play();
+            if (p2 && typeof p2.catch === 'function') {
+              p2.catch(endIntro);
+            }
+          });
+        }
+        video.addEventListener('ended', endIntro);
+      } else {
+        setTimeout(hideTitle, 5000);
+        setTimeout(endIntro, 2600);
+      }
+    })();
   </script>
 </body>
 </html>
