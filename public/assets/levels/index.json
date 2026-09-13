@@ -14,7 +14,7 @@
       "id": "subei_battle",
       "name": "宿北战役",
       "subtitle": "SUBEI BATTLE",
-      "type": "offensive",
+      "type": "annihilative",
       "difficulty": "教学",
       "order": 2,
       "description": "教学战役。学习基础指挥：选择单位、移动路径、攻击前进。歼灭敌军"

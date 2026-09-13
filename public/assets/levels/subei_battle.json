@@ -3,7 +3,7 @@
   "id": "subei_battle",
   "name": "宿北战役",
   "subtitle": "SUBEI BATTLE",
-  "type": "offensive",
+  "type": "annihilative",
   "difficulty": "教学",
   "description": "沿南北公路南下，突破山地隘口，歼灭宿北守军并夺取宿北城。",
   "map": "/assets/maps/suqian.json",
@@ -89,13 +89,15 @@
     },
     {
       "faction": "red",
+      "objective": "annihilate",
       "at": { "spawnId": "s16" },
       "units": [
-        { "type": "light", "count": 1 }
+        { "type": "heavy", "count": 2 }
       ]
     },
     {
       "faction": "red",
+      "objective": "annihilate",
       "at": { "spawnId": "s17" },
       "units": [
         { "type": "light", "count": 1 }
@@ -103,6 +105,7 @@
     },
     {
       "faction": "red",
+      "objective": "annihilate",
       "at": { "spawnId": "s18" },
       "units": [
         { "type": "light", "count": 1 }
@@ -110,6 +113,7 @@
     },
     {
       "faction": "red",
+      "objective": "annihilate",
       "at": { "spawnId": "s19" },
       "units": [
         { "type": "light", "count": 1 }
@@ -117,6 +121,7 @@
     },
     {
       "faction": "red",
+      "objective": "annihilate",
       "at": { "spawnId": "s20" },
       "units": [
         { "type": "light", "count": 1 }
@@ -154,5 +159,8 @@
     ]
   },
 
-  "victory": { "type": "captureAll" }
+  "victory": { "type": "annihilative",
+              "faction": "blue",
+              "time": 300
+               }
 }

@@ -34,6 +34,9 @@ export class World {
     this.history = [];  // 事件日志（HUD 战场通讯用）
     this.winner = null;
     this.endTime = null;
+    // 关卡任务规则（可选）：由 GameScene 用 level.js 的 buildMission() 写入。
+    // null = 只有基础规则（失去全部城市即负）；victory.js 必须容忍它为 null。
+    this.mess = null;
     this.spatial = new SpatialGrid(map.size.width, map.size.height);
     this.nextUnitId = 1;
   }

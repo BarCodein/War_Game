@@ -206,9 +206,20 @@ world.issueCommands(unitIds, command)           // 唯一入口，附带校验
 
   解析顺序为 绝对坐标 → 命名锚点 → `spawnId` → `spawn` → `cityId` → `city`；解析不到时返回 `null`，调用方跳过该点位而不是崩溃。`anchors` 用来给常用坐标起名（可复用同一坐标、改一处即全局生效），**不允许锚点引用锚点**（无链式引用）。
 - **兵力部署（编队式）**：`at` 为任意 PointRef；第 *i* 个单位的落点 = 锚点 + `offset` + `spacing × i`（两者缺省为 0）。可读性好且移动出生点后无需逐单位改坐标。
+- **编队目标 `objective`（可选）**：给整条编队打标记，部署时写到单位上（`unit.objective`）。当前只有 `"annihilate"`：该编队部署出的单位属于**歼灭胜负条件的「指定单位」**（见下表 `annihilative`）。写法：`{ "faction": "red", "objective": "annihilate", "at": { "spawnId": "s16" }, "units": [ … ] }`。AI 在 `ai.triggers` 里临时生成的增援不受此标记影响。
 - **AI 脚本（事件 → 动作）**：`at` 支持 `{ time }`（经过秒数）与 `{ enemyCrossX }`（任一敌军越过该 x）；条件**首次满足时立即执行一次** `actions`，若给了 `repeatEvery` 则此后每 *n* 秒再执行一次。动作类型：`spawn` / `attackNearest` / `attackMove` / `hold`；所有目标同样是 PointRef（如 `{ city: 'blue' }` 在**调用时**解析，跟随城市易主）。新增行为只需扩展动作类型与 `level.js` 的校验，引擎其余部分不变。
-- **`type`（进攻 / 防守）**：当前仅作元数据与 UI 展示。
-- **`victory`**：**预留字段，当前引擎不读取**；胜负判定仍按 `gdd.md` §10（失去全部城市即负）。若要改成数据驱动，接入点见 `simulation/systems/victory.js`。
+- **`type`（关卡类型）**：`offensive`（进攻）/ `defensive`（防守）/ `annihilative`（歼灭）。合法值白名单是 `level.js` 的 `LEVEL_TYPES`，`validateLevel()` 会拒绝其它值。
+  **当前仅作元数据**：`GameScene` / `hud` / `world` / `victory` 都不读取它，胜负判定仍只看城市（`gdd.md` §10）。要让类型真正驱动玩法，接入方式是把它随关卡一起交给世界（如 `new World(mapData, { type })` 或在 `GameScene.create()` 里写入 `world.mess`），再由 `simulation/systems/victory.js` 分派——该文件里已留有 `defendVictory` / `attackVictory` 两个待启用的判定函数。
+- **`victory`（胜负条件）**：可选。基础规则始终生效——**一方失去全部城市即告负**（`gdd.md` §10）。声明任务规则时会追加判定，由 `buildMission(level, world)` 解析成 `world.mess` 后交给 `simulation/systems/victory.js`：
+
+  | `victory.mode`（或 `type`） | 判定 |
+  | --- | --- |
+  | `captureAll`（缺省） | 不额外判定，只用基础规则 |
+  | `defend` | `faction` 为防守方：坚守到 `time` 即胜；任一 `points` 据点易主 → 该据点当前归属方胜 |
+  | `attack` | `faction` 为进攻方：`time` 内拿下全部 `points` 即胜；超时判负 |
+  | `annihilative` | `faction` 为我方：**消灭全部「指定单位」**即胜——指定单位 = 编队上标了 `"objective": "annihilate"` 的那些单位（未标记的敌军死光不算达成）；声明了 `time` 则超时判负 |
+
+  字段：`faction`（判定视角阵营，缺省 `blue`）、`time`（时限秒数，缺省不限时）、`points`（据点 id 数组，占领点优先、其次城市；缺省 = 地图上全部占领点）。写错的值会被 `validateLevel()` 拦截，引用不存在的据点由 `validateLevelReferences()` 指出。
 - 校验分两层：`validateLevel()` 做结构 + 语义校验（阵营、单位类型、坐标引用与锚点定义、条件与动作类型、`repeatEvery > 0` 等），`parseLevel()` 校验失败即抛错并聚合原因；`validateLevelReferences(level, mapData)` 在地图载入后交叉校验 `spawnId` / `cityId` / `anchor` 是否真实存在（`BootScene` 调用，仅告警不致命）；`deployForces()` 负责按数据部署。测试见 `tests/unit/level.test.js`。
 
 ## 8. 空间分区（性能）

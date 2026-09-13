@@ -3,8 +3,8 @@ import {
   loadLevel, loadLevelIndex, loadMap, loadTutorialMap, makePlainMap, runSimulation,
 } from './helpers.js';
 import {
-  LEVEL_VERSION, parseLevel, validateLevel, validateLevelReferences,
-  deployForces, resolvePoint, resolveAnchor, resolveTarget,
+  LEVEL_VERSION, VICTORY_MODES, parseLevel, validateLevel, validateLevelReferences,
+  deployForces, buildMission, resolvePoint, resolveAnchor, resolveTarget,
 } from '../../src/simulation/level.js';
 import { attackMoveCommand } from '../../src/simulation/commands.js';
 import { World } from '../../src/simulation/world.js';
@@ -162,13 +162,14 @@ describe('level：AI 脚本由数据驱动', () => {
   });
 });
 
-describe('level：宿北战役（进攻关卡 · 山地隘口）', () => {
+describe('level：宿北战役（歼灭关卡 · 山地隘口）', () => {
   const level = parseLevel(loadLevel('subei_battle'));
   const mapData = loadMap('suqian');
 
   it('第二关引用全部有效，兵力落在可通行地形上', () => {
     expect(level.id).toBe('subei_battle');
-    expect(level.type).toBe('offensive');
+    // 关卡类型随关卡 JSON 走：改 JSON 的 type 时同步改这一行
+    expect(level.type).toBe('annihilative');
     expect(level.map).toBe('/assets/maps/suqian.json');
     expect(validateLevelReferences(level, mapData)).toEqual([]);
 
@@ -186,11 +187,24 @@ describe('level：宿北战役（进攻关卡 · 山地隘口）', () => {
     // 隘口锚点压在山地上（防御修正 0.75），是这一关的战术要点
     const roadblock = resolvePoint({ anchor: 'roadblock' }, world, level.anchors);
     expect(world.terrain.defenseModifierAt(roadblock.x, roadblock.y)).toBe(0.75);
+
+    // 「指定单位」：标了 objective 的编队部署出的单位带 unit.objective，
+    // 未标记的编队（如 AI 增援）不带——歼灭胜负只看这些带标记的单位
+    const marked = spawned.filter(u => u.objective === 'annihilate');
+    const declaredMarked = level.forces
+      .filter(force => force.objective === 'annihilate')
+      .reduce((sum, force) => sum + force.units.reduce((n, unit) => n + unit.count, 0), 0);
+    expect(declaredMarked).toBeGreaterThan(0);
+    expect(marked).toHaveLength(declaredMarked);
+    expect(marked.every(u => u.faction === 'red')).toBe(true);
   });
 
-  it('这关能打完：朴素打法下蓝军 300s 内攻陷宿北城', () => {
+  it('这关能打完：朴素打法下蓝军 300s 内获胜（歼灭指定单位或夺取宿北城）', () => {
     const world = new World(mapData);
     deployForces(world, level.forces, level.anchors);
+    // 走真实路径：胜利条件同样由关卡 JSON 的 victory 决定
+    world.mess = buildMission(level, world);
+    expect(world.mess).toMatchObject({ mode: 'annihilative', faction: 'blue' });
     const redAi = new ScriptedAI(world, {
       faction: 'red', script: level.ai, anchors: level.anchors,
     });
@@ -210,7 +224,74 @@ describe('level：宿北战役（进攻关卡 · 山地隘口）', () => {
     runSimulation(world, [redAi, blueCommander], 300);
 
     expect(world.winner).toBe('blue');
-    expect(world.cities.find(c => c.id === 'c23').faction).toBe('blue');
+  });
+});
+
+describe('level：胜负条件（victory → buildMission）', () => {
+  const base = () => ({
+    version: 1,
+    id: 'x',
+    type: 'offensive',
+    map: '/assets/maps/x.json',
+    forces: [{ faction: 'blue', at: { x: 1, y: 2 }, units: [{ type: 'light', count: 1 }] }],
+  });
+
+  it('captureAll / 未声明 victory → 不额外判定（返回 null，只走失城判负）', () => {
+    const world = new World(makePlainMap());
+    expect(VICTORY_MODES).toEqual(['captureAll', 'defend', 'attack', 'annihilative']);
+    expect(buildMission({ victory: { type: 'captureAll' } }, world)).toBeNull();
+    expect(buildMission({ victory: null }, world)).toBeNull();
+    expect(buildMission({}, world)).toBeNull();
+    expect(buildMission(null, world)).toBeNull();
+  });
+
+  it('defend / attack / annihilative：解析阵营、时限与据点对象（id → 世界对象）', () => {
+    const world = new World(makePlainMap({
+      capturePoints: [{ id: 'p1', x: 600, y: 300, faction: 'blue' }],
+    }));
+    const mission = buildMission({
+      victory: { mode: 'defend', faction: 'red', time: 90, points: ['p1', 'c1'] },
+    }, world);
+    expect(mission).toEqual({
+      mode: 'defend', faction: 'red', time: 90, points: [world.capturePoints[0], world.cities[0]],
+    });
+
+    // 缺省：faction = 玩家方 blue、time = null（不限时）、points = 地图上全部占领点
+    expect(buildMission({ victory: { type: 'attack' } }, world)).toEqual({
+      mode: 'attack', faction: 'blue', time: null, points: [world.capturePoints[0]],
+    });
+
+    // 宿北战役的写法：歼灭战 + 我方阵营 + 时限
+    expect(buildMission({ victory: { type: 'annihilative', faction: 'blue', time: 10 } }, world))
+      .toMatchObject({ mode: 'annihilative', faction: 'blue', time: 10 });
+  });
+
+  it('victory 字段非法时被校验拦截', () => {
+    const bad = (victory, forces) => validateLevel({ ...base(), victory, ...(forces ? { forces } : {}) });
+    expect(bad({ mode: 'nuke' }).some(e => e.includes('victory invalid mode'))).toBe(true);
+    expect(bad({ mode: 'defend' }).some(e => e.includes('必须声明 faction'))).toBe(true);
+    expect(bad({ mode: 'defend', faction: 'green' }).some(e => e.includes('victory invalid faction'))).toBe(true);
+    expect(bad({ mode: 'defend', faction: 'blue', time: -1 }).some(e => e.includes('victory.time'))).toBe(true);
+    expect(bad({ mode: 'defend', faction: 'blue', points: [1] }).some(e => e.includes('victory.points'))).toBe(true);
+    expect(bad('nope')).toContain('victory must be an object');
+    // 歼灭战必须至少有一个「指定单位」（forces 上标 objective）
+    expect(bad({ mode: 'annihilative', faction: 'blue' }).some(e => e.includes('objective'))).toBe(true);
+    // 编队 objective 只能是白名单里的值
+    const badObjective = base();
+    badObjective.forces[0].objective = 'melt';
+    expect(validateLevel(badObjective).some(e => e.includes('invalid objective'))).toBe(true);
+    // 合法写法
+    expect(bad({ mode: 'defend', faction: 'blue', time: 60, points: ['p1'] })).toEqual([]);
+    expect(bad({ type: 'captureAll' })).toEqual([]); // 当前教程关用的就是这种
+    const marked = base();
+    marked.forces[0].objective = 'annihilate';
+    expect(bad({ mode: 'annihilative', faction: 'blue', time: 300 }, marked.forces)).toEqual([]);
+  });
+
+  it('victory.points 引用不存在的据点会被交叉校验指出', () => {
+    const level = parseLevel({ ...base(), victory: { mode: 'defend', faction: 'blue', points: ['nope'] } });
+    const errors = validateLevelReferences(level, loadTutorialMap());
+    expect(errors).toContainEqual(expect.stringContaining('不存在据点 "nope"'));
   });
 });
 
