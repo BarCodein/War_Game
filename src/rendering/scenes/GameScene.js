@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { World } from '../../simulation/world.js';
 import { createLoop } from '../../simulation/loop.js';
 import { ScriptedAI } from '../../simulation/ai.js';
-import { deployForces } from '../../simulation/level.js';
+import { deployForces, buildMission } from '../../simulation/level.js';
 import { createTerrainRenderer } from '../terrainRenderer.js';
 import { createFogRenderer } from '../fogRenderer.js';
 import { createUnitRenderer } from '../unitRenderer.js';
@@ -89,11 +89,13 @@ export class GameScene extends Phaser.Scene {
       // anchors 是关卡的命名锚点表，at / target 里的 { anchor } 都靠它解析。
       const anchors = this.level.anchors;
       deployForces(world, this.level.forces, anchors);
+      // 关卡任务规则（可选）：victory 写了 defend / attack 才生效，否则为 null，只走「失城判负」
+      world.mess = buildMission(this.level, world);
       this.ai = this.level.ai
         ? new ScriptedAI(world, { faction: this.level.ai.faction, script: this.level.ai, anchors })
         : null;
     } else {
-      // 沙盒模式（编辑器试玩 / 关卡不可用）：仅按地图出生点部署，无脚本敌军
+      // 沙盒模式（编辑器试玩 / 关卡不可用）：仅按地图出生点部署，无脚本敌军、无任务规则
       world.spawnInitial();
       this.ai = null;
     }

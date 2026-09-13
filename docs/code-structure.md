@@ -165,12 +165,13 @@ war_game/
 
 ### `src/simulation/level.js`
 关卡（Level）标准格式 v1——**"一局游戏"的完整规格**（`architecture.md` §7.1）：
-- 字段：`id` / `name` / `subtitle` / `type`（进攻 | 防守）/ `difficulty` / `map`（引用地图路径）/ `anchors`（命名锚点表）/ `forces`（编队式兵力）/ `ai`（事件→动作脚本）/ `victory`（预留，引擎暂不读取）。
+- 字段：`id` / `name` / `subtitle` / `type`（`offensive` 进攻 | `defensive` 防守 | `annihilative` 歼灭，白名单见 `LEVEL_TYPES`）/ `difficulty` / `map`（引用地图路径）/ `anchors`（命名锚点表）/ `forces`（编队式兵力）/ `ai`（事件→动作脚本）/ `victory`（胜负条件，见 `buildMission`）。
 - `validateLevel()` 结构 + 语义校验（阵营、单位类型、坐标引用与锚点定义、触发条件与动作类型、`repeatEvery > 0`）；`parseLevel()` 失败即抛错并聚合原因。
 - **坐标引用 PointRef**：`{ x, y }` / `{ spawn }` / `{ spawnId }` / `{ city }` / `{ cityId }` / `{ anchor }`，统一由 `resolvePoint(ref, world, anchors)` 解析（顺序：绝对坐标 → 命名锚点 → spawnId → spawn → cityId → city；解析不到返回 `null`）。`resolveAnchor` / `resolveTarget` 为同一函数的历史别名。
 - `parseAnchors()` 校验命名锚点表（禁止锚点引用锚点）；`validateLevelReferences(level, mapData)` 在地图载入后交叉校验 `spawnId` / `cityId` / `anchor` 是否真实存在（`BootScene` 调用，仅告警）。
-- `deployForces(world, forces, anchors)` 按数据部署：落点 = 锚点 + `offset` + `spacing × i`。
-- 常量：`LEVEL_VERSION`、`LEVEL_TYPES`、`AI_ACTION_TYPES`、`FACTIONS`、`LEVELS_INDEX_PATH`、`levelPath(id)`。
+- `deployForces(world, forces, anchors)` 按数据部署：落点 = 锚点 + `offset` + `spacing × i`；编队的 `objective` 会写到单位上（`unit.objective`），供歼灭胜负条件识别「指定单位」。
+- `buildMission(level, world)` 把 `victory` 解析成运行时任务规则（`world.mess`）：`{ mode, faction, time, points }`；`captureAll` / 未声明 → `null`。
+- 常量：`LEVEL_VERSION`、`LEVEL_TYPES`、`VICTORY_MODES`、`OBJECTIVE_ANNIHILATE`、`FORCE_OBJECTIVES`、`AI_ACTION_TYPES`、`FACTIONS`、`LEVELS_INDEX_PATH`、`levelPath(id)`。
 
 ### `src/simulation/ai.js`
 脚本敌军（`ScriptedAI`）：**解释关卡 JSON 里的「事件 → 动作」脚本**，引擎不含关卡特例：
@@ -215,7 +216,10 @@ war_game/
 - `isSpotted` 判定；维护敌方 `lastSeen` 最后已知位置。
 
 ### `src/simulation/systems/victory.js`
-胜负判定：一方失去全部城市即告负，另一方获胜（`cityCaptured`/`victory` 事件、`winner`/`endTime`）。
+胜负判定（写 `winner`/`endTime`，推 `victory` 事件）：
+- **基础规则（始终生效）**：一方失去全部城市即告负，另一方获胜。
+- **关卡任务规则（可选，读 `world.mess`）**：`defendVictory`（坚守到时限 / 据点易主即败）、`attackVictory`（时限内拿下全部据点）、`annihilationVictory`（**消灭全部指定单位**——`unit.objective === 'annihilate'` 的敌军；未标记的敌军不计入；声明了 `time` 则超时判负）。`world.mess` 为 `null` 时直接跳过——未声明任务的关卡只走基础规则。
+- `world.mess` 由 `GameScene` 用 `level.js` 的 `buildMission(level, world)` 写入（来源是关卡 JSON 的 `victory`）。
 
 ---
 

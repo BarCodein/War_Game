@@ -32,6 +32,9 @@ export function makeUnit({ id, faction, type, x, y }) {
     lastMoveX: x,
     lastMoveY: y,
     lastSeen: { blue: null, red: null }, // 敌方目视记录 { x, y, time }（fog 系统维护）
+    // 编队目标标记（关卡 forces[].objective，由 deployForces 写入）：
+    // 'annihilate' = 该单位是歼灭胜负条件的「指定单位」
+    objective: null,
     deadAt: null,
   };
 }

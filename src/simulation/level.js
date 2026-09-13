@@ -8,7 +8,7 @@ import { values } from '../config/index.js';
 //   version     number    关卡格式版本
 //   id          string    关卡唯一标识（同时是 URL ?level=<id> 与存档 key）
 //   name / subtitle / description / difficulty / order   展示用元数据
-//   type        string    'offensive'（进攻）| 'defensive'（防守）；当前仅作元数据与 UI 展示
+//   type        string    'offensive'（进攻）| 'defensive'（防守）| 'annihilative' （歼灭）；当前仅作元数据与 UI 展示
 //   map         string    地图 JSON 路径（与关卡分离，编辑器产出的地图可被多个关卡复用）
 //   anchors     object    可选：命名锚点表，把常用坐标起名，供 at / target 用 { anchor: '名字' } 引用
 //   forces      Force[]   初始兵力（编队式描述）
@@ -33,8 +33,15 @@ import { values } from '../config/index.js';
 // 触发语义   条件首次满足 → 立即执行一次 actions；若给了 repeatEvery → 此后每 repeatEvery 秒再执行一次
 
 export const LEVEL_VERSION = 1;
-export const LEVEL_TYPES = ['offensive', 'defensive'];
+export const LEVEL_TYPES = ['offensive', 'defensive', 'annihilative'];
 export const AI_ACTION_TYPES = ['spawn', 'attackNearest', 'attackMove', 'hold'];
+// victory 判定方式：captureAll = 占领全部敌方城市（基础失城判负天然覆盖，不做额外判定）；
+// defend = 坚守时限与据点；attack = 时限内夺取据点；annihilative = 消灭全部**指定单位**。
+// 见 buildMission 与 systems/victory.js。
+export const VICTORY_MODES = ['captureAll', 'defend', 'attack', 'annihilative'];
+// 编队目标标记：带 "objective": "annihilate" 的编队，其部署出的单位就是歼灭胜负条件的目标单位。
+export const OBJECTIVE_ANNIHILATE = 'annihilate';
+export const FORCE_OBJECTIVES = [OBJECTIVE_ANNIHILATE];
 export const FACTIONS = ['blue', 'red'];
 // 关卡索引文件路径（BootScene 与战役选择页共用，避免路径写两遍）
 export const LEVELS_INDEX_PATH = '/assets/levels/index.json';
@@ -102,7 +109,11 @@ export function validateLevel(data) {
     data.forces.forEach((force, fi) => {
       if (!force || !FACTIONS.includes(force.faction)) errors.push(`forces[${fi}] invalid faction`);
       if (!refOk(force.at)) errors.push(`forces[${fi}] invalid anchor (need ${refHint})`);
-      if (!Array.isArray(force.units) || force.units.length === 0) {
+      // 编队目标（可选）：标记为歼灭目标的编队，其单位会带上 unit.objective
+      if (force?.objective !== undefined && !FORCE_OBJECTIVES.includes(force.objective)) {
+        errors.push(`forces[${fi}] invalid objective: ${force.objective} (expected ${FORCE_OBJECTIVES.join(' | ')})`);
+      }
+      if (!Array.isArray(force?.units) || force.units.length === 0) {
         errors.push(`forces[${fi}] units must be a non-empty array`);
         return;
       }
@@ -161,6 +172,38 @@ export function validateLevel(data) {
     }
   }
 
+  // 胜负条件（可选）：声明了就必须合法，避免写错后静默不生效
+  if (data.victory !== undefined && data.victory !== null) {
+    const victory = data.victory;
+    if (typeof victory !== 'object' || Array.isArray(victory)) {
+      errors.push('victory must be an object');
+    } else {
+      const mode = victory.mode ?? victory.type;
+      if (mode !== undefined && !VICTORY_MODES.includes(mode)) {
+        errors.push(`victory invalid mode: ${mode} (expected ${VICTORY_MODES.join(' | ')})`);
+      }
+      if (victory.faction !== undefined && !FACTIONS.includes(victory.faction)) {
+        errors.push('victory invalid faction');
+      }
+      if (victory.time !== undefined && !(isFiniteNumber(victory.time) && victory.time > 0)) {
+        errors.push('victory.time must be a positive number (seconds)');
+      }
+      if (victory.points !== undefined
+        && (!Array.isArray(victory.points) || victory.points.some(id => !isNonEmptyString(id)))) {
+        errors.push('victory.points must be an array of ids');
+      }
+      // mode 为 defend / attack / annihilative 时必须有判定视角阵营
+      if (['defend', 'attack', 'annihilative'].includes(mode) && !FACTIONS.includes(victory.faction)) {
+        errors.push(`victory.mode=${mode} 必须声明 faction（${FACTIONS.join(' | ')}）`);
+      }
+      // 歼灭战必须有「指定单位」，否则判定永远不会触发（写错了要能立刻发现）
+      if (mode === 'annihilative'
+        && !(Array.isArray(data.forces) ? data.forces : []).some(force => force?.objective === OBJECTIVE_ANNIHILATE)) {
+        errors.push(`victory.mode=annihilative 需要在至少一个编队上标记 "objective": "${OBJECTIVE_ANNIHILATE}"（歼灭的指定单位）`);
+      }
+    }
+  }
+
   return errors;
 }
 
@@ -181,7 +224,33 @@ export function parseLevel(data) {
     anchors: parseAnchors(data).anchors,
     forces: data.forces,
     ai: data.ai ?? null,
-    victory: data.victory ?? null, // 预留：当前引擎不读取
+    victory: data.victory ?? null, // { mode|type, faction?, time?, points? } → buildMission 消费
+  };
+}
+
+// 关卡 victory → 运行时任务规则（world.mess）。没有任务规则时返回 null。
+//   { "victory": { "mode": "defend", "faction": "blue", "time": 300, "points": ["p1", "c2"] } }
+//   - mode  : 'defend'（坚守）| 'attack'（夺取据点）| 'annihilative'（消灭全部指定单位——
+//             指定单位 = 编队上标了 "objective": "annihilate" 的那些单位）。
+//             'captureAll' 与缺省都返回 null——"占领全部敌方城市" 已由基础的失城判负规则覆盖。
+//   - faction: 判定视角阵营（defend = 防守方，attack / annihilative = 我方），缺省 blue（玩家方）。
+//   - time  : 时限（秒），缺省 null = 不限时。
+//   - points: 据点 id 列表（defend / attack 用），先在占领点里找、再在城市里找；
+//             缺省 = 地图上全部占领点。
+export function buildMission(level, world) {
+  const victory = level?.victory;
+  const mode = victory?.mode ?? victory?.type;
+  if (mode !== 'defend' && mode !== 'attack' && mode !== 'annihilative') return null;
+  const ids = victory.points ?? (world.capturePoints ?? []).map(point => point.id);
+  const points = ids
+    .map(id => (world.capturePoints ?? []).find(point => point.id === id)
+      ?? world.cities.find(city => city.id === id))
+    .filter(Boolean);
+  return {
+    mode,
+    faction: victory.faction ?? 'blue',
+    time: isFiniteNumber(victory.time) ? victory.time : null,
+    points,
   };
 }
 
@@ -229,6 +298,7 @@ export function validateLevelReferences(level, mapData) {
   const errors = [];
   const spawnIds = new Set((mapData?.spawns ?? []).map(s => s.id).filter(Boolean));
   const cityIds = new Set((mapData?.cities ?? []).map(c => c.id).filter(Boolean));
+  const pointIds = new Set((mapData?.capturePoints ?? []).map(p => p.id).filter(Boolean));
   const anchors = level.anchors ?? {};
 
   const check = (ref, where) => {
@@ -251,12 +321,17 @@ export function validateLevelReferences(level, mapData) {
     }
   }
   check(level.ai?.fallback, 'ai.fallback');
+  // victory.points 是据点 id 列表（占领点优先，其次城市）
+  (level.victory?.points ?? []).forEach((id, i) => {
+    if (!pointIds.has(id) && !cityIds.has(id)) errors.push(`victory.points[${i}]: 地图中不存在据点 "${id}"`);
+  });
   return errors;
 }
 
 // ---------- 兵力部署 ----------
 
-// 按关卡 forces 部署初始兵力；anchors 为本关命名锚点表。返回实际生成的单位数组（便于测试与调试）
+// 按关卡 forces 部署初始兵力；anchors 为本关命名锚点表。返回实际生成的单位数组（便于测试与调试）。
+// 编队上的 objective 会写到单位上（unit.objective），供胜负判定识别「指定单位」。
 export function deployForces(world, forces, anchors = {}) {
   const spawned = [];
   for (const force of forces) {
@@ -266,12 +341,14 @@ export function deployForces(world, forces, anchors = {}) {
       const offset = group.offset ?? { x: 0, y: 0 };
       const spacing = group.spacing ?? { x: 0, y: 0 };
       for (let i = 0; i < group.count; i += 1) {
-        spawned.push(world.spawnUnit(
+        const unit = world.spawnUnit(
           force.faction,
           group.type,
           anchor.x + offset.x + spacing.x * i,
           anchor.y + offset.y + spacing.y * i,
-        ));
+        );
+        if (force.objective) unit.objective = force.objective;
+        spawned.push(unit);
       }
     }
   }
