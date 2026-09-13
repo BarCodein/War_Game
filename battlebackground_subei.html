@@ -21,8 +21,8 @@
   <!-- ==================== 页面标题 ==================== -->
   <section class="battle-hero">
     <span class="hero-eyebrow">CAMPAIGN BACKGROUND</span>
-    <h1>辽沈战役</h1>
-    <p class="hero-subtitle">1948年9月 — 1948年11月 · 东北地区</p>
+    <h1>宿北战役</h1>
+    <p class="hero-subtitle">1946年12月 · 江苏宿迁北部</p>
   </section>
 
   <!-- ==================== 战役背景视频（入场动画） ====================
@@ -31,7 +31,7 @@
        右上角「跳过入场」按钮可随时跳过；视频完整播完后淡出，
        进入下方敌我情况/战役目标内容。
        ★ 接入方式：下方 <video src="./assets/video/1.mp4"> 已配置，
-         换成辽沈战役的背景视频文件名即可（放入 assets/video/ 目录）。
+         换成宿北战役的背景视频文件名即可（放入 assets/video/ 目录）。
   =============================================================== -->
   <div class="bbg-intro-overlay" id="bbgIntroOverlay">
     <div class="bbg-intro-video">
@@ -42,8 +42,8 @@
     <!-- 开场标题：视频开头显示，5 秒后渐隐 -->
     <div class="bbg-intro-content" id="bbgIntroContent">
       <span class="cut-eyebrow">CAMPAIGN BACKGROUND</span>
-      <h1>辽沈战役</h1>
-      <p>1948年9月 — 1948年11月 · 东北地区</p>
+      <h1>宿北战役</h1>
+      <p>1946年12月 · 江苏宿迁北部</p>
     </div>
     <!-- 跳过按钮：固定在右上角 -->
     <button class="bbg-intro-skip" id="bbgIntroSkip">跳过入场 &rarr;</button>
@@ -55,12 +55,12 @@
     <section class="bbg-section">
       <h2>敌我情况</h2>
       <div class="bbg-img-box">
-        <!-- ★ 辽沈战役态势图接口 -->
-        <img id="battleSituation" src="./assets/texture/background2.png" alt="辽沈战役态势图">
+        <!-- ★ 宿北战役态势图（用户提供） -->
+        <img id="battleSituation" src="./assets/texture/subei_battle_map.jpg" alt="宿北战役态势图">
       </div>
       <div class="bbg-text">
-        <strong>我方部队：</strong>东北野战军主力，兵力约70万，士气高昂、装备精良，采取"关门打狗"的战略方针，先攻锦州切断东北国民党军陆上退路，再各个歼灭。<br><br>
-        <strong>敌方部队：</strong>国民党东北"剿总"卫立煌集团所辖约55万军队，分据沈阳、长春、锦州三大据点，企图打通北宁线、撤至关内或坚守顽抗。
+        <strong>我方部队：</strong>山东野战军与华中野战军，由陈毅、粟裕统一指挥，采取"集中兵力、各个歼灭"的作战方针，隐蔽集结、诱敌深入、抓住战机。<br><br>
+        <strong>敌方部队：</strong>国民党军整编第69师、整编第11师等部约2万余人，分路向宿迁以北地区进犯，企图打通陇海路东段，向华东解放区腹地推进。
       </div>
     </section>
 
@@ -68,7 +68,7 @@
     <section class="bbg-section">
       <h2>战役目标</h2>
       <div class="bbg-text">
-        集中优势兵力攻取锦州，"关门打狗"，切断东北国民党军陆上退路；全歼沈阳、长春、锦州之敌，解放东北全境，为后续战役创造有利条件。
+        集中优势兵力，抓住敌军分散冒进的战机，首先围歼整编第69师于宿北地区；打破国民党军对华东解放区的进攻，扭转华东战场的不利局面。
       </div>
     </section>
 
@@ -77,24 +77,24 @@
       <h2>历史背景</h2>
       <div class="bbg-text" id="battleContext">
         <!-- ★ 历史背景文字接口：此处可由 JS/数据源填充 -->
-        1948年秋，解放战争进入战略决战阶段。辽沈战役是三大战役中首先发起的决定性战役，解放了东北全境，使东北野战军成为解放军最强大的战略机动力量，为后续战役的全面胜利奠定了坚实基础。
+        1946年6月全面内战爆发后，国民党军向华东解放区发起大规模进攻。宿北战役是山东野战军与华中野战军首次协同作战，全歼国民党军整编第69师，毙其师长戴之奇，是华东战场战略防御阶段的重要转折。
       </div>
     </section>
 
     <!-- ==================== 开始战斗 ==================== -->
     <div class="bbg-start">
-      <a class="battle-btn" id="startBattleBtn" href="./loading.html">&#9876; 开始指挥</a>
+      <a class="battle-btn" id="startBattleBtn" href="./loading.html?level=subei_battle">&#9876; 开始指挥</a>
     </div>
 
   </div>
 
   <script>
-    // 开始指挥 → 进入加载页（loading.html）
+    // 开始指挥 → 进入加载页（loading.html），并透传关卡参数 level=subei_battle
     var startBtn = document.getElementById('startBattleBtn');
     if (startBtn) {
       startBtn.addEventListener('click', function (e) {
         e.preventDefault();
-        window.location.href = './loading.html';
+        window.location.href = './loading.html?level=subei_battle';
       });
     }
 
