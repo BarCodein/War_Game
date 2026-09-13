@@ -26,6 +26,7 @@ export function updateMovement(world, dt) {
     previousPositions.set(unit, { x: unit.x, y: unit.y });
     moveAlongRoute(world, unit, dt);
   }
+  separateWaterOverlaps(world);
   separateOverlaps(world);
   updateBlockedUnits(world, previousPositions, dt);
 }
@@ -46,6 +47,12 @@ function updateBlockedUnits(world, previousPositions, dt) {
     unit.stuckTime += dt;
     if (unit.stuckTime < values.movement.stuckThresholdSeconds) continue;
     unit.stuckTime = 0;
+    if (world.terrain.terrainAt(unit.x, unit.y) === values.terrain.codes.water) {
+      // Water speed and low morale can make a tick's displacement small;
+      // water is passable, so do not replace the route with a side detour.
+      unit.rerouteAttempts = 0;
+      continue;
+    }
     if (tryRerouteBlockedUnit(world, unit)) continue;
     unit.rerouteAttempts += 1;
     if (unit.rerouteAttempts >= values.movement.maxRerouteAttempts) {
@@ -244,6 +251,12 @@ function moveAlongRoute(world, unit, dt, ignoreMoraleEffects = false, speedMulti
   const travel = stats.speed * terrainMult * moraleMult * speedMultiplier * dt;
 
   if (distance <= travel) {
+    if (!world.terrain.passableAt(target.x, target.y) || segmentBlocked(world.terrain, unit.x, unit.y, target.x, target.y)) {
+      unit.route = [];
+      unit.routeIndex = 0;
+      unit.state = 'hold';
+      return;
+    }
     unit.x = target.x;
     unit.y = target.y;
     unit.routeIndex += 1;
@@ -255,6 +268,15 @@ function moveAlongRoute(world, unit, dt, ignoreMoraleEffects = false, speedMulti
     return;
   }
 
+  // 水域是可通行地形，沿已规划目标直线前进；不要套用陆地障碍的
+  // 惰性重规划，否则减速跨格时会反复改写目标方向，表现为原地转圈。
+  if (world.terrain.terrainAt(unit.x, unit.y) === values.terrain.codes.water) {
+    const waterStep = waterSafeStep(world, unit, target, travel);
+    unit.x += waterStep.x;
+    unit.y += waterStep.y;
+    return;
+  }
+
   // 仅在路径变更或进入新格子时检查不可通行地形
   const cellKey = world.terrain.cellIndex(world.terrain.cellAt(unit.x, unit.y).cx, world.terrain.cellAt(unit.x, unit.y).cy);
   if (unit.pathDirty || unit.pathCheckCell !== cellKey) {
@@ -262,8 +284,16 @@ function moveAlongRoute(world, unit, dt, ignoreMoraleEffects = false, speedMulti
     unit.pathCheckCell = cellKey;
     if (segmentBlocked(world.terrain, unit.x, unit.y, target.x, target.y)) {
       const detour = findPath(world.terrain, unit.x, unit.y, target.x, target.y);
-      if (detour) unit.route.splice(unit.routeIndex, 0, ...detour);
-      // 找不到路径则原地保持（不改状态）
+      if (detour && detour.length > 0) {
+        unit.route.splice(unit.routeIndex, 0, ...detour);
+        target = unit.route[unit.routeIndex];
+      } else {
+        // 找不到路径则原地保持（不穿行不可通行地形）
+        unit.route = [];
+        unit.routeIndex = 0;
+        unit.state = 'hold';
+        return;
+      }
     }
   }
 
@@ -273,9 +303,69 @@ function moveAlongRoute(world, unit, dt, ignoreMoraleEffects = false, speedMulti
   const remaining = Math.hypot(target.x - unit.x, target.y - unit.y);
   const step = Math.min(travel, remaining);
   if (step > 0) {
-    unit.x += (target.x - unit.x) / remaining * step;
-    unit.y += (target.y - unit.y) / remaining * step;
+    const nextX = unit.x + (target.x - unit.x) / remaining * step;
+    const nextY = unit.y + (target.y - unit.y) / remaining * step;
+    if (!world.terrain.passableAt(nextX, nextY) || segmentBlocked(world.terrain, unit.x, unit.y, nextX, nextY)) {
+      unit.route = [];
+      unit.routeIndex = 0;
+      unit.state = 'hold';
+      return;
+    }
+    unit.x = nextX;
+    unit.y = nextY;
   }
+}
+
+function waterSafeStep(world, unit, target, travel) {
+  const directionX = (target.x - unit.x) / Math.hypot(target.x - unit.x, target.y - unit.y);
+  const directionY = (target.y - unit.y) / Math.hypot(target.x - unit.x, target.y - unit.y);
+  let allowed = travel;
+  for (const other of world.units) {
+    if (other === unit || other.state === 'dead') continue;
+    const offsetX = other.x - unit.x;
+    const offsetY = other.y - unit.y;
+    const along = offsetX * directionX + offsetY * directionY;
+    if (along <= 0 || along > travel + unit.radius + other.radius) continue;
+    const lateral = Math.abs(offsetX * directionY - offsetY * directionX);
+    const clearance = waterClearance(unit, other);
+    if (lateral >= clearance) continue;
+    const forwardLimit = along - Math.sqrt(Math.max(0, clearance * clearance - lateral * lateral));
+    allowed = Math.min(allowed, Math.max(0, forwardLimit));
+  }
+  return { x: directionX * allowed, y: directionY * allowed };
+}
+
+function separateWaterOverlaps(world) {
+  const waterUnits = world.units.filter(unit => unit.state !== 'dead'
+    && world.terrain.terrainAt(unit.x, unit.y) === values.terrain.codes.water);
+  for (let pass = 0; pass < 8; pass += 1) {
+    let changed = false;
+    for (const unit of waterUnits) {
+      for (const other of world.units) {
+        if (other === unit || other.state === 'dead') continue;
+        if (other.id < unit.id && world.terrain.terrainAt(other.x, other.y) === values.terrain.codes.water) continue;
+        const dx = unit.x - other.x;
+        const dy = unit.y - other.y;
+        const distance = Math.hypot(dx, dy);
+        const clearance = waterClearance(unit, other);
+        if (distance >= clearance) continue;
+        const nx = distance > 0.001 ? dx / distance : (unit.id < other.id ? 1 : -1);
+        const ny = distance > 0.001 ? dy / distance : 0;
+        const push = (clearance - distance) / 2;
+        unit.x += nx * push;
+        unit.y += ny * push;
+        other.x -= nx * push;
+        other.y -= ny * push;
+        changed = true;
+      }
+    }
+    if (!changed) break;
+  }
+}
+
+function waterClearance(unit, other) {
+  // Keep a visible two-pixel buffer even when older configs use zero separation.
+  return unit.radius + other.radius + Math.max(2, values.movement.unitSeparation) + 0.01;
 }
 
 function activateNextQueuedRoute(world, unit) {
@@ -357,17 +447,25 @@ function separateOverlaps(world) {
       if (dist >= min) continue;
       if (dist < 0.001) {
         const offset = unit.id < other.id ? 1 : -1;
-        unit.x += offset;
-        other.x -= offset;
+        if (world.terrain.passableAt(unit.x + offset, unit.y)) unit.x += offset;
+        if (world.terrain.passableAt(other.x - offset, other.y)) other.x -= offset;
         continue;
       }
       const push = min - dist;
       const nx = dx / dist;
       const ny = dy / dist;
-      unit.x += nx * push / 2;
-      unit.y += ny * push / 2;
-      other.x -= nx * push / 2;
-      other.y -= ny * push / 2;
+      const newUnitX = unit.x + nx * push / 2;
+      const newUnitY = unit.y + ny * push / 2;
+      if (world.terrain.passableAt(newUnitX, newUnitY)) {
+        unit.x = newUnitX;
+        unit.y = newUnitY;
+      }
+      const newOtherX = other.x - nx * push / 2;
+      const newOtherY = other.y - ny * push / 2;
+      if (world.terrain.passableAt(newOtherX, newOtherY)) {
+        other.x = newOtherX;
+        other.y = newOtherY;
+      }
     }
   }
 }
@@ -405,7 +503,7 @@ export function findPath(terrain, x0, y0, x1, y1) {
 
   const costOf = (cx, cy) => {
     const name = nameByCode[terrain.cells[index(cx, cy)]];
-    if (name === 'water') return null;
+    if (!values.terrain.passable[name]) return null;
     return 1 / (values.terrain.moveMultiplier[name] ?? 1);
   };
 
@@ -509,12 +607,19 @@ export function planRoute(terrain, startX, startY, waypoints) {
   for (const wp of waypoints) {
     if (segmentBlocked(terrain, cx, cy, wp.x, wp.y)) {
       const detour = findPath(terrain, cx, cy, wp.x, wp.y);
-      if (detour && detour.length) points.push(...detour);
-      // 无路可达时保留直线（维持原行为：交由移动时的惰性绕行）
+      if (detour && detour.length) {
+        points.push(...detour);
+        cx = detour[detour.length - 1].x;
+        cy = detour[detour.length - 1].y;
+      }
+      // 无路可达时不可穿透不可通行地形，放弃该无法到达的路径点
+    } else {
+      if (terrain.passableAt(wp.x, wp.y)) {
+        points.push({ x: wp.x, y: wp.y });
+        cx = wp.x;
+        cy = wp.y;
+      }
     }
-    points.push({ x: wp.x, y: wp.y });
-    cx = wp.x;
-    cy = wp.y;
   }
   return simplify(points);
 }

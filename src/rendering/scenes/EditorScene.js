@@ -8,7 +8,7 @@ import { values } from '../../config/index.js';
 // 城市初始阵营、可玩性校验、localStorage 与文件导入导出、一键试玩并安全返回。
 // 与运行时共享同一地图模型与校验（architecture.md §10）。
 
-const TERRAIN_COLORS = { 0: 0xa7c942, 1: 0x536426, 2: 0x2798ed, 3: 0x8a8a92 };
+const TERRAIN_COLORS = { 0: 0xa7c942, 1: 0x536426, 2: 0x2798ed, 3: 0x8a8a92, 4: 0x8f6b45, 5: 0x4b3d32, 6: 0xd6b35a };
 const FACTION_COLORS = { blue: 0x1911ce, red: 0xe93227 };
 
 const TOOL_CODES = {
@@ -16,6 +16,9 @@ const TOOL_CODES = {
   'paint-forest': 1,
   'paint-water': 2,
   'paint-bridge': 3,
+  'paint-mountain': 4,
+  'paint-high-mountain': 5,
+  'paint-road': 6,
   erase: 0,
 };
 

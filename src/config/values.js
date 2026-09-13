@@ -24,10 +24,11 @@ export const values = {
 
   terrain: {
     gridCellSize: 10,                  // 逻辑网格边长（px）
-    codes: { plain: 0, forest: 1, water: 2, bridge: 3 },
-    passable: { plain: true, forest: true, water: true, bridge: true },
-    moveMultiplier: { plain: 1.0, forest: 0.6, water: 0.5, bridge: 1.0 },
-    defenseModifier: { plain: 1.0, forest: 0.85, bridge: 0.9 }, // 防御者地形修正
+    codes: { plain: 0, forest: 1, water: 2, bridge: 3, mountain: 4, highMountain: 5, road: 6 },
+    passable: { plain: true, forest: true, water: true, bridge: true, mountain: true, highMountain: false, road: true },
+    moveMultiplier: { plain: 1.0, forest: 0.6, water: 0.5, bridge: 1.0, mountain: 0.65, highMountain: 1.0, road: 1.25 },
+    defenseModifier: { plain: 1.0, forest: 0.85, bridge: 0.9, mountain: 0.75, road: 1.0 }, // 防御者地形修正
+    moraleMoveMultiplier: { plain: 1.0, forest: 1.0, water: 1.0, bridge: 1.0, mountain: 1.0, highMountain: 1.0, road: 0.5 },
   },
 
   morale: {

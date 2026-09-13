@@ -11,6 +11,9 @@ const CELL_COLORS = {
   1: 0x536426, // 森林
   2: 0x2798ed, // 水域
   3: 0x8a8a92, // 桥梁
+  4: 0x8f6b45, // 山地
+  5: 0x4b3d32, // 高山
+  6: 0xd6b35a, // 道路
 };
 
 const BACKGROUND_KEY_PREFIX = 'map-background::';
