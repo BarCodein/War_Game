@@ -207,16 +207,9 @@
 | cities.vision | 180 |
 | supply：capacityPerCity / attritionHpPerSecond / attritionMoralePerSecond | 5 / −1 /s / −2 /s |
 | fog：forestSpotDistance / showLastKnownGhost | 60 / true |
-<<<<<<< HEAD
-| terrain：gridCellSize / codes | 20 px / 0 平原 1 森林 2 水域 3 桥梁 |
+| terrain：gridCellSize / codes | 10 px / 0 平原 1 森林 2 水域 3 桥梁 |
 | terrain.passable：平原 / 森林 / 水域 / 桥梁 | 可 / 可 / 可 / 可 |
 | terrain.moveMultiplier：平原 / 森林 / 水域 / 桥梁 | 1.0 / 0.6 / 0.5 / 1.0 |
-=======
-| terrain：gridCellSize / codes | 10 px / 0 平原 1 森林 2 水域 3 桥梁 |
-| terrain.passable：平原 / 森林 / 水域 / 桥梁 | 可 / 可 / 不可 / 可 |
-| terrain.moveMultiplier：平原 / 森林 / 桥梁 | 1.0 / 0.6 / 1.0 |
->>>>>>> e16aad694b43e3cd002c5db7e4f3ccecf50c14b4
-| terrain.defenseModifier：平原 / 森林 / 桥梁 | 1.0 / 0.85 / 0.9 |
 
 ### 交互与 UI 数值
 
