@@ -53,7 +53,7 @@ test.describe('单位选择', () => {
     const canvas = page.locator('#battlefield canvas');
     const box = await canvas.boundingBox();
     const px = box.x + (unit.x / 1280) * box.width;
-    const py = box.y + (unit.y / 720) * box.height;
+    const py = box.y + (unit.y / 800) * box.height;
     await page.mouse.move(px, py);
     await page.mouse.down();
     const rect = await page.evaluate(() => window.__game.selection.getDragRect());
@@ -75,7 +75,7 @@ test.describe('单位选择', () => {
     }, unit.id);
     const canvas = page.locator('#battlefield canvas');
     const box = await canvas.boundingBox();
-    const start = { x: box.x + (unit.x / 1280) * box.width, y: box.y + (unit.y / 720) * box.height };
+    const start = { x: box.x + (unit.x / 1280) * box.width, y: box.y + (unit.y / 800) * box.height };
     await page.mouse.move(start.x, start.y);
     await page.mouse.down();
     await page.mouse.move(start.x + (30 / 1280) * box.width, start.y, { steps: 3 });

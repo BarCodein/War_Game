@@ -19,7 +19,7 @@ export function loadFromStorage() {
   }
 }
 
-const SIZE_PRESETS = { '1280x720': [1280, 720], '1920x1080': [1920, 1080], '960x540': [960, 540] };
+const SIZE_PRESETS = { '1280x800': [1280, 800], '1280x720': [1280, 720], '1920x1080': [1920, 1080], '960x540': [960, 540] };
 
 export function createEditorToolbar(scene, store, callbacks = {}) {
   const toolbar = document.querySelector('#editorToolbar');
