@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { advance, makePlainMap, makeWorld } from './helpers.js';
+import values from '../../src/config/values.js';
+
+// 城市生产当前**关闭**（values.cities.production.enabled = false，gdd.md §7）：
+// 生产相关的用例在生产打开时才运行，关闭时改跑「不产出」的用例——
+// 逻辑仍保留在 supply.js，改回 enabled: true 即自动恢复原有用例的覆盖。
+const productionEnabled = values.cities.production.enabled;
 
 function blueCityMap() {
   return makePlainMap({
@@ -30,7 +36,20 @@ describe('supply', () => {
     expect(supplied[0].hp).toBe(60);
   });
 
-  it('城市自动生产：12s 出一个轻型单位；补给满时暂停', () => {
+  it.runIf(!productionEnabled)('生产已关闭：城市不再自动产出单位，计时器保持为 0', () => {
+    const world = makeWorld(blueCityMap());
+    world.spawnUnit('blue', 'light', 150, 600);
+    advance(world, 60); // 相当于旧规则下能产出 5 个的时间
+    expect(world.units.filter(u => u.faction === 'blue')).toHaveLength(1);
+    expect(world.cities.find(c => c.id === 'c1').productionTimer).toBe(0);
+
+    // 补给未满、也没被围攻，同样不产出（生产整段被跳过）
+    const empty = makeWorld(blueCityMap());
+    advance(empty, 60);
+    expect(empty.units).toHaveLength(0);
+  });
+
+  it.skipIf(!productionEnabled)('城市自动生产：12s 出一个轻型单位；补给满时暂停', () => {
     const world = makeWorld(blueCityMap());
     world.spawnUnit('blue', 'light', 150, 600);
     advance(world, 12.5);
@@ -43,7 +62,7 @@ describe('supply', () => {
     expect(full.units.filter(u => u.faction === 'blue').length).toBe(5); // 满补给，生产暂停
   });
 
-  it('被敌方单位围攻时暂停生产', () => {
+  it.skipIf(!productionEnabled)('被敌方单位围攻时暂停生产', () => {
     const world = makeWorld(blueCityMap());
     world.spawnUnit('blue', 'light', 300, 600); // 守方不在地图半径内，避免交战
     world.spawnUnit('red', 'light', 150, 600);   // 距蓝城 50 ≤ 占领半径 60

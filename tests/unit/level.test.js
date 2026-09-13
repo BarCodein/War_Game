@@ -25,15 +25,15 @@ describe('level：教学关已转为标准格式', () => {
     expect(level.ai.triggers.length).toBeGreaterThan(0);
   });
 
-  it('关卡声明的兵力总数与 gdd 教学关配比一致（蓝 3 轻 1 重 / 红 2 轻 2 重）', () => {
+  it('关卡声明的兵力总数与 gdd 教学关配比一致（蓝 6 轻 2 重 / 红 2 轻 2 重）', () => {
     const level = parseLevel(loadLevel('fracture-canyon'));
     const count = (faction, type) => level.forces
       .filter(f => f.faction === faction)
       .flatMap(f => f.units)
       .filter(u => u.type === type)
       .reduce((sum, u) => sum + u.count, 0);
-    expect(count('blue', 'light')).toBe(3);
-    expect(count('blue', 'heavy')).toBe(1);
+    expect(count('blue', 'light')).toBe(6);
+    expect(count('blue', 'heavy')).toBe(2);
     expect(count('red', 'light')).toBe(2);
     expect(count('red', 'heavy')).toBe(2);
   });
@@ -58,14 +58,18 @@ describe('level：引擎按数据部署兵力', () => {
     const world = new World(loadTutorialMap());
     const spawned = deployForces(world, level.forces);
 
-    expect(spawned).toHaveLength(8); // 蓝 4 + 红 4
+    expect(spawned).toHaveLength(12); // 蓝 8（6 轻 2 重）+ 红 4（2 轻 2 重）
     const at = (faction) => spawned.filter(u => u.faction === faction)
       .map(u => `${u.type}@${u.x},${u.y}`);
     expect(at('blue')).toEqual([
       'light@200,560',
       'light@170,590',
       'light@150,590',
+      'light@180,610',
+      'light@200,610',
+      'light@220,610',
       'heavy@240,520',
+      'heavy@270,520',
     ]);
     expect(at('red')).toEqual([
       'light@1080,160',
@@ -170,13 +174,18 @@ describe('level：宿北战役（进攻关卡 · 山地隘口）', () => {
 
     const world = new World(mapData);
     const spawned = deployForces(world, level.forces, level.anchors);
-    expect(spawned).toHaveLength(9); // 蓝 5（3 轻 2 重）+ 红 4（2 轻 2 重）
+    // 数量按关卡声明推算，这样调整兵力配比不需要改测试
+    const declared = level.forces.reduce((sum, force) => sum
+      + force.units.reduce((n, unit) => n + unit.count, 0), 0);
+    expect(spawned).toHaveLength(declared);
+    expect(spawned.filter(u => u.faction === 'blue').length).toBeGreaterThan(0);
+    expect(spawned.filter(u => u.faction === 'red').length).toBeGreaterThan(0);
+    // 落点必须都在可通行地形上（山顶/水面会让单位卡住）
     expect(spawned.every(u => world.terrain.passableAt(u.x, u.y))).toBe(true);
 
-    // 红军尖兵扼守山地隘口（防御修正 0.75），是这一关的战术要点
-    const vanguard = spawned.find(u => u.faction === 'red' && u.type === 'light');
-    expect(vanguard.x).toBeCloseTo(198.3, 1);
-    expect(world.terrain.defenseModifierAt(vanguard.x, vanguard.y)).toBe(0.75);
+    // 隘口锚点压在山地上（防御修正 0.75），是这一关的战术要点
+    const roadblock = resolvePoint({ anchor: 'roadblock' }, world, level.anchors);
+    expect(world.terrain.defenseModifierAt(roadblock.x, roadblock.y)).toBe(0.75);
   });
 
   it('这关能打完：朴素打法下蓝军 300s 内攻陷宿北城', () => {

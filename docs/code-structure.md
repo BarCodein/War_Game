@@ -202,7 +202,7 @@ war_game/
 ### `src/simulation/systems/supply.js`
 补给与城市维护：
 - 每单位就近分配到一座己方城市，每城容量 5，超出者补给不足。
-- 己方城市附近恢复生命 +3/s；城市自动生产（12s/轻型，补给满或被围暂停）；补给不足损耗。
+- 己方城市附近恢复生命 +3/s；城市生产当前**关闭**（`values.cities.production.enabled = false`；逻辑保留：12s/轻型，补给满或被围暂停）；补给不足损耗。
 
 ### `src/simulation/systems/capture.js`
 城市占领：

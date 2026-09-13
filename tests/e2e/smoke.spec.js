@@ -24,13 +24,13 @@ test('关卡由 URL 定位：?level=<id> 加载标准关卡', async ({ page }) =
   const state = await page.evaluate(() => ({
     levelId: window.__game.scene.level?.id ?? null,
     type: window.__game.scene.level?.type ?? null,
-    // 兵力来自关卡 JSON：蓝 3 轻 1 重 + 红 2 轻 2 重 = 8
+    // 兵力来自关卡 JSON：蓝 6 轻 2 重 + 红 2 轻 2 重 = 12（城市生产已关闭，不会随时间增加）
     units: window.__game.world.units.length,
     hasAi: Boolean(window.__game.scene.ai),
   }));
   expect(state.levelId).toBe('fracture-canyon');
   expect(state.type).toBe('offensive');
-  expect(state.units).toBe(8);
+  expect(state.units).toBe(12);
   expect(state.hasAi).toBe(true);
 });
 
