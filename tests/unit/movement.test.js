@@ -4,12 +4,8 @@ import { planRoute, transitionToNewRoute, updateMovement } from '../../src/simul
 import { values } from '../../src/config/index.js';
 
 function riverWorldWithBridge() {
-<<<<<<< HEAD
-  // 第 15 列（x=300~320）一整列水域，第 16 行放一座桥。
-=======
-  // 第 30–31 列（x=300~320）一整列水域，第 32–33 行放一座桥（唯一可通行缺口）
+  // 第 30–31 列（x=300~320）为水域，第 32–33 行放一座桥（水域可通行，桥用于验证桥梁通行）。
   // 10px 网格下，原 20px 的 (15,16) 对应 2×2 块 (30~31, 32~33)，桥仍在 (310, 330)。
->>>>>>> e16aad694b43e3cd002c5db7e4f3ccecf50c14b4
   const cells = {};
   for (let cy = 0; cy < 72; cy += 1) {
     cells[`30,${cy}`] = values.terrain.codes.water;
@@ -33,11 +29,10 @@ describe('planRoute（最短路径规划）', () => {
     expect(route[route.length - 1]).toEqual({ x: 400, y: 360 });
   });
 
-<<<<<<< HEAD
   it('水域中的单位按水域速度倍率移动', () => {
     const plainWorld = makeWorld(makePlainMap());
     const waterWorld = makeWorld(makePlainMap({
-      terrainCells: { '5,5': values.terrain.codes.water },
+      terrainCells: { '10,11': values.terrain.codes.water }, // 10px 网格下单位 (100,110) 所在格
     }));
     const plainUnit = plainWorld.spawnUnit('blue', 'light', 100, 110);
     const waterUnit = waterWorld.spawnUnit('blue', 'light', 100, 110);
@@ -51,11 +46,8 @@ describe('planRoute（最短路径规划）', () => {
   });
 
   it('路径目标始终保留，即使水域没有桥梁', () => {
-=======
-  it('无路可达时回退为直线（保留目标点）', () => {
-    // 第 80–81 列（x=800~820）一整列水域、无桥梁 → 不可达
+    // 第 80–81 列（x=800~820）为水域；水域可通行，因此直线路径直达目标
     // （坐标与其它用例不同，避免共用全局 pathCache 的格子键被复用）
->>>>>>> e16aad694b43e3cd002c5db7e4f3ccecf50c14b4
     const cells = {};
     for (let cy = 0; cy < 72; cy += 1) {
       cells[`80,${cy}`] = values.terrain.codes.water;
@@ -64,6 +56,52 @@ describe('planRoute（最短路径规划）', () => {
     const world = makeWorld(makePlainMap({ terrainCells: cells }));
     const route = planRoute(world.terrain, 600, 360, [{ x: 900, y: 360 }]);
     expect(route).toEqual([{ x: 900, y: 360 }]);
+  });
+
+  it('高山地形围起封闭山谷时，谷外单位无法规划路径且被物理阻挡无法进入山谷', () => {
+    const cells = {};
+    for (let cx = 20; cx <= 30; cx += 1) {
+      cells[`${cx},20`] = values.terrain.codes.highMountain;
+      cells[`${cx},30`] = values.terrain.codes.highMountain;
+    }
+    for (let cy = 20; cy <= 30; cy += 1) {
+      cells[`20,${cy}`] = values.terrain.codes.highMountain;
+      cells[`30,${cy}`] = values.terrain.codes.highMountain;
+    }
+    const world = makeWorld(makePlainMap({ terrainCells: cells }));
+    const route = planRoute(world.terrain, 100, 250, [{ x: 250, y: 250 }]);
+    expect(route).toEqual([]);
+
+    const unit = world.spawnUnit('blue', 'light', 100, 250);
+    world.issueCommands([unit.id], { type: 'move', path: [{ x: 250, y: 250 }] });
+    expect(unit.state).toBe('hold');
+    expect(unit.route).toEqual([]);
+
+    // 即使被强行赋予穿山路径，移动系统也必须在撞上高山前将其阻挡停下
+    unit.route = [{ x: 250, y: 250 }];
+    unit.routeIndex = 0;
+    unit.state = 'moving';
+    for (let tick = 0; tick < 180; tick += 1) world.tick(1 / 60);
+
+    expect(unit.x).toBeLessThanOrEqual(200);
+    expect(unit.state).toBe('hold');
+  });
+
+  it('高山地形围起山谷但有缺口时，单位通过缺口绕行进入山谷', () => {
+    const cells = {};
+    for (let cx = 20; cx <= 30; cx += 1) {
+      cells[`${cx},20`] = values.terrain.codes.highMountain;
+      cells[`${cx},30`] = values.terrain.codes.highMountain;
+    }
+    for (let cy = 20; cy <= 30; cy += 1) {
+      cells[`20,${cy}`] = values.terrain.codes.highMountain;
+      cells[`30,${cy}`] = values.terrain.codes.highMountain;
+    }
+    delete cells['20,22']; // 在 cy=22 留出缺口
+    const world = makeWorld(makePlainMap({ terrainCells: cells }));
+    const route = planRoute(world.terrain, 100, 255, [{ x: 255, y: 255 }]);
+    expect(route.length).toBeGreaterThan(1);
+    expect(route[route.length - 1]).toEqual({ x: 255, y: 255 });
   });
 });
 

@@ -10,7 +10,26 @@ describe('editor store', () => {
     expect(map.terrain.cells.every(code => code === 0)).toBe(true);
     expect(map.cities.map(c => c.faction).sort()).toEqual(['blue', 'red']);
     expect(map.spawns.map(s => s.faction).sort()).toEqual(['blue', 'red']);
+    expect(map.capturePoints).toEqual([]); // 占领点默认留空
     expect(createEditorStore(map).errors()).toEqual([]);
+  });
+
+  it('占领点：添加、移动、删除；旧地图缺字段时自动补齐', () => {
+    const store = createEditorStore();
+    const id = store.addCapturePoint(640, 360, 'neutral');
+    expect(store.mapData.capturePoints.find(p => p.id === id))
+      .toMatchObject({ x: 640, y: 360, faction: 'neutral' });
+    store.moveCapturePoint(id, 700, 400);
+    expect(store.mapData.capturePoints.find(p => p.id === id)).toMatchObject({ x: 700, y: 400 });
+    store.removeCapturePoint(id);
+    expect(store.mapData.capturePoints.some(p => p.id === id)).toBe(false);
+
+    // 旧存档没有 capturePoints 字段：载入后应补齐为空数组，且新增不崩溃
+    const legacy = createNewMap('旧图', 1280, 720);
+    delete legacy.capturePoints;
+    store.loadMapData(legacy);
+    expect(store.mapData.capturePoints).toEqual([]);
+    expect(store.addCapturePoint(600, 300, 'blue')).toBeTruthy();
   });
 
   it('绘制与线段采样绘制地形，越界被忽略', () => {

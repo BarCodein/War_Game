@@ -36,7 +36,9 @@ describe('world integration', () => {
       },
     };
 
-    runSimulation(world, [redAi, blueCommander], 150);
+    // 300s 预算：当前平衡（低伤害/高攻速、士气行军与交战消耗、水域可通行）下
+    // 蓝军约在 250s 攻陷红城；局部提前结束（world.winner 置位即停），加余量不增加耗时。
+    runSimulation(world, [redAi, blueCommander], 300);
 
     expect(world.winner).toBe('blue');
     expect(world.history.some(e => e.type === 'cityCaptured' && e.cityId === 'c2' && e.faction === 'blue')).toBe(true);

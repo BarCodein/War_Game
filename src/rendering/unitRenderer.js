@@ -29,6 +29,9 @@ const SIDE_COLORS = {
   red: { fill: 0xf01818, outline: 0x76100e },
 };
 
+// 占领点配色：中立灰，蓝/红用阵营色
+const POINT_COLORS = { neutral: 0x9aa7a7, blue: 0x1911ce, red: 0xe93227 };
+
 // 贴图旋转基准：立绘「正上方」朝向目标方向（+90°）。
 const SPRITE_FACING_OFFSET = Math.PI / 2;
 
@@ -81,6 +84,7 @@ export function createUnitRenderer(scene, world, selection) {
     cityGraphics.clear();
     stats.ghostCount = 0;
     for (const city of world.cities) drawCity(city);
+    for (const point of world.capturePoints) drawCapturePoint(point);
     for (const unit of world.units) {
       if (unit.state === 'dead') {
         hideSprite(unit.id);
@@ -313,6 +317,30 @@ export function createUnitRenderer(scene, world, selection) {
     }
     const label = cityLabels.get(city.id);
     if (label) label.setText(t('city.label', { faction: t(`faction.${city.faction}`) }));
+  }
+
+  // 占领点：菱形轮廓（与城市的圆盘+旗明显区分）+ 中心点 + 占领进度环。
+  // 中立时用灰色，被占领后显示所属阵营色。
+  function drawCapturePoint(point) {
+    const { x, y } = point;
+    const color = POINT_COLORS[point.faction] ?? POINT_COLORS.neutral;
+    const r = 14;
+    cityGraphics.lineStyle(2, color, 1);
+    cityGraphics.beginPath();
+    cityGraphics.moveTo(x, y - r);
+    cityGraphics.lineTo(x + r, y);
+    cityGraphics.lineTo(x, y + r);
+    cityGraphics.lineTo(x - r, y);
+    cityGraphics.closePath();
+    cityGraphics.strokePath();
+    cityGraphics.fillStyle(color, 0.85);
+    cityGraphics.fillCircle(x, y, 3.5);
+    if (point.captureProgress > 0) {
+      cityGraphics.lineStyle(4, 0xf4d71a, 0.95);
+      cityGraphics.beginPath();
+      cityGraphics.arc(x, y, 20, -Math.PI / 2, -Math.PI / 2 + point.captureProgress / 100 * Math.PI * 2);
+      cityGraphics.strokePath();
+    }
   }
 
   function drawGhost(x, y, radius) {
