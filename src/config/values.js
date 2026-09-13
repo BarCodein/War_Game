@@ -26,7 +26,7 @@ export const values = {
     gridCellSize: 10,                  // 逻辑网格边长（px）
     codes: { plain: 0, forest: 1, water: 2, bridge: 3 },
     passable: { plain: true, forest: true, water: true, bridge: true },
-    moveMultiplier: { plain: 1.0, forest: 0.6, water: 0.5, bridge: 1.0 },
+    moveMultiplier: { plain: 1.0, forest: 0.6, water: 0.4, bridge: 1.0 },
     defenseModifier: { plain: 1.0, forest: 0.85, bridge: 0.9 }, // 防御者地形修正
   },
 
@@ -57,6 +57,13 @@ export const values = {
     production: { interval: 12, unitType: 'light', pauseWhenSupplyFull: true },
     recovery: { radius: 100, hpPerSecond: 3, moralePerSecond: 5 },
     vision: 180,
+  },
+
+  // 占领点：可被占领的中立/阵营目标，被占领后**仅提供视野**；
+  // 不提供补给容量、不提供士气加成、不生产、不恢复、不计入胜负（gdd.md §7.1）。
+  capturePoints: {
+    vision: 180, // 被己方占领后提供的视野半径（独立数值，可单独调）
+    capture: { radius: 60, perUnitPerSecond: 0.05, capPerSecond: 0.15, decayPerSecond: 0.03 }, // 沿用城市占领规则
   },
 
   supply: {

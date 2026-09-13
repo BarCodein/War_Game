@@ -125,11 +125,13 @@ world.issueCommands(unitIds, command)           // 唯一入口，附带校验
   "background": "/assets/map_pics/mp.png",
   "cities": [ { "id": "c1", "x": 200, "y": 560, "faction": "blue" } ],
   "spawns": [ { "faction": "blue", "x": 200, "y": 560 } ],
+  "capturePoints": [ { "id": "p1", "x": 640, "y": 300, "faction": "neutral" } ],
   "objectives": [ { "id": "o1", "type": "captureCity", "cityId": "c2", "holdSeconds": 0 } ]
 }
 ```
 
 - `cells`：0 平原 / 1 森林 / 2 水域 / 3 桥梁（`gdd.md` §5），行优先。
+- `capturePoints`（可选）：占领点数组，`faction` 为 `neutral` | `blue` | `red`；被占领后**仅提供视野**，不提供补给/士气/生产/恢复，也不计入胜负（`gdd.md` §7.1）。缺省为空数组。
 - 读取流程：**结构校验（schema）→ 可玩性校验（双方至少 1 出生点与 1 城市、尺寸/格子一致）→ 版本迁移链（version < 当前版本时逐级升级）**，失败即拒绝载入并报错。
 - 编辑器与运行时共享同一地图模型与校验代码（`REQUIREMENTS.md` §4.6）。
 - 存档：`localStorage` 存设置/进度/自定义地图，文件 API 导入导出。

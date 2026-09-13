@@ -61,6 +61,18 @@ export function validateMap(data) {
   for (const faction of ['blue', 'red']) {
     if (!spawns.some(s => s && s.faction === faction)) errors.push(`no ${faction} spawn (unplayable)`);
   }
+  // 占领点（可选）：阵营可为 neutral/blue/red；不参与可玩性判定，也不影响胜负
+  const capturePoints = data.capturePoints ?? [];
+  if (!Array.isArray(capturePoints)) {
+    errors.push('invalid capturePoints');
+  } else {
+    for (const point of capturePoints) {
+      if (!point || typeof point.id !== 'string' || !Number.isFinite(point.x) || !Number.isFinite(point.y)
+        || !['blue', 'red', 'neutral'].includes(point.faction)) {
+        errors.push(`invalid capturePoint: ${JSON.stringify(point)}`);
+      }
+    }
+  }
   return errors;
 }
 
@@ -112,6 +124,8 @@ export function parseMap(data) {
     background: migrated.background ?? null, // 背景地图图片 URL（可选）；渲染层据此改用图片显示
     cities: migrated.cities,
     spawns: migrated.spawns,
+    // 占领点：被占领后仅提供视野（不提供补给/士气/生产/恢复，也不计入胜负）
+    capturePoints: migrated.capturePoints ?? [],
     objectives: migrated.objectives ?? [],
   };
 }
