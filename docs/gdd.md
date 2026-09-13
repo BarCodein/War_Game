@@ -145,7 +145,7 @@
 
 ## 10. 教学战役关卡：断裂峡谷（§8-6）
 
-**地图**（1280×720）：蓝军城市 A 位于西南，红军城市 B（北方信标）位于东北；河流自西向东横贯中部，中央一座桥梁；两岸散布森林。
+**地图**（1280×800）：蓝军城市 A 位于西南，红军城市 B（北方信标）位于东北；河流自西向东横贯中部，中央一座桥梁；两岸散布森林。
 
 **初始兵力**：蓝军 3 轻型 + 1 重型，集结于城市 A；红军 2 轻型 + 2 重型驻守城市 B 周边（驻守半径 80 px）。
 
@@ -249,7 +249,7 @@
 
 | config 路径 | 值 |
 |---|---|
-| tutorial.map：width / height / midlineX | 1280 / 720 / 640 |
+| tutorial.map：width / height / midlineX | 1280 / 800 / 640 |
 | tutorial.forces：blue / red | 3 轻 + 1 重 / 2 轻 + 2 重 |
 | tutorial.garrisonRadius / clearRadius | 80 / 200 |
 | tutorial.reinforcement：atSecond / count / unitType / spawn / moveTo | 60 s / 2 / light / (1230, 400) / (1080, 160) |

@@ -19,7 +19,7 @@ test.describe('地图编辑器', () => {
       cities: window.__editor.store.mapData.cities.length,
       size: window.__editor.store.mapData.size,
     }));
-    expect(info).toEqual({ version: 1, cities: 2, size: { width: 1280, height: 720 } });
+    expect(info).toEqual({ version: 1, cities: 2, size: { width: 1280, height: 800 } });
   });
 
   test('绘制与擦除地形', async ({ page }) => {
