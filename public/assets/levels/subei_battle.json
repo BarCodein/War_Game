@@ -1,0 +1,158 @@
+{
+  "version": 1,
+  "id": "subei_battle",
+  "name": "宿北战役",
+  "subtitle": "SUBEI BATTLE",
+  "type": "offensive",
+  "difficulty": "教学",
+  "description": "沿南北公路南下，突破山地隘口，歼灭宿北守军并夺取宿北城。",
+  "map": "/assets/maps/suqian.json",
+
+  "anchors": {
+    "northLine": { "spawnId": "s7" },
+    "blueBase": { "cityId": "c1" },
+    "roadblock": { "spawnId": "s16" },
+    "redBase": { "cityId": "c23" },
+    "eastHook": { "spawnId": "s19" }
+  },
+
+  "forces": [
+    
+    {
+      "faction": "blue",
+      "at": { "spawnId": "s9" },
+      "units": [
+        { "type": "heavy", "count": 1   }
+      ]
+    },
+    {
+      "faction": "blue",
+      "at": { "spawnId": "s8" },
+      "units": [
+        { "type": "heavy", "count": 1   }
+      ]
+    },
+    {
+      "faction": "blue",
+      "at": { "spawnId": "s3" },
+      "units": [
+        { "type": "light", "count": 1 }
+      ]
+    },
+    {
+      "faction": "blue",
+      "at": { "spawnId": "s6" },
+      "units": [
+        { "type": "light", "count": 1 }
+      ]
+    },
+    {
+      "faction": "blue",
+      "at": { "spawnId": "s7" },
+      "units": [
+        { "type": "light", "count": 1 }
+      ]
+    },{
+      "faction": "blue",
+      "at": { "spawnId": "s9" },
+      "units": [
+        { "type": "light", "count": 1 }
+      ]
+    },
+    {
+      "faction": "blue",
+      "at": { "spawnId": "s11" },
+      "units": [
+        { "type": "light", "count": 1 }
+      ]
+    },
+    {
+      "faction": "blue",
+      "at": { "spawnId": "s13" },
+      "units": [
+        { "type": "light", "count": 1 }
+      ]
+    },
+    {
+      "faction": "blue",
+      "at": { "spawnId": "s14" },
+      "units": [
+        { "type": "light", "count": 1 }
+      ]
+    },
+    {
+      "faction": "blue",
+      "at": { "spawnId": "s15" },
+      "units": [
+        { "type": "light", "count": 1 }
+      ]
+    },
+    {
+      "faction": "red",
+      "at": { "spawnId": "s16" },
+      "units": [
+        { "type": "light", "count": 1 }
+      ]
+    },
+    {
+      "faction": "red",
+      "at": { "spawnId": "s17" },
+      "units": [
+        { "type": "light", "count": 1 }
+      ]
+    },
+    {
+      "faction": "red",
+      "at": { "spawnId": "s18" },
+      "units": [
+        { "type": "light", "count": 1 }
+      ]
+    },
+    {
+      "faction": "red",
+      "at": { "spawnId": "s19" },
+      "units": [
+        { "type": "light", "count": 1 }
+      ]
+    },
+    {
+      "faction": "red",
+      "at": { "spawnId": "s20" },
+      "units": [
+        { "type": "light", "count": 1 }
+      ]
+    }
+
+  ],
+
+  "ai": {
+    "faction": "red",
+    "fallback": { "anchor": "roadblock" },
+    "triggers": [
+      {
+        "id": "reinforcement",
+        "at": { "time": 75 },
+        "actions": [
+          {
+            "type": "spawn",
+            "unitType": "light",
+            "count": 2,
+            "at": { "anchor": "eastHook" },
+            "spacing": { "x": 0, "y": 22 },
+            "order": { "type": "attackMove", "target": { "anchor": "roadblock" } }
+          }
+        ]
+      },
+      {
+        "id": "counterattack",
+        "at": { "time": 120 },
+        "repeatEvery": 10,
+        "actions": [
+          { "type": "attackNearest" }
+        ]
+      }
+    ]
+  },
+
+  "victory": { "type": "captureAll" }
+}

@@ -35,7 +35,8 @@ war_game/
 │  │  ├─ loop.js               #    固定时间步长累积器
 │  │  ├─ commands.js           #    统一命令接口与校验
 │  │  ├─ spatial.js            #    均匀网格空间分区
-│  │  ├─ ai.js                 #    脚本敌军
+│  │  ├─ ai.js                 #    脚本敌军（解释关卡的事件→动作脚本）
+│  │  ├─ level.js              #    关卡标准格式：校验 / 兵力部署 / 锚点与目标解析
 │  │  └─ systems/              #    tick 内的规则系统
 │  │     ├─ movement.js        #      移动/寻路/软排斥/溃逃撤退
 │  │     ├─ combat.js          #      接触交战/伤害/目标选择
@@ -137,9 +138,9 @@ war_game/
 ### `src/simulation/map.js`
 地图 JSON 模型与校验：
 - `MAP_VERSION`、`migrations`、`migrateMap`（版本迁移链，机制就绪）。
-- `validateMap`：结构 + 可玩性校验（尺寸、地形格、双阵营城市/出生点）。
+- `validateMap`：结构 + 可玩性校验（尺寸、地形格、双阵营城市/出生点），并检查**城市 id / 出生点 id 唯一**。
 - `makeTerrain`：地形访问层（`terrainAt`、`passableAt`、`moveMultiplierAt`、`defenseModifierAt`、格子索引）。
-- `parseMap`：迁移 + 校验 + 规范化输出。
+- `parseMap`：迁移 + 校验 + 规范化输出；`normalizeSpawns` 给缺 id 的出生点补 `s1`、`s2`…（跳过已占用的名字），使关卡能用 `{ spawnId }` 精确引用手写地图的出生点。
 
 ### `src/simulation/entities.js`
 实体工厂，返回**纯数据对象**：
@@ -162,10 +163,20 @@ war_game/
 - 每 tick 重建（O(n)），邻居查询近似 O(1)/单位，**禁止全单位两两检测**（`REQUIREMENTS.md §5`）。
 - `rebuild(units)` / `cellKeyAt(x,y)` / `query(x,y,radius)`（按桶序，确定性）。
 
+### `src/simulation/level.js`
+关卡（Level）标准格式 v1——**"一局游戏"的完整规格**（`architecture.md` §7.1）：
+- 字段：`id` / `name` / `subtitle` / `type`（进攻 | 防守）/ `difficulty` / `map`（引用地图路径）/ `anchors`（命名锚点表）/ `forces`（编队式兵力）/ `ai`（事件→动作脚本）/ `victory`（预留，引擎暂不读取）。
+- `validateLevel()` 结构 + 语义校验（阵营、单位类型、坐标引用与锚点定义、触发条件与动作类型、`repeatEvery > 0`）；`parseLevel()` 失败即抛错并聚合原因。
+- **坐标引用 PointRef**：`{ x, y }` / `{ spawn }` / `{ spawnId }` / `{ city }` / `{ cityId }` / `{ anchor }`，统一由 `resolvePoint(ref, world, anchors)` 解析（顺序：绝对坐标 → 命名锚点 → spawnId → spawn → cityId → city；解析不到返回 `null`）。`resolveAnchor` / `resolveTarget` 为同一函数的历史别名。
+- `parseAnchors()` 校验命名锚点表（禁止锚点引用锚点）；`validateLevelReferences(level, mapData)` 在地图载入后交叉校验 `spawnId` / `cityId` / `anchor` 是否真实存在（`BootScene` 调用，仅告警）。
+- `deployForces(world, forces, anchors)` 按数据部署：落点 = 锚点 + `offset` + `spacing × i`。
+- 常量：`LEVEL_VERSION`、`LEVEL_TYPES`、`AI_ACTION_TYPES`、`FACTIONS`、`LEVELS_INDEX_PATH`、`levelPath(id)`。
+
 ### `src/simulation/ai.js`
-脚本敌军（`ScriptedAI`）：
+脚本敌军（`ScriptedAI`）：**解释关卡 JSON 里的「事件 → 动作」脚本**，引擎不含关卡特例：
 - 只读世界状态，通过 `world.issueCommands` 下发（与人类共用统一命令接口）。
-- 支持**驻守、定时增援、条件触发进攻、周期重选目标、向 fallbackTarget（敌方城市）进军**。
+- 触发条件：`{ time }`（经过秒数）、`{ enemyCrossX }`（任一敌军越过该 x）；首次满足**立即执行一次**动作，`repeatEvery` 存在时此后周期重复。
+- 动作：`spawn`（可按 `order` 逐单位下令）、`attackNearest`（各打最近敌军，无敌人时转向 `fallback`）、`attackMove`、`hold`；所有点位经 `resolvePoint(ref, world, this.anchors)` 解析，构造时传入关卡 `anchors`。
 - `nearestEnemy` 用空间区扩张半径查询，避免全图扫描。
 
 ### `src/simulation/systems/movement.js`
@@ -294,15 +305,18 @@ DOM 编辑器工具栏：
 - 来自原型遗留视觉表现（`gdd.md §9` 暂定保留）。
 
 ### `src/rendering/scenes/BootScene.js`
-游戏页启动场景：
-- 读 URL 参数 `?fromEditor=1` → 从 `sessionStorage` 取试玩地图；`#bench` → 性能基准；否则 fetch 教学地图。
-- `scene.start('Game', { mapData, fromEditor })`。
+游戏页启动场景：把 URL 解析为**关卡**再启动游戏。
+- `?level=<id>` → 加载 `/assets/levels/<id>.json`（标准关卡格式）→ 再加载其 `map` 指向的地图。
+- `#bench` → 性能基准；`?fromEditor=1` → 编辑器试玩（地图取 `sessionStorage`，无关卡脚本）。
+- 无参数 → 取关卡索引 `/assets/levels/index.json` 的第一关；索引同时供「下一关」导航使用。
+- 载入地图后调用 `validateLevelReferences()` 交叉校验关卡的 `spawnId` / `cityId` / `anchor`，有误仅 `console.warn`（不致命）。
+- `scene.start('Game', { level, mapData, fromEditor, levelIndex })`。
 
 ### `src/rendering/scenes/GameScene.js`
 游戏主场景：
-- `create()`：构造 `World`、`ScriptedAI`（非试玩）、控制器、循环、输入层（selection/orders/keyboard）、渲染层、HUD。
-- **编辑器试玩**：`fromEditor` 时仅按地图出生点部署、无脚本敌军、显示"返回编辑器"。
-- `spawnTutorialForces()`：教学关兵力（蓝 3 轻 + 1 重，红 2 轻 + 2 重）。
+- `create()`：构造 `World`、`ScriptedAI`（关卡模式下）、控制器、循环、输入层（selection/orders/keyboard）、渲染层、HUD。
+- **关卡模式**：`deployForces(world, level.forces, level.anchors)` 部署兵力，`new ScriptedAI(world, { faction, script, anchors })`；引擎不把关卡写进代码。
+- **沙盒模式**（编辑器试玩 / 关卡不可用）：仅按地图出生点部署、无脚本敌军、显示"返回编辑器"。
 - `update()`：固定步长推进（暂停/胜负时跳过），每帧重绘单位/迷雾/控制线/覆盖层 + 更新 HUD。
 - `drawOverlays()`：盒选矩形、拖拽轨迹、行军/攻击前进轨迹含末端箭头（加深颜色 `0x1f2b24`）。
 

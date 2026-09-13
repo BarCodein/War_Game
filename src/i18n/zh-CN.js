@@ -8,6 +8,8 @@ export default {
   'hud.mission.name': '断裂峡谷 · Dawn Sector',
   'hud.pause': '暂停游戏',
   'hud.speed': '游戏速度',
+  // 关卡载入失败横幅（关卡 JSON 校验不过时显示在战场顶部）
+  'hud.levelError': '关卡「{id}」载入失败，已退回沙盒模式（地图 / 兵力 / AI 未按关卡生效）',
   // 左栏
   'hud.units.title': '我的编队',
   'hud.units.count': '{n} UNITS',

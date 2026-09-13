@@ -33,7 +33,24 @@ export function createEditorStore(initialMap = createNewMap('新地图', 1280, 8
   const state = { mapData: JSON.parse(JSON.stringify(initialMap)) };
   // 旧存档/旧地图没有 capturePoints 字段：补齐为空数组，避免新增操作崩溃
   if (!Array.isArray(state.mapData.capturePoints)) state.mapData.capturePoints = [];
-  let nextId = 3; // c1/c2、s1/s2 已占用
+
+  // 新增对象的 id 计数器：城市 c*、出生点 s*、占领点 p* 各自独立，取已用最大编号 + 1。
+  // 不能写死初值——像 suqian 这类已有 c23、s20 的地图，固定从 3 开始会生成重复的 s3，
+  // 而 validateMap 会拒绝重复的城市/出生点 id，编辑器会直接报错、无法试玩。
+  const nextIds = { c: 1, s: 1, p: 1 };
+  function refreshNextIds() {
+    const scan = (items, kind) => {
+      nextIds[kind] = 1;
+      for (const item of items) {
+        const match = /^([csp])(\d+)$/.exec(String(item?.id ?? ''));
+        if (match && match[1] === kind) nextIds[kind] = Math.max(nextIds[kind], Number(match[2]) + 1);
+      }
+    };
+    scan(state.mapData.cities, 'c');
+    scan(state.mapData.spawns, 's');
+    scan(state.mapData.capturePoints, 'p');
+  }
+  refreshNextIds();
 
   function cellAt(x, y) {
     const { gridCellSize, size } = state.mapData;
@@ -72,8 +89,8 @@ export function createEditorStore(initialMap = createNewMap('新地图', 1280, 8
 
     addCity(x, y, faction) {
       if (!cellAt(x, y)) return null;
-      const id = `c${nextId}`;
-      nextId += 1;
+      const id = `c${nextIds.c}`;
+      nextIds.c += 1;
       state.mapData.cities.push({ id, x, y, faction });
       return id;
     },
@@ -92,8 +109,8 @@ export function createEditorStore(initialMap = createNewMap('新地图', 1280, 8
 
     addSpawn(x, y, faction) {
       if (!cellAt(x, y)) return null;
-      const id = `s${nextId}`;
-      nextId += 1;
+      const id = `s${nextIds.s}`;
+      nextIds.s += 1;
       state.mapData.spawns.push({ id, faction, x, y });
       return id;
     },
@@ -113,8 +130,8 @@ export function createEditorStore(initialMap = createNewMap('新地图', 1280, 8
     // 占领点：faction 为 'neutral' | 'blue' | 'red'
     addCapturePoint(x, y, faction = 'neutral') {
       if (!cellAt(x, y)) return null;
-      const id = `p${nextId}`;
-      nextId += 1;
+      const id = `p${nextIds.p}`;
+      nextIds.p += 1;
       state.mapData.capturePoints.push({ id, x, y, faction });
       return id;
     },
@@ -138,6 +155,7 @@ export function createEditorStore(initialMap = createNewMap('新地图', 1280, 8
     loadMapData(data) {
       state.mapData = JSON.parse(JSON.stringify(data));
       if (!Array.isArray(state.mapData.capturePoints)) state.mapData.capturePoints = [];
+      refreshNextIds(); // 载入的地图可能已经用了很大的编号，计数器要跟着走
     },
   };
 }

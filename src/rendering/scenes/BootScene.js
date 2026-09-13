@@ -1,11 +1,24 @@
 import Phaser from 'phaser';
 import { UNIT_TEXTURES } from '../unitRenderer.js';
+import { parseLevel, validateLevelReferences, LEVELS_INDEX_PATH, levelPath } from '../../simulation/level.js';
 
-// 游戏页启动场景（architecture.md §10）：
-// 1. ?fromEditor=1 → 从 sessionStorage 取地图（编辑器试玩）
-// 2. ?map=<path>  → 加载指定地图文件（战役选择页传入）
-// 3. #bench       → 进入性能基准测试
-// 4. 其他         → 加载默认教学地图（fracture-canyon.json）
+// 游戏页启动场景（architecture.md §10）：把 URL 解析为「关卡」再启动游戏。
+//   1. ?level=<id>   → 加载 /assets/levels/<id>.json（标准关卡格式，含地图/兵力/增援/AI）
+//   2. #bench        → 性能基准测试
+//   3. ?fromEditor=1 → 编辑器试玩：地图来自 sessionStorage，无关卡脚本（纯沙盒）
+//   4. 无参数        → 关卡索引里的第一关（默认教学关）
+//
+// 关卡索引 /assets/levels/index.json 同时用于战役选择页与「下一关」导航。
+
+const DEFAULT_LEVEL_ID = 'fracture-canyon';
+const DEFAULT_MAP = '/assets/maps/fracture-canyon.json';
+
+async function loadJson(path) {
+  const response = await fetch(path);
+  if (!response.ok) throw new Error(`${path} → HTTP ${response.status}`);
+  return response.json();
+}
+
 export class BootScene extends Phaser.Scene {
   constructor() {
     super({ key: 'Boot' });
@@ -21,40 +34,72 @@ export class BootScene extends Phaser.Scene {
 
   async create() {
     const params = new URLSearchParams(window.location.search);
-    const campaignId = params.get('campaign') || 'fracture-canyon';
 
-    // 编辑器试玩模式：从 sessionStorage 取地图数据
-    const fromEditor = params.get('fromEditor') === '1';
-    let mapData = null;
-    if (fromEditor) {
-      const raw = sessionStorage.getItem('war-of-dots.playtest');
-      if (raw) mapData = JSON.parse(raw);
-    }
-
-    // 战役选择页模式：从 URL 参数加载指定地图
-    const mapPath = params.get('map');
-    if (mapPath && !mapData) {
-      try {
-        const response = await fetch(mapPath);
-        mapData = await response.json();
-      } catch (err) {
-        console.error(`[BootScene] Failed to load map from ${mapPath}:`, err);
-        // 加载失败时降级到默认地图
-      }
-    }
-
-    // 性能基准测试模式
-    if (!mapData && window.location.hash === '#bench') {
+    // 性能基准测试
+    if (window.location.hash === '#bench') {
       this.scene.start('Bench');
       return;
     }
 
-    // 默认：加载教学地图
-    if (!mapData) {
-      const response = await fetch('/assets/maps/fracture-canyon.json');
-      mapData = await response.json();
+    // 关卡索引（供默认关卡与「下一关」导航使用；缺失不致命）
+    let levelIndex = [];
+    try {
+      levelIndex = (await loadJson(LEVELS_INDEX_PATH)).levels ?? [];
+    } catch (err) {
+      console.error('[BootScene] level index unavailable:', err);
     }
 
-    this.scene.start('Game', { mapData, fromEditor, campaignId });
+    // 编辑器试玩：地图来自 sessionStorage，无关卡脚本（沙盒模式）
+    if (params.get('fromEditor') === '1') {
+      const raw = sessionStorage.getItem('war-of-dots.playtest');
+      if (raw) {
+        this.scene.start('Game', {
+          level: null, mapData: JSON.parse(raw), fromEditor: true, levelIndex,
+        });
+        return;
+      }
+      console.error('[BootScene] fromEditor=1 但 sessionStorage 中没有试玩地图，回退到默认关卡');
+    }
+
+    // 关卡：?level=<id> 优先，否则索引中的第一关
+    const levelId = params.get('level') || levelIndex[0]?.id || DEFAULT_LEVEL_ID;
+    let level = null;
+    let levelError = null;
+    try {
+      level = parseLevel(await loadJson(levelPath(levelId)));
+    } catch (err) {
+      levelError = err.message;
+      console.error(`[BootScene] 关卡 "${levelId}" 加载失败：`, err);
+    }
+
+    // 地图：关卡指定的路径优先，否则退回默认教学地图
+    let mapData = null;
+    if (level) {
+      try {
+        mapData = await loadJson(level.map);
+      } catch (err) {
+        levelError = err.message;
+        console.error(`[BootScene] 关卡地图 "${level.map}" 加载失败：`, err);
+      }
+    }
+    if (!mapData) {
+      mapData = await loadJson(DEFAULT_MAP);
+      level = null; // 关卡不可用时降级为纯沙盒（按出生点部署）
+      levelError = levelError ?? `无法载入关卡地图，已退回默认地图 ${DEFAULT_MAP}`;
+    }
+
+    // 关卡引用交叉校验：spawnId / cityId / anchor 写错时告警（不致命，解析不到的点位会被跳过）
+    if (level) {
+      const refErrors = validateLevelReferences(level, mapData);
+      if (refErrors.length > 0) {
+        console.warn(`[BootScene] 关卡 "${level.id}" 存在无效引用：\n- ${refErrors.join('\n- ')}`);
+        levelError = `关卡存在无效引用：\n- ${refErrors.join('\n- ')}`;
+      }
+    }
+
+    // levelError 交给 GameScene 显示在画面上：静默退回沙盒会让「关卡写错了」看起来像「游戏坏了」
+    this.scene.start('Game', {
+      level, mapData, fromEditor: false, levelIndex, levelId, levelError,
+    });
   }
 }

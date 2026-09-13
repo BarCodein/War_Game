@@ -1,5 +1,5 @@
 import { t } from '../i18n/index.js';
-import { campaigns, loadProgress, startCampaign } from '../entries/battlechoose-data.js';
+import { loadLevels, loadProgress, startLevel } from '../entries/battlechoose-data.js';
 
 // ──────────────────────────────────────────────
 // 过场动画接口（cutscene）
@@ -38,14 +38,14 @@ export async function playCutscene() {
 // ──────────────────────────────────────────────
 // 渲染关卡卡片
 // ──────────────────────────────────────────────
-function renderBattleCards() {
+function renderBattleCards(levels) {
   const grid = document.getElementById('battleCardGrid');
   if (!grid) return;
 
   const progress = loadProgress();
 
-  grid.innerHTML = campaigns.map((campaign, index) => {
-    const prog = progress[campaign.id] ?? {};
+  grid.innerHTML = levels.map((level, index) => {
+    const prog = progress[level.id] ?? {};
     const isCompleted = prog.completed === true;
     const statusClass = isCompleted ? 'completed' : 'available';
     const statusText = isCompleted
@@ -59,15 +59,15 @@ function renderBattleCards() {
           <span class="battle-card-status ${statusClass}">${statusText}</span>
         </div>
         <div>
-          <h2>${campaign.name}</h2>
-          <span class="eyebrow-sub">${campaign.subtitle}</span>
+          <h2>${level.name}</h2>
+          <span class="eyebrow-sub">${level.subtitle}</span>
         </div>
-        <p>${campaign.description}</p>
+        <p>${level.description}</p>
         <div class="battle-card-footer">
           <span style="font: 9px 'IBM Plex Mono', monospace; color: var(--muted); letter-spacing: 1px;">
-            ${t('battlechoose.card.difficulty')}: ${campaign.difficulty}
+            ${t('battlechoose.card.difficulty')}: ${level.difficulty}
           </span>
-          <button class="battle-card-btn" data-campaign-id="${campaign.id}">
+          <button class="battle-card-btn" data-level-id="${level.id}">
             <span>▶</span>
             <span>${t('battlechoose.card.start')}</span>
           </button>
@@ -78,8 +78,7 @@ function renderBattleCards() {
   // 绑定开始战斗按钮
   grid.querySelectorAll('.battle-card-btn').forEach(btn => {
     btn.addEventListener('click', () => {
-      const campaignId = btn.dataset.campaignId;
-      startCampaign(campaignId);
+      startLevel(btn.dataset.levelId);
     });
   });
 }
@@ -97,7 +96,14 @@ async function init() {
   // 2. 播放过场动画，完成后显示关卡卡片
   await playCutscene();
 
-  renderBattleCards();
+  // 关卡卡片来自关卡索引（public/assets/levels/index.json），与引擎读的是同一份数据
+  let levels = [];
+  try {
+    levels = await loadLevels();
+  } catch (err) {
+    console.error('[battlechoose] 关卡索引加载失败：', err);
+  }
+  renderBattleCards(levels);
 
   const grid = document.getElementById('battleCardGrid');
   if (grid) grid.classList.add('visible');

@@ -17,6 +17,23 @@ test('主页提供游戏与地图编辑器入口', async ({ page }) => {
   await expect(page.locator('.home-card').nth(1)).toHaveAttribute('href', '/editor.html');
 });
 
+test('关卡由 URL 定位：?level=<id> 加载标准关卡', async ({ page }) => {
+  await page.goto('/game.html?level=fracture-canyon', { waitUntil: 'domcontentloaded' });
+  await expect(page.locator('#battlefield canvas')).toBeVisible();
+  await page.waitForFunction(() => window.__gameReady === true, null, { timeout: 60000 });
+  const state = await page.evaluate(() => ({
+    levelId: window.__game.scene.level?.id ?? null,
+    type: window.__game.scene.level?.type ?? null,
+    // 兵力来自关卡 JSON：蓝 3 轻 1 重 + 红 2 轻 2 重 = 8
+    units: window.__game.world.units.length,
+    hasAi: Boolean(window.__game.scene.ai),
+  }));
+  expect(state.levelId).toBe('fracture-canyon');
+  expect(state.type).toBe('offensive');
+  expect(state.units).toBe(8);
+  expect(state.hasAi).toBe(true);
+});
+
 test('HUD 关键元素渲染', async ({ page }) => {
   await waitForGame(page);
   await expect(page.locator('#unitList .unit-card').first()).toBeVisible();

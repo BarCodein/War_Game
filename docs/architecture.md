@@ -121,20 +121,95 @@ world.issueCommands(unitIds, command)           // 唯一入口，附带校验
   "name": "断裂峡谷",
   "size": { "width": 1280, "height": 800 },
   "gridCellSize": 10,
-  "terrain": { "width": 128, "height": 72, "cells": [0, 0, 2, "…"] },
+  "terrain": { "width": 128, "height": 80, "cells": [0, 0, 2, "…"] },
   "background": "/assets/map_pics/mp.png",
   "cities": [ { "id": "c1", "x": 200, "y": 560, "faction": "blue" } ],
-  "spawns": [ { "faction": "blue", "x": 200, "y": 560 } ],
+  "spawns": [ { "id": "s1", "faction": "blue", "x": 200, "y": 560 } ],
   "capturePoints": [ { "id": "p1", "x": 640, "y": 300, "faction": "neutral" } ],
   "objectives": [ { "id": "o1", "type": "captureCity", "cityId": "c2", "holdSeconds": 0 } ]
 }
 ```
 
 - `cells`：0 平原 / 1 森林 / 2 水域 / 3 桥梁 / 4 山地 / 5 高山 / 6 道路（`gdd.md` §5），行优先。
+- `cities[].id` / `capturePoints[].id` 必填且**全局唯一**（重复会被校验拦截）；`spawns[].id` 可选——缺省时 `parseMap()` 自动补 `s1`、`s2`…（跳过已占用的名字），因此旧地图无需改动即可被关卡用 `{ spawnId }` 精确引用（编辑器新增的出生点也遵循同一命名）。
 - `capturePoints`（可选）：占领点数组，`faction` 为 `neutral` | `blue` | `red`；被占领后**仅提供视野**，不提供补给/士气/生产/恢复，也不计入胜负（`gdd.md` §7.1）。缺省为空数组。
 - 读取流程：**结构校验（schema）→ 可玩性校验（双方至少 1 出生点与 1 城市、尺寸/格子一致）→ 版本迁移链（version < 当前版本时逐级升级）**，失败即拒绝载入并报错。
 - 编辑器与运行时共享同一地图模型与校验代码（`REQUIREMENTS.md` §4.6）。
 - 存档：`localStorage` 存设置/进度/自定义地图，文件 API 导入导出。
+
+## 7.1 关卡 JSON schema（v1）
+
+**关卡（Level）是「一局游戏」的完整规格**：地图、兵力部署、增援、关卡类型与敌方 AI 脚本。引擎（`GameScene`）不含任何具体关卡的特例代码，只按 `simulation/level.js` 的接口消费数据。
+
+```json
+{
+  "version": 1,
+  "id": "fracture-canyon",
+  "name": "断裂峡谷",
+  "subtitle": "FRACTURE CANYON",
+  "type": "offensive",
+  "difficulty": "教学",
+  "description": "教学战役。……",
+  "map": "/assets/maps/fracture-canyon.json",
+  "anchors": {
+    "eastGate": { "x": 1230, "y": 400 },
+    "redBase": { "cityId": "c2" }
+  },
+  "forces": [
+    {
+      "faction": "blue",
+      "at": { "spawnId": "s1" },
+      "units": [
+        { "type": "light", "count": 1 },
+        { "type": "light", "count": 2, "offset": { "x": -30, "y": 30 }, "spacing": { "x": -20, "y": 0 } },
+        { "type": "heavy", "count": 1, "offset": { "x": 40, "y": -40 }, "spacing": { "x": 30, "y": 0 } }
+      ]
+    }
+  ],
+  "ai": {
+    "faction": "red",
+    "fallback": { "city": "blue" },
+    "triggers": [
+      {
+        "id": "reinforcement",
+        "at": { "time": 60 },
+        "actions": [{
+          "type": "spawn", "unitType": "light", "count": 2,
+          "at": { "anchor": "eastGate" }, "spacing": { "x": 18, "y": 0 },
+          "order": { "type": "attackMove", "target": { "anchor": "redBase" } }
+        }]
+      },
+      {
+        "id": "counterattack",
+        "at": { "enemyCrossX": 640 },
+        "repeatEvery": 5,
+        "actions": [{ "type": "attackNearest" }]
+      }
+    ]
+  },
+  "victory": { "type": "captureAll" }
+}
+```
+
+- **URL 约定**：`game.html?level=<id>` → 读取 `/assets/levels/<id>.json`；无参数时取索引 `/assets/levels/index.json` 的第一关。索引同时供战役选择页与「下一关」导航使用（单一数据源）。
+- **地图分离**：关卡通过 `map` 引用地图文件，因此编辑器产出的地图可被多个关卡复用；引擎不把地图内联进关卡。
+- **坐标引用 PointRef**：`at` / `target` / `fallback` / `anchors` 的值都是同一种「坐标引用」，六选一，全部由 `resolvePoint(ref, world, anchors)` 解析：
+
+  | 写法 | 含义 |
+  | --- | --- |
+  | `{ x, y }` | 绝对坐标 |
+  | `{ spawn: 'blue' \| 'red' }` | 该阵营在地图中的**第一个**出生点（兼容写法） |
+  | `{ spawnId: 's1' }` | 指定 id 的出生点（**多出生点地图用这个**，顺序无关） |
+  | `{ city: 'blue' \| 'red' }` | 该阵营**当前**拥有的第一座城市（调用时解析，跟随城市易主） |
+  | `{ cityId: 'c2' }` | 指定 id 的城市（城市 id 必填且唯一） |
+  | `{ anchor: 'eastGate' }` | 引用本关 `anchors` 表里的命名锚点 |
+
+  解析顺序为 绝对坐标 → 命名锚点 → `spawnId` → `spawn` → `cityId` → `city`；解析不到时返回 `null`，调用方跳过该点位而不是崩溃。`anchors` 用来给常用坐标起名（可复用同一坐标、改一处即全局生效），**不允许锚点引用锚点**（无链式引用）。
+- **兵力部署（编队式）**：`at` 为任意 PointRef；第 *i* 个单位的落点 = 锚点 + `offset` + `spacing × i`（两者缺省为 0）。可读性好且移动出生点后无需逐单位改坐标。
+- **AI 脚本（事件 → 动作）**：`at` 支持 `{ time }`（经过秒数）与 `{ enemyCrossX }`（任一敌军越过该 x）；条件**首次满足时立即执行一次** `actions`，若给了 `repeatEvery` 则此后每 *n* 秒再执行一次。动作类型：`spawn` / `attackNearest` / `attackMove` / `hold`；所有目标同样是 PointRef（如 `{ city: 'blue' }` 在**调用时**解析，跟随城市易主）。新增行为只需扩展动作类型与 `level.js` 的校验，引擎其余部分不变。
+- **`type`（进攻 / 防守）**：当前仅作元数据与 UI 展示。
+- **`victory`**：**预留字段，当前引擎不读取**；胜负判定仍按 `gdd.md` §10（失去全部城市即负）。若要改成数据驱动，接入点见 `simulation/systems/victory.js`。
+- 校验分两层：`validateLevel()` 做结构 + 语义校验（阵营、单位类型、坐标引用与锚点定义、条件与动作类型、`repeatEvery > 0` 等），`parseLevel()` 校验失败即抛错并聚合原因；`validateLevelReferences(level, mapData)` 在地图载入后交叉校验 `spawnId` / `cityId` / `anchor` 是否真实存在（`BootScene` 调用，仅告警不致命）；`deployForces()` 负责按数据部署。测试见 `tests/unit/level.test.js`。
 
 ## 8. 空间分区（性能）
 

@@ -21,10 +21,30 @@ function aiWorld() {
   return world;
 }
 
+// 关卡 JSON 里的「事件 → 动作」脚本格式（见 src/simulation/level.js）
 function script() {
   return {
-    reinforcement: { atTime: 60, count: 2, unitType: 'light', spawn: { x: 1230, y: 400 }, moveTo: { x: 1100, y: 100 } },
-    trigger: { onEnemyCrossX: 640, retargetInterval: 5 },
+    fallback: { x: 100, y: 600 },
+    triggers: [
+      {
+        id: 'reinforcement',
+        at: { time: 60 },
+        actions: [{
+          type: 'spawn',
+          unitType: 'light',
+          count: 2,
+          at: { x: 1230, y: 400 },
+          spacing: { x: 18, y: 0 },
+          order: { type: 'attackMove', target: { x: 1100, y: 100 } },
+        }],
+      },
+      {
+        id: 'counterattack',
+        at: { enemyCrossX: 640 },
+        repeatEvery: 5,
+        actions: [{ type: 'attackNearest' }],
+      },
+    ],
   };
 }
 
@@ -59,10 +79,7 @@ describe('scripted ai', () => {
 
   it('敌军覆灭后向 fallbackTarget 进军（失败条件可达）', () => {
     const world = aiWorld();
-    const ai = new ScriptedAI(world, {
-      faction: 'red',
-      script: { ...script(), fallbackTarget: { x: 100, y: 600 } },
-    });
+    const ai = new ScriptedAI(world, { faction: 'red', script: script() });
     const blue = world.units.find(u => u.faction === 'blue');
     blue.x = 700; // 越过中线触发进攻
     runSimulation(world, [ai], 0.1);

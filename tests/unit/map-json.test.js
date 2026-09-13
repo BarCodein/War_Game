@@ -80,6 +80,42 @@ describe('map json', () => {
     expect(validateMap(future)).toContain(`map version ${MAP_VERSION + 1} is newer than supported ${MAP_VERSION}`);
   });
 
+  it('出生点 id：缺省自动补 s1、s2…（已有 id 保留且不重复）', () => {
+    // 教学地图手写了 id
+    expect(parseMap(loadTutorialMap()).spawns).toEqual([
+      { id: 's1', faction: 'blue', x: 200, y: 560 },
+      { id: 's2', faction: 'red', x: 1080, y: 160 },
+    ]);
+
+    // 旧地图完全没有 id → 按顺序补齐；已占用的名字会被跳过
+    const legacy = parseMap(makePlainMap({
+      spawns: [
+        { faction: 'blue', x: 100, y: 600 },
+        { id: 's1', faction: 'red', x: 200, y: 600 },
+        { faction: 'red', x: 1100, y: 100 },
+      ],
+    }));
+    expect(legacy.spawns.map(s => s.id)).toEqual(['s2', 's1', 's3']);
+    expect(legacy.spawns.map(s => s.x)).toEqual([100, 200, 1100]);
+  });
+
+  it('id 唯一性校验：重复的城市 id / 出生点 id 被拦截', () => {
+    const dupCity = makePlainMap({
+      cities: [{ id: 'c1', x: 100, y: 100, faction: 'blue' }, { id: 'c1', x: 1000, y: 600, faction: 'red' }],
+    });
+    expect(validateMap(dupCity)).toContain('duplicate city id: c1');
+
+    const dupSpawn = makePlainMap({
+      spawns: [{ id: 's1', faction: 'blue', x: 100, y: 600 }, { id: 's1', faction: 'red', x: 1100, y: 100 }],
+    });
+    expect(validateMap(dupSpawn)).toContain('duplicate spawn id: s1');
+
+    const emptyId = makePlainMap({
+      spawns: [{ id: '', faction: 'blue', x: 100, y: 600 }, { faction: 'red', x: 1100, y: 100 }],
+    });
+    expect(validateMap(emptyId)).toContainEqual(expect.stringContaining('invalid spawn id'));
+  });
+
   it('版本迁移机制：低于当前版本且无迁移时拒绝载入', () => {
     const legacy = { ...makePlainMap(), version: 0 };
     expect(() => migrateMap(legacy)).toThrow(/unsupported map version 0/);

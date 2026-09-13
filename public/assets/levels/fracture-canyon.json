@@ -1,0 +1,67 @@
+{
+  "version": 1,
+  "id": "fracture-canyon",
+  "name": "断裂峡谷",
+  "subtitle": "FRACTURE CANYON",
+  "type": "offensive",
+  "difficulty": "教学",
+  "description": "教学战役。学习基础指挥：选择单位、移动路径、攻击前进。占领北方信标，赢得第一场战斗。",
+  "map": "/assets/maps/fracture-canyon.json",
+
+  "anchors": {
+    "eastGate": { "x": 1230, "y": 400 },
+    "redBase": { "cityId": "c2" }
+  },
+
+  "forces": [
+    {
+      "faction": "blue",
+      "at": { "spawnId": "s1" },
+      "units": [
+        { "type": "light", "count": 1 },
+        { "type": "light", "count": 2, "offset": { "x": -30, "y": 30 }, "spacing": { "x": -20, "y": 0 } },
+        { "type": "heavy", "count": 1, "offset": { "x": 40, "y": -40 }, "spacing": { "x": 30, "y": 0 } }
+      ]
+    },
+    {
+      "faction": "red",
+      "at": { "spawnId": "s2" },
+      "units": [
+        { "type": "light", "count": 1 },
+        { "type": "light", "count": 1, "offset": { "x": -40, "y": -40 }, "spacing": { "x": -25, "y": 0 } },
+        { "type": "heavy", "count": 2, "offset": { "x": 40, "y": 50 }, "spacing": { "x": 30, "y": 0 } }
+      ]
+    }
+  ],
+
+  "ai": {
+    "faction": "red",
+    "fallback": { "city": "blue" },
+    "triggers": [
+      {
+        "id": "reinforcement",
+        "at": { "time": 60 },
+        "actions": [
+          {
+            "type": "spawn",
+            "unitType": "light",
+            "count": 2,
+            "at": { "anchor": "eastGate" },
+            "spacing": { "x": 18, "y": 0 },
+            "order": { "type": "attackMove", "target": { "anchor": "redBase" } }
+          }
+        ]
+      },
+      {
+        "id": "counterattack",
+        "at": { "enemyCrossX": 640 },
+        "repeatEvery": 5,
+        "actions": [
+          { "type": "attackNearest" }
+        ]
+      }
+    ]
+  },
+
+  "victory": { "type": "captureAll" }
+}

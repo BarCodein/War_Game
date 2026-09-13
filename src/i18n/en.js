@@ -7,6 +7,7 @@ export default {
   'hud.mission.name': 'Fracture Canyon · Dawn Sector',
   'hud.pause': 'Pause game',
   'hud.speed': 'Game speed',
+  'hud.levelError': 'Level "{id}" failed to load — falling back to sandbox (map / forces / AI not applied)',
   'hud.units.title': 'My Units',
   'hud.units.count': '{n} UNITS',
   'hud.city.title': 'City Status',
