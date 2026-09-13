@@ -89,6 +89,7 @@ export default {
   'editor.tool.mountain': '山地',
   'editor.tool.highMountain': '高山',
   'editor.tool.road': '道路',
+  'editor.tool.town': '城镇',
   'editor.tool.erase': '擦除',
   'editor.tool.cityBlue': '蓝城',
   'editor.tool.cityRed': '红城',

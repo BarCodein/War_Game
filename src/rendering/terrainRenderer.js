@@ -14,6 +14,7 @@ const CELL_COLORS = {
   4: 0x8f6b45, // 山地
   5: 0x4b3d32, // 高山
   6: 0xd6b35a, // 道路
+  7: 0xc2845a, // 城镇
 };
 
 const BACKGROUND_KEY_PREFIX = 'map-background::';

@@ -229,11 +229,11 @@
 | capturePoints.capture：radius / perUnitPerSecond / capPerSecond / decayPerSecond | 60 / 5% / 15% / 3% |
 | supply：capacityPerCity / attritionHpPerSecond / attritionMoralePerSecond | 5 / −1 /s / −2 /s |
 | fog：forestSpotDistance / showLastKnownGhost | 60 / true |
-| terrain：gridCellSize / codes | 10 px / 0 平原 1 森林 2 水域 3 桥梁 4 山地 5 高山 6 道路 |
-| terrain.passable：平原 / 森林 / 水域 / 桥梁 / 山地 / 高山 / 道路 | 可 / 可 / 可 / 可 / 可 / 不可 / 可 |
-| terrain.moveMultiplier：平原 / 森林 / 水域 / 桥梁 / 山地 / 高山 / 道路 | 1.0 / 0.6 / 0.4 / 1.0 / 0.65 / 0 / 1.25 |
-| terrain.defenseModifier：平原 / 森林 / 桥梁 / 山地 / 道路 | 1.0 / 0.85 / 0.9 / 0.75 / 1.0 |
-| terrain.moraleMoveMultiplier：平原 / 森林 / 水域 / 桥梁 / 山地 / 高山 / 道路 | 1.0 / 1.0 / 1.0 / 1.0 / 1.0 / 1.0 / 0.5 |
+| terrain：gridCellSize / codes | 10 px / 0 平原 1 森林 2 水域 3 桥梁 4 山地 5 高山 6 道路 7 城镇 |
+| terrain.passable：平原 / 森林 / 水域 / 桥梁 / 山地 / 高山 / 道路 / 城镇 | 可 / 可 / 可 / 可 / 可 / 不可 / 可 / 可 |
+| terrain.moveMultiplier：平原 / 森林 / 水域 / 桥梁 / 山地 / 高山 / 道路 / 城镇 | 1.0 / 0.6 / 0.4 / 1.0 / 0.65 / 0 / 1.25 / 1.0 |
+| terrain.defenseModifier：平原 / 森林 / 桥梁 / 山地 / 道路 / 城镇 | 1.0 / 0.85 / 0.9 / 0.75 / 1.0 / 0.6 |
+| terrain.moraleMoveMultiplier：平原 / 森林 / 水域 / 桥梁 / 山地 / 高山 / 道路 / 城镇 | 1.0 / 1.0 / 1.0 / 1.0 / 1.0 / 1.0 / 0.5 / 1.0 |
 
 ### 交互与 UI 数值
 
