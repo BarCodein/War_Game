@@ -55,17 +55,17 @@
 |---|---|---|---|---|
 | 平原 | 可 | 1.0 | 1.0 | 正常 |
 | 森林 | 可 | 0.6 | 0.85 | 位于森林中的敌军，仅当己方单位距其 ≤60 时可见 |
-| 水域 | 可 | 0.5 | — | 正常（无实体可藏） |
+| 水域 | 可 | 0.4 | — | 正常（无实体可藏） |
 | 桥梁 | 可 | 1.0 | 0.9 | 正常 |
 | 山地 | 可 | 0.65 | 0.75 | 正常 |
 | 高山 | 不可 | — | — | 正常 |
 | 道路 | 可 | 1.25 | 1.0 | 正常 |
 
-- 逻辑网格：格子 20 px，编码 `0 平原 / 1 森林 / 2 水域 / 3 桥梁`，用于通行性、寻路成本与视野阻挡。
-- **移动与寻路（暂定）**：右键指令默认直线行进，单位可穿过水域并按地形倍率减速；批量单位共享路径缓存以控制开销。
 - 逻辑网格：格子 10 px，编码 `0 平原 / 1 森林 / 2 水域 / 3 桥梁 / 4 山地 / 5 高山 / 6 道路`，用于通行性、寻路成本与视野阻挡。
 - **移动与寻路（暂定）**：右键指令默认直线行进，路径与不可通行地形相交时在逻辑网格上 A* 绕行并缓存路径；批量单位共享路径缓存以控制开销。
 - 道路上的单位移动速度提高至 1.25 倍，移动士气消耗降低至普通地形的 50%。
+
+## 6. 士气系统（§8-1）
 
 范围 0–100，初始 80。
 
@@ -110,6 +110,24 @@
 **生产（暂定）**：MVP 采用**自动生产**——每座己方城市每 **12 s** 生产 1 个轻型单位，出生在城市旁；当该城补给容量已满，或**城市被围攻（敌方单位进入占领半径）时暂停生产**，保证攻城战可决出胜负。玩家配置生产（队列、兵种选择）不在 MVP 范围，作为后续扩展。原型中的「钢材/能源/情报」资源面板与快速部署按钮为占位设计，MVP 移除（无经济系统）。
 
 **恢复（暂定）**：己方城市 100 px 内的己方单位，生命 +3 /s，士气 +5 /s（与 §6 城市士气修正叠加）。
+
+## 7.1 占领点
+
+**定位**：可被占领的战术目标。与城市的关键区别是——**被占领后只提供视野**。
+
+- **初始归属**：可为 中立 / 蓝 / 红 三种（地图编辑器中对应「中立占领点 / 蓝占领点 / 红占领点」三个工具）。
+- **占领速率**：半径 60 px、每单位 5% /s、上限 15% /s、无人在场时 3% /s 衰减——与城市规则一致。
+- **判定更严格**（因为存在中立起点）：
+  - 守方（属于该点的阵营）在场 → 进度冻结；
+  - **多个阵营同时在场 → 也冻结**（避免中立点上「谁先被遍历到谁占」的歧义）；
+  - 仅单一、且无守方的阵营在场 → 该阵营累积进度，满 100% 易主（事件 `capturePointCaptured`）。
+- **被占领后仅提供视野**：视野半径 180 px，计入战争迷雾的可见区域。
+- **明确不提供**：补给容量与损耗豁免、士气加成、单位生产、生命与士气恢复。
+- **不影响胜负**：胜负仍只看城市（失去全部城市即告负）。
+
+> 实现要点：占领点存于**独立数组 `world.capturePoints`**，绝不并入 `world.cities`。
+> 因此 `supply.js`（补给/生产/恢复）、`morale.js`（城市士气加成）、`victory.js`（失城判负）
+> **无需任何特判即自动排除占领点**；只有 `capture.js`（易主）与 `fog.js`（视野）读取它。
 
 ## 8. 补给系统
 
@@ -191,6 +209,8 @@
 |---|---|
 | units.light：hp / damage / attackInterval / range / speed / radius / vision | 60 / 0.8 / 0.2 s / 40 / 40 / 14 / 140 |
 | units.heavy：hp / damage / attackInterval / range / speed / radius / vision | 80 / 1 / 0.2 s / 40 / 40 / 14 / 160 |
+| combat.defend | 0.75（防守方承受伤害系数） |
+| combat.hp_dps_ratio | 0.8（血量低于该比例后攻击力随血量线性下降） |
 | morale.initial / min / max | 80 / 0 / 100 |
 | morale.perSecond：friendlyNearby / cityNearby / supplied / unsupplied / inCombat / moving / attack | +2 / +5 / +1 / −2 / −8 / −5（/s），进攻倍率 ×1.3 |
 | morale.ranges：friendly / city / allyDeath | 60 / 120 / 100（px） |
@@ -199,16 +219,19 @@
 | morale.effects.weakened：damage / speed | ×0.75 / ×0.85 |
 | morale.effects.shaken：damage / speed | ×0.5 / ×0.7 |
 | morale.rout：recoverPerSecond / stopAt / stuckSeconds | +8 /s / 20 / 5 s |
+| morale.unordered：recoverPerSecond / stopAt / stuckSeconds | +10 /s / 20 / 5 s |
 | movement.routSpeedMultiplier | 0.6 |
 | cities.capture：radius / perUnitPerSecond / capPerSecond / decayPerSecond | 60 / 5% / 15% / 3% |
 | cities.production：interval / unitType / pauseWhenSupplyFull | 12 s / light / true |
 | cities.recovery：radius / hpPerSecond / moralePerSecond | 100 / +3 /s / +5 /s |
 | cities.vision | 180 |
+| capturePoints.vision | 180 |
+| capturePoints.capture：radius / perUnitPerSecond / capPerSecond / decayPerSecond | 60 / 5% / 15% / 3% |
 | supply：capacityPerCity / attritionHpPerSecond / attritionMoralePerSecond | 5 / −1 /s / −2 /s |
 | fog：forestSpotDistance / showLastKnownGhost | 60 / true |
 | terrain：gridCellSize / codes | 10 px / 0 平原 1 森林 2 水域 3 桥梁 4 山地 5 高山 6 道路 |
 | terrain.passable：平原 / 森林 / 水域 / 桥梁 / 山地 / 高山 / 道路 | 可 / 可 / 可 / 可 / 可 / 不可 / 可 |
-| terrain.moveMultiplier：平原 / 森林 / 水域 / 桥梁 / 山地 / 高山 / 道路 | 1.0 / 0.6 / 0.5 / 1.0 / 0.65 / 1.0 / 1.25 |
+| terrain.moveMultiplier：平原 / 森林 / 水域 / 桥梁 / 山地 / 高山 / 道路 | 1.0 / 0.6 / 0.4 / 1.0 / 0.65 / 0 / 1.25 |
 | terrain.defenseModifier：平原 / 森林 / 桥梁 / 山地 / 道路 | 1.0 / 0.85 / 0.9 / 0.75 / 1.0 |
 | terrain.moraleMoveMultiplier：平原 / 森林 / 水域 / 桥梁 / 山地 / 高山 / 道路 | 1.0 / 1.0 / 1.0 / 1.0 / 1.0 / 1.0 / 0.5 |
 
