@@ -43,6 +43,8 @@ export function validateMap(data) {
     if (size && gridCellSize > 0 && (terrain.width !== size.width / gridCellSize || terrain.height !== size.height / gridCellSize)) {
       errors.push('terrain grid dimensions do not match map size / gridCellSize');
     }
+    const validCodes = new Set(Object.values(values.terrain.codes));
+    if (terrain.cells.some(code => !validCodes.has(code))) errors.push('terrain contains unknown code');
   }
 
   for (const city of cities) {
@@ -95,6 +97,9 @@ export function makeTerrain(mapData) {
     },
     defenseModifierAt(x, y) {
       return values.terrain.defenseModifier[nameByCode[this.terrainAt(x, y)]] ?? 1;
+    },
+    moraleMoveMultiplierAt(x, y) {
+      return values.terrain.moraleMoveMultiplier[nameByCode[this.terrainAt(x, y)]] ?? 1;
     },
   };
 }

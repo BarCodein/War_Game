@@ -57,16 +57,15 @@
 | 森林 | 可 | 0.6 | 0.85 | 位于森林中的敌军，仅当己方单位距其 ≤60 时可见 |
 | 水域 | 可 | 0.5 | — | 正常（无实体可藏） |
 | 桥梁 | 可 | 1.0 | 0.9 | 正常 |
+| 山地 | 可 | 0.65 | 0.75 | 正常 |
+| 高山 | 不可 | — | — | 正常 |
+| 道路 | 可 | 1.25 | 1.0 | 正常 |
 
-<<<<<<< HEAD
 - 逻辑网格：格子 20 px，编码 `0 平原 / 1 森林 / 2 水域 / 3 桥梁`，用于通行性、寻路成本与视野阻挡。
 - **移动与寻路（暂定）**：右键指令默认直线行进，单位可穿过水域并按地形倍率减速；批量单位共享路径缓存以控制开销。
-=======
-- 逻辑网格：格子 10 px，编码 `0 平原 / 1 森林 / 2 水域 / 3 桥梁`，用于通行性、寻路成本与视野阻挡。
-- **移动与寻路（暂定）**：右键指令默认直线行进，路径与水域相交时在逻辑网格上 A* 绕行并缓存路径；批量单位共享路径缓存以控制开销。
->>>>>>> e16aad694b43e3cd002c5db7e4f3ccecf50c14b4
-
-## 6. 士气系统（§8-1）
+- 逻辑网格：格子 10 px，编码 `0 平原 / 1 森林 / 2 水域 / 3 桥梁 / 4 山地 / 5 高山 / 6 道路`，用于通行性、寻路成本与视野阻挡。
+- **移动与寻路（暂定）**：右键指令默认直线行进，路径与不可通行地形相交时在逻辑网格上 A* 绕行并缓存路径；批量单位共享路径缓存以控制开销。
+- 道路上的单位移动速度提高至 1.25 倍，移动士气消耗降低至普通地形的 50%。
 
 范围 0–100，初始 80。
 
@@ -190,10 +189,10 @@
 
 | config 路径 | 值 |
 |---|---|
-| units.light：hp / damage / attackInterval / range / speed / radius / vision | 60 / 8 / 1.0 s / 40 / 90 / 10 / 140 |
-| units.heavy：hp / damage / attackInterval / range / speed / radius / vision | 120 / 16 / 1.6 s / 55 / 55 / 14 / 160 |
+| units.light：hp / damage / attackInterval / range / speed / radius / vision | 60 / 0.8 / 0.2 s / 40 / 40 / 14 / 140 |
+| units.heavy：hp / damage / attackInterval / range / speed / radius / vision | 80 / 1 / 0.2 s / 40 / 40 / 14 / 160 |
 | morale.initial / min / max | 80 / 0 / 100 |
-| morale.perSecond：friendlyNearby / cityNearby / supplied / unsupplied / inCombat | +2 / +5 / +1 / −2 / −1（/s） |
+| morale.perSecond：friendlyNearby / cityNearby / supplied / unsupplied / inCombat / moving / attack | +2 / +5 / +1 / −2 / −8 / −5（/s），进攻倍率 ×1.3 |
 | morale.ranges：friendly / city / allyDeath | 60 / 120 / 100（px） |
 | morale.onAllyDeath | −10 |
 | morale.thresholds：weakenedBelow / shakenBelow / routAt | 60 / 30 / 0 |
@@ -203,20 +202,15 @@
 | movement.routSpeedMultiplier | 0.6 |
 | cities.capture：radius / perUnitPerSecond / capPerSecond / decayPerSecond | 60 / 5% / 15% / 3% |
 | cities.production：interval / unitType / pauseWhenSupplyFull | 12 s / light / true |
-| cities.recovery：radius / hpPerSecond / moralePerSecond | 120 / +3 /s / +5 /s |
+| cities.recovery：radius / hpPerSecond / moralePerSecond | 100 / +3 /s / +5 /s |
 | cities.vision | 180 |
 | supply：capacityPerCity / attritionHpPerSecond / attritionMoralePerSecond | 5 / −1 /s / −2 /s |
 | fog：forestSpotDistance / showLastKnownGhost | 60 / true |
-<<<<<<< HEAD
-| terrain：gridCellSize / codes | 20 px / 0 平原 1 森林 2 水域 3 桥梁 |
-| terrain.passable：平原 / 森林 / 水域 / 桥梁 | 可 / 可 / 可 / 可 |
-| terrain.moveMultiplier：平原 / 森林 / 水域 / 桥梁 | 1.0 / 0.6 / 0.5 / 1.0 |
-=======
-| terrain：gridCellSize / codes | 10 px / 0 平原 1 森林 2 水域 3 桥梁 |
-| terrain.passable：平原 / 森林 / 水域 / 桥梁 | 可 / 可 / 不可 / 可 |
-| terrain.moveMultiplier：平原 / 森林 / 桥梁 | 1.0 / 0.6 / 1.0 |
->>>>>>> e16aad694b43e3cd002c5db7e4f3ccecf50c14b4
-| terrain.defenseModifier：平原 / 森林 / 桥梁 | 1.0 / 0.85 / 0.9 |
+| terrain：gridCellSize / codes | 10 px / 0 平原 1 森林 2 水域 3 桥梁 4 山地 5 高山 6 道路 |
+| terrain.passable：平原 / 森林 / 水域 / 桥梁 / 山地 / 高山 / 道路 | 可 / 可 / 可 / 可 / 可 / 不可 / 可 |
+| terrain.moveMultiplier：平原 / 森林 / 水域 / 桥梁 / 山地 / 高山 / 道路 | 1.0 / 0.6 / 0.5 / 1.0 / 0.65 / 1.0 / 1.25 |
+| terrain.defenseModifier：平原 / 森林 / 桥梁 / 山地 / 道路 | 1.0 / 0.85 / 0.9 / 0.75 / 1.0 |
+| terrain.moraleMoveMultiplier：平原 / 森林 / 水域 / 桥梁 / 山地 / 高山 / 道路 | 1.0 / 1.0 / 1.0 / 1.0 / 1.0 / 1.0 / 0.5 |
 
 ### 交互与 UI 数值
 

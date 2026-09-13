@@ -27,6 +27,16 @@ describe('map json', () => {
     expect(terrain.defenseModifierAt(120, 500)).toBe(0.85);
   });
 
+  it('新增地形：山地减速减伤，高山不可通行，道路加速并降低移动士气消耗', () => {
+    const map = parseMap(makePlainMap({ terrainCells: { '1,1': 4, '2,1': 5, '3,1': 6 } }));
+    const terrain = map.terrain;
+    expect(terrain.moveMultiplierAt(15, 15)).toBe(0.65);
+    expect(terrain.defenseModifierAt(15, 15)).toBe(0.75);
+    expect(terrain.passableAt(25, 15)).toBe(false);
+    expect(terrain.moveMultiplierAt(35, 15)).toBe(1.25);
+    expect(terrain.moraleMoveMultiplierAt(35, 15)).toBe(0.5);
+  });
+
   it('结构校验：缺 version / 格子数不符 / 缺蓝城 / 缺红出生点 / 未来版本', () => {
     const base = makePlainMap({
       cities: [{ id: 'b', x: 100, y: 100, faction: 'blue' }, { id: 'r', x: 1000, y: 600, faction: 'red' }],
@@ -39,6 +49,10 @@ describe('map json', () => {
     const badCells = JSON.parse(JSON.stringify(base));
     badCells.terrain.cells = [0];
     expect(validateMap(badCells)).toContain('terrain cells length mismatch');
+
+    const unknownTerrain = JSON.parse(JSON.stringify(base));
+    unknownTerrain.terrain.cells[0] = 99;
+    expect(validateMap(unknownTerrain)).toContain('terrain contains unknown code');
 
     const noBlueCity = JSON.parse(JSON.stringify(base));
     noBlueCity.cities = noBlueCity.cities.filter(c => c.faction !== 'blue');

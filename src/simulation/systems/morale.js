@@ -43,7 +43,9 @@ function applyModifiers(world, unit, dt) {
   rate += unit.supplied ? m.perSecond.supplied : m.perSecond.unsupplied;
   const mode = (unit.route.length === 0) ? 1 : m.perSecond.attack;  // 判别防守还是运动战
   if (unit.underFire) rate += m.perSecond.inCombat * mode;
-  if (unit.state === 'moving') rate += m.perSecond.moving; // 行军消耗士气
+  if (unit.state === 'moving') {
+    rate += m.perSecond.moving * world.terrain.moraleMoveMultiplierAt(unit.x, unit.y);
+  } // 行军消耗士气
   unit.morale = clamp(unit.morale + rate * dt);
   //if (unit.morale <= m.thresholds.routAt) enterRout(world, unit);
   if (unit.morale <= values.morale.thresholds.routAt) {
