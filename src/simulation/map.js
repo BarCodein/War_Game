@@ -47,18 +47,32 @@ export function validateMap(data) {
     if (terrain.cells.some(code => !validCodes.has(code))) errors.push('terrain contains unknown code');
   }
 
+  const cityIds = new Set();
   for (const city of cities) {
     if (!city || typeof city.id !== 'string' || !Number.isFinite(city.x) || !Number.isFinite(city.y) || !['blue', 'red'].includes(city.faction)) {
       errors.push(`invalid city: ${JSON.stringify(city)}`);
+      continue;
     }
+    if (cityIds.has(city.id)) errors.push(`duplicate city id: ${city.id}`);
+    cityIds.add(city.id);
   }
   for (const faction of ['blue', 'red']) {
     if (!cities.some(c => c && c.faction === faction)) errors.push(`no ${faction} city (unplayable)`);
   }
+  // 出生点：id 可选（缺省时 parseMap 会自动补 s1、s2…），但填了就必须唯一
+  const spawnIds = new Set();
   for (const spawn of spawns) {
     if (!spawn || !['blue', 'red'].includes(spawn.faction) || !Number.isFinite(spawn.x) || !Number.isFinite(spawn.y)) {
       errors.push(`invalid spawn: ${JSON.stringify(spawn)}`);
+      continue;
     }
+    if (spawn.id === undefined) continue;
+    if (typeof spawn.id !== 'string' || spawn.id.length === 0) {
+      errors.push(`invalid spawn id: ${JSON.stringify(spawn.id)}`);
+      continue;
+    }
+    if (spawnIds.has(spawn.id)) errors.push(`duplicate spawn id: ${spawn.id}`);
+    spawnIds.add(spawn.id);
   }
   for (const faction of ['blue', 'red']) {
     if (!spawns.some(s => s && s.faction === faction)) errors.push(`no ${faction} spawn (unplayable)`);
@@ -116,6 +130,27 @@ export function makeTerrain(mapData) {
   };
 }
 
+// 出生点补 id：手写地图常省略 id，但关卡用 { spawnId } 引用时需要稳定标识。
+// 规则：已有 id 原样保留；缺 id 的按顺序补 s1、s2…（跳过已被占用的名字），因此不会改变已有地图的行为。
+function normalizeSpawns(spawns = []) {
+  const used = new Set(spawns
+    .map(spawn => spawn?.id)
+    .filter(id => typeof id === 'string' && id.length > 0));
+  let next = 1;
+  return spawns.map((spawn) => {
+    if (!spawn || typeof spawn !== 'object') return spawn;
+    if (typeof spawn.id === 'string' && spawn.id.length > 0) return spawn;
+    let id = `s${next}`;
+    while (used.has(id)) {
+      next += 1;
+      id = `s${next}`;
+    }
+    used.add(id);
+    next += 1;
+    return { ...spawn, id };
+  });
+}
+
 export function parseMap(data) {
   const migrated = migrateMap(data);
   const errors = validateMap(migrated);
@@ -128,7 +163,8 @@ export function parseMap(data) {
     terrain: makeTerrain(migrated),
     background: migrated.background ?? null, // 背景地图图片 URL（可选）；渲染层据此改用图片显示
     cities: migrated.cities,
-    spawns: migrated.spawns,
+    // 出生点 id 归一化：保证每个出生点都有 id，供关卡 { spawnId } 精确引用
+    spawns: normalizeSpawns(migrated.spawns),
     // 占领点：被占领后仅提供视野（不提供补给/士气/生产/恢复，也不计入胜负）
     capturePoints: migrated.capturePoints ?? [],
     objectives: migrated.objectives ?? [],

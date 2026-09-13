@@ -1,6 +1,6 @@
 import { t } from '../i18n/index.js';
 import { values } from '../config/index.js';
-import { campaigns, saveProgress } from '../entries/battlechoose-data.js';
+import { saveProgress } from '../entries/battlechoose-data.js';
 
 // HUD（DOM 实现，gdd.md §11 布局）：编队列表、城市状态、任务进度、事件日志、
 // 顶栏控制与胜利结算。文案全部走 i18n；按 performance.hudRefreshMs 节流刷新。
@@ -55,11 +55,13 @@ export function createHud(scene, world, controller, selection, orders) {
       window.location.reload();
     }
   }
+  // 胜利后进入下一关：关卡顺序取自关卡索引（与战役选择页同源），只携带关卡 id
   function continueAfterVictory() {
-    const currentIndex = campaigns.findIndex(campaign => campaign.id === scene.campaignId);
-    const nextCampaign = currentIndex >= 0 ? campaigns[currentIndex + 1] : null;
-    if (nextCampaign) {
-      window.location.href = `/game.html?campaign=${encodeURIComponent(nextCampaign.id)}&map=${encodeURIComponent(nextCampaign.mapPath)}`;
+    const levels = scene.levelIndex ?? [];
+    const currentIndex = levels.findIndex(level => level.id === scene.campaignId);
+    const nextLevel = currentIndex >= 0 ? levels[currentIndex + 1] : null;
+    if (nextLevel) {
+      window.location.href = `/game.html?level=${encodeURIComponent(nextLevel.id)}`;
       return;
     }
     window.location.href = '/battlechoose.html';
@@ -245,8 +247,9 @@ export function createHud(scene, world, controller, selection, orders) {
     const win = world.winner === 'blue';
     if (win && !scene.fromEditor && scene.campaignId) {
       saveProgress(scene.campaignId, { completed: true, wins: 1 });
-      const currentIndex = campaigns.findIndex(campaign => campaign.id === scene.campaignId);
-      els.restartButton.textContent = campaigns[currentIndex + 1]
+      const levels = scene.levelIndex ?? [];
+      const currentIndex = levels.findIndex(level => level.id === scene.campaignId);
+      els.restartButton.textContent = levels[currentIndex + 1]
         ? t('victory.next')
         : t('victory.select');
     } else {

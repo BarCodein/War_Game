@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { World } from '../../simulation/world.js';
 import { createLoop } from '../../simulation/loop.js';
 import { ScriptedAI } from '../../simulation/ai.js';
-import { values } from '../../config/index.js';
+import { deployForces } from '../../simulation/level.js';
 import { createTerrainRenderer } from '../terrainRenderer.js';
 import { createFogRenderer } from '../fogRenderer.js';
 import { createUnitRenderer } from '../unitRenderer.js';
@@ -12,6 +12,7 @@ import { createSelection } from '../../input/selection.js';
 import { createOrders } from '../../input/orders.js';
 import { createKeyboard } from '../../input/keyboard.js';
 import { createGameController } from '../../controllers/gameController.js';
+import { t } from '../../i18n/index.js';
 
 // 轨迹末端箭头：沿行进方向在终点画一个实心三角。
 function drawArrow(graphics, x0, y0, x1, y1, color) {
@@ -71,6 +72,11 @@ export class GameScene extends Phaser.Scene {
 
   init(data) {
     this.mapData = data.mapData;
+    this.level = data.level ?? null;            // 关卡规格（标准格式，见 simulation/level.js）
+    this.levelIndex = data.levelIndex ?? [];    // 关卡索引（供「下一关」导航）
+    this.campaignId = this.level?.id ?? null;   // 存档与进度使用的关卡 id
+    this.requestedLevelId = data.levelId ?? null; // 请求载入的关卡 id（失败时用于提示）
+    this.levelError = data.levelError ?? null;  // 关卡载入/引用校验错误（非空时画面顶部显示横幅）
     this.fromEditor = data.fromEditor === true;
   }
 
@@ -78,27 +84,18 @@ export class GameScene extends Phaser.Scene {
     document.body.classList.remove('editor-mode');
     const world = new World(this.mapData);
     this.world = world;
-    if (this.fromEditor) {
-      // 编辑器试玩：仅按地图出生点部署兵力，无脚本敌军（REQUIREMENTS.md §4.6）
+    if (this.level && !this.fromEditor) {
+      // 关卡模式：兵力部署与敌方脚本全部来自关卡 JSON，引擎不包含任何关卡特例代码。
+      // anchors 是关卡的命名锚点表，at / target 里的 { anchor } 都靠它解析。
+      const anchors = this.level.anchors;
+      deployForces(world, this.level.forces, anchors);
+      this.ai = this.level.ai
+        ? new ScriptedAI(world, { faction: this.level.ai.faction, script: this.level.ai, anchors })
+        : null;
+    } else {
+      // 沙盒模式（编辑器试玩 / 关卡不可用）：仅按地图出生点部署，无脚本敌军
       world.spawnInitial();
       this.ai = null;
-    } else {
-      this.spawnTutorialForces();
-      this.ai = new ScriptedAI(world, {
-        faction: 'red',
-        script: {
-          reinforcement: {
-            atTime: values.tutorial.reinforcement.atSecond,
-            count: values.tutorial.reinforcement.count,
-            unitType: values.tutorial.reinforcement.unitType,
-            spawn: { ...values.tutorial.reinforcement.spawn },
-            moveTo: { ...values.tutorial.reinforcement.moveTo },
-          },
-          trigger: { onEnemyCrossX: values.tutorial.map.midlineX, retargetInterval: 5 },
-          // 蓝军覆灭后红军向蓝城进军（失败条件可达，gdd.md §10）
-          fallbackTarget: world.cities.find(city => city.faction === 'blue'),
-        },
-      });
     }
 
     this.controller = createGameController();
@@ -119,6 +116,9 @@ export class GameScene extends Phaser.Scene {
     // HUD（DOM）
     this.hud = createHud(this, world, this.controller, this.selection, this.orders);
 
+    // 关卡载入失败时在画面上给出可见提示（否则静默退回沙盒，看起来像"游戏坏了"）
+    if (this.levelError) this.showLevelError();
+
     // 开发环境暴露实例供 Playwright 断言（生产构建不包含）；场景关闭时清理，避免旧引用竞态
     if (import.meta.env.DEV) {
       window.__game = { world, scene: this, controller: this.controller, selection: this.selection };
@@ -129,17 +129,24 @@ export class GameScene extends Phaser.Scene {
     window.__gameReady = true;
   }
 
-  // 教学关初始兵力（gdd.md §10）：蓝 3 轻 + 1 重，红 2 轻 + 2 重
-  spawnTutorialForces() {
-    const { world } = this;
-    world.spawnInitial();
-    const blue = world.map.spawns.find(spawn => spawn.faction === 'blue');
-    const red = world.map.spawns.find(spawn => spawn.faction === 'red');
-    const forces = values.tutorial.forces;
-    for (let i = 0; i < forces.blue.light - 1; i += 1) world.spawnUnit('blue', 'light', blue.x - 30 - i * 20, blue.y + 30);
-    for (let i = 0; i < forces.blue.heavy; i += 1) world.spawnUnit('blue', 'heavy', blue.x + 40 + i * 30, blue.y - 40);
-    for (let i = 0; i < forces.red.light - 1; i += 1) world.spawnUnit('red', 'light', red.x - 40 - i * 25, red.y - 40);
-    for (let i = 0; i < forces.red.heavy; i += 1) world.spawnUnit('red', 'heavy', red.x + 40 + i * 30, red.y + 50);
+  // 关卡载入/引用校验失败时的可见提示（否则引擎会静默退回沙盒模式：
+  // 地图、兵力、AI 全部不按关卡生效，看起来像"关卡跑不起来"，实际是 JSON 写错了）
+  showLevelError() {
+    const lines = this.levelError.split('\n').map(line => line.trim()).filter(Boolean);
+    const body = lines
+      .filter(line => !line.startsWith('[')) // 去掉 "[level] invalid level:" 这类前缀行
+      .map(line => `· ${line.replace(/^-\s*/, '')}`)
+      .join('\n');
+    const banner = this.add.text(0, 0, `${t('hud.levelError', { id: this.requestedLevelId ?? '' })}\n${body}`, {
+      fontFamily: 'Consolas, "Microsoft YaHei", monospace',
+      fontSize: '18px',
+      color: '#ffd9d9',
+      backgroundColor: '#3a1616',
+      padding: { x: 14, y: 10 },
+      lineSpacing: 4,
+      wordWrap: { width: Math.min(1000, this.scale.width - 80) },
+    }).setDepth(200);
+    banner.setPosition(Math.max(12, (this.scale.width - banner.width) / 2), 12);
   }
 
   update(time, delta) {

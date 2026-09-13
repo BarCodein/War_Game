@@ -65,6 +65,20 @@ describe('editor store', () => {
     expect(store.mapData.spawns.some(s => s.id === id)).toBe(false);
   });
 
+  it('新增对象 id 不与已有对象撞名（载入 c23 / s20 的地图后继续加）', () => {
+    const map = createNewMap('宿北', 1280, 800);
+    map.cities = [{ id: 'c1', x: 100, y: 100, faction: 'blue' }, { id: 'c23', x: 1000, y: 600, faction: 'red' }];
+    map.spawns = [{ id: 's3', faction: 'blue', x: 100, y: 100 }, { id: 's20', faction: 'red', x: 1000, y: 600 }];
+    const store = createEditorStore(map);
+    expect(store.addSpawn(200, 200, 'blue')).toBe('s21');
+    expect(store.addCity(300, 300, 'red')).toBe('c24');
+    expect(store.errors()).toEqual([]); // 没有重复 id，地图仍然合法
+
+    // 通过 loadMapData 换成大编号地图后，计数器同样要跟上
+    store.loadMapData(map);
+    expect(store.addSpawn(400, 400, 'red')).toBe('s21');
+  });
+
   it('可玩性校验：删除红城后报告错误', () => {
     const store = createEditorStore();
     store.removeCity('c2');

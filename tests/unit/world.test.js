@@ -19,8 +19,26 @@ describe('world integration', () => {
     const redAi = new ScriptedAI(world, {
       faction: 'red',
       script: {
-        reinforcement: { atTime: 60, count: 2, unitType: 'light', spawn: { x: 1230, y: 400 }, moveTo: { x: 1080, y: 160 } },
-        trigger: { onEnemyCrossX: 640, retargetInterval: 5 },
+        triggers: [
+          {
+            id: 'reinforcement',
+            at: { time: 60 },
+            actions: [{
+              type: 'spawn',
+              unitType: 'light',
+              count: 2,
+              at: { x: 1230, y: 400 },
+              spacing: { x: 18, y: 0 },
+              order: { type: 'attackMove', target: { x: 1080, y: 160 } },
+            }],
+          },
+          {
+            id: 'counterattack',
+            at: { enemyCrossX: 640 },
+            repeatEvery: 5,
+            actions: [{ type: 'attackNearest' }],
+          },
+        ],
       },
     });
 

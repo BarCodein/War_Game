@@ -58,3 +58,20 @@ export function loadTutorialMap() {
   const url = new URL('../../public/assets/maps/fracture-canyon.json', import.meta.url);
   return JSON.parse(readFileSync(url, 'utf8'));
 }
+
+// 任意地图 JSON（public/assets/maps/<file>.json）
+export function loadMap(file = 'fracture-canyon') {
+  const url = new URL(`../../public/assets/maps/${file}.json`, import.meta.url);
+  return JSON.parse(readFileSync(url, 'utf8'));
+}
+
+// 标准关卡 JSON（public/assets/levels/<id>.json）
+export function loadLevel(id = 'fracture-canyon') {
+  const url = new URL(`../../public/assets/levels/${id}.json`, import.meta.url);
+  return JSON.parse(readFileSync(url, 'utf8'));
+}
+
+export function loadLevelIndex() {
+  const url = new URL('../../public/assets/levels/index.json', import.meta.url);
+  return JSON.parse(readFileSync(url, 'utf8'));
+}
