@@ -3,7 +3,7 @@ import { t } from '../../src/i18n/index.js';
 
 describe('i18n', () => {
   it('默认语言为中文，已知键返回中文文案', () => {
-    expect(t('hud.brand.title')).toBe('WAR OF DOTS');
+    expect(t('hud.brand.title')).toBe('沙盘战争'); // 品牌名已由 WAR OF DOTS 改为中文名
     expect(t('hud.selection.none')).toBe('未选择单位');
   });
 

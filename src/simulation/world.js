@@ -1,4 +1,4 @@
-import { makeUnit, makeCity } from './entities.js';
+import { makeUnit, makeCity, makeCapturePoint } from './entities.js';
 import { parseMap } from './map.js';
 import { SpatialGrid } from './spatial.js';
 import { validateCommand } from './commands.js';
@@ -25,6 +25,9 @@ export class World {
     this.terrain = map.terrain;
     this.size = map.size;
     this.cities = map.cities.map(city => makeCity(city));
+    // 占领点独立于 cities：supply / morale / production / victory 只读 cities，
+    // 因此占领点天然不提供补给、士气、生产与胜负影响，仅 fog 额外读取它提供视野。
+    this.capturePoints = map.capturePoints.map(point => makeCapturePoint(point));
     this.units = [];
     this.fog = { blue: createFogGrid(map.terrain), red: createFogGrid(map.terrain) };
     this.events = [];   // 本 tick 产生的事件（morale 消费 unitDied 后于 tick 末清空）
@@ -33,6 +36,9 @@ export class World {
     this.endTime = null;
     this.spatial = new SpatialGrid(map.size.width, map.size.height);
     this.nextUnitId = 1;
+    this.mess = {};
+    for (const point of this.capturePoints)
+      mess.points.push(point);
   }
 
   spawnUnit(faction, type = 'light', x, y) {
@@ -124,6 +130,8 @@ function applyCommand(world, unit, command) {
       : newRoute;
     unit.routeIndex = 0;
     unit.pathDirty = true;
+    // 下达行军命令即视为「主动脱离战斗」：置为 moving，交由 movement 推进；
+    // 若下一 tick 仍在接触范围内，combat 会重新置回 combat（见 gdd.md §4）。
     unit.state = 'moving';
     return;
   }

@@ -78,17 +78,24 @@ describe('combat', () => {
     expect(world.history.some(e => e.type === 'unitDied' && e.unitId === red.id)).toBe(true);
   });
 
-  it('前进为攻击前进：move 途中接敌停下交战，敌军清空后恢复行军', () => {
+  it('move 指令可使单位脱离战斗并继续行军', () => {
     const { world, blue, red } = combatWorld();
     advance(world, 1 / 60);
     expect(blue.state).toBe('combat'); // 双方进入交战
-    world.issueCommands([blue.id], moveCommand([{ x: 40, y: 100 }])); // 攻击前进
+    expect(Math.hypot(red.x - blue.x, red.y - blue.y))
+      .toBeLessThanOrEqual(blue.radius + red.radius + values.combat.contactTolerance); // 处于接触范围内
+
+    // 主动后撤：下达 move 命令后单位不再被自动交战锁定，可脱离接触
+    world.issueCommands([blue.id], moveCommand([{ x: 40, y: 100 }]));
+    expect(blue.state).toBe('moving');
     advance(world, 0.5);
-    expect(blue.state).toBe('combat'); // 敌军仍在射程内：停下交战
-    expect(Math.abs(blue.x - 100)).toBeLessThan(5); // 未脱离
-    world.killUnit(red, 'combat'); // 敌军清空
+    expect(blue.state).toBe('moving'); // 已脱离交战，未被重新锁定为 combat
+    expect(blue.x).toBeLessThan(85);   // 确实离开了接触位置（实测约 74）
+
+    // 敌军清空后继续沿预定路线前进
+    world.killUnit(red, 'combat');
     advance(world, 0.5);
-    expect(blue.state).toBe('moving'); // 沿预定路线恢复行军
-    expect(blue.x).toBeLessThan(85); // 继续前进
+    expect(blue.state).toBe('moving');
+    expect(blue.x).toBeLessThan(65);   // 实测约 54
   });
 });

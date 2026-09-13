@@ -49,6 +49,12 @@ function paintVision(world, faction, mask) {
     if (city.faction !== faction) continue;
     paintCircle(terrain, mask, city.x, city.y, values.cities.vision);
   }
+  // 占领点：仅在被己方占领时提供视野（用独立半径 values.capturePoints.vision）。
+  // 这是占领点唯一的规则作用——不提供补给、士气、生产或恢复。
+  for (const point of world.capturePoints) {
+    if (point.faction !== faction) continue;
+    paintCircle(terrain, mask, point.x, point.y, values.capturePoints.vision);
+  }
 }
 
 // 逐行解析求交：格子中心 (cx*size+half, cy*size+half) 落在半径内 ⟺
