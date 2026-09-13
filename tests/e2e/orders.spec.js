@@ -77,7 +77,7 @@ test.describe('指挥输入', () => {
     await clickWorld(page, unit.x, unit.y);
     const canvas = page.locator('#battlefield canvas');
     const box = await canvas.boundingBox();
-    const toPage = (x, y) => ({ x: box.x + x / 1280 * box.width, y: box.y + y / 720 * box.height });
+    const toPage = (x, y) => ({ x: box.x + x / 1280 * box.width, y: box.y + y / 800 * box.height });
     const start = toPage(unit.x, unit.y);
     await page.mouse.move(start.x, start.y);
     await page.mouse.down();
@@ -96,7 +96,7 @@ test.describe('指挥输入', () => {
     await clickWorld(page, unit.x, unit.y);
     const canvas = page.locator('#battlefield canvas');
     const box = await canvas.boundingBox();
-    const toPage = (x, y) => ({ x: box.x + x / 1280 * box.width, y: box.y + y / 720 * box.height });
+    const toPage = (x, y) => ({ x: box.x + x / 1280 * box.width, y: box.y + y / 800 * box.height });
     const start = toPage(unit.x, unit.y);
     await page.mouse.move(start.x, start.y);
     await page.mouse.down();

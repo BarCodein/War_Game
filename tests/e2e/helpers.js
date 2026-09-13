@@ -1,7 +1,7 @@
 import { expect } from '@playwright/test';
 
 export const GAME_WIDTH = 1280;
-export const GAME_HEIGHT = 720;
+export const GAME_HEIGHT = 800;
 
 export async function waitForGame(page) {
   // 游戏页（game.html）。waitUntil: domcontentloaded——外部字体等慢资源偶发拖住 load

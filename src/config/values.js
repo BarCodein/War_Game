@@ -124,7 +124,7 @@ export const values = {
 
   // 教学关卡的规则性数值；地图几何体（地形格子/城市坐标/出生点）在关卡 JSON 中（architecture.md §7）
   tutorial: {
-    map: { width: 1280, height: 720, midlineX: 640 },
+    map: { width: 1280, height: 800, midlineX: 640 },
     forces: { blue: { light: 3, heavy: 1 }, red: { light: 2, heavy: 2 } },
     garrisonRadius: 80,
     clearRadius: 200, // 目标 3「清除信标周边敌军」的判定半径

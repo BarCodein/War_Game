@@ -52,7 +52,7 @@ const MIRROR = {
   'simulation.fixedStep': 1 / 60,
   'simulation.maxCatchUpTicks': 5,
   'simulation.speeds': [0.5, 1, 2],
-  'tutorial.map': { width: 1280, height: 720, midlineX: 640 },
+  'tutorial.map': { width: 1280, height: 800, midlineX: 640 },
   'tutorial.forces': { blue: { light: 3, heavy: 1 }, red: { light: 2, heavy: 2 } },
   'tutorial.garrisonRadius': 80,
   'tutorial.clearRadius': 200,
