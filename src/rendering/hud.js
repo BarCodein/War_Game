@@ -135,9 +135,12 @@ export function createHud(scene, world, controller, selection, orders) {
     }
     const redCity = world.cities.find(city => city.faction === 'red');
     const supplied = world.units.filter(unit => unit.state !== 'dead' && unit.faction === 'blue' && unit.supplied).length;
-    const productionLeft = Math.max(0, values.cities.production.interval - blueCity.productionTimer);
+    // 生产已关闭时不显示倒计时（否则会显示一个永远不会归零的假倒计时）
+    const productionRow = values.cities.production.enabled
+      ? `<div class="status-row"><span>${t('hud.city.production')}</span><b>${Math.max(0, values.cities.production.interval - blueCity.productionTimer).toFixed(0)} s</b></div>`
+      : '';
     els.cityCard.innerHTML = `
-      <div class="status-row"><span>${t('hud.city.production')}</span><b>${productionLeft.toFixed(0)} s</b></div>
+      ${productionRow}
       <div class="status-row"><span>${t('hud.city.supply')}</span><b>${supplied} / ${values.supply.capacityPerCity}</b></div>
       ${redCity ? `
       <div class="status-row"><span>${t('hud.city.capture')} · ${t('city.label', { faction: t('faction.red') })}</span><b>${redCity.captureProgress.toFixed(0)}%</b></div>

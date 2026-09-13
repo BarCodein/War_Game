@@ -19,7 +19,7 @@ const MIRROR = {
   'morale.rout': { recoverPerSecond: 8, stopAt: 20, stuckSeconds: 5 },
   'morale.unordered': { recoverPerSecond: 10, stopAt: 20, stuckSeconds: 5 },
   'cities.capture': { radius: 60, perUnitPerSecond: 0.05, capPerSecond: 0.15, decayPerSecond: 0.03 },
-  'cities.production': { interval: 12, unitType: 'light', pauseWhenSupplyFull: true },
+  'cities.production': { enabled: false, interval: 12, unitType: 'light', pauseWhenSupplyFull: true },
   'cities.recovery': { radius: 100, hpPerSecond: 3, moralePerSecond: 5 },
   'cities.vision': 180,
   'capturePoints.vision': 180,
@@ -53,7 +53,7 @@ const MIRROR = {
   'simulation.maxCatchUpTicks': 5,
   'simulation.speeds': [0.5, 1, 2],
   'tutorial.map': { width: 1280, height: 800, midlineX: 640 },
-  'tutorial.forces': { blue: { light: 3, heavy: 1 }, red: { light: 2, heavy: 2 } },
+  'tutorial.forces': { blue: { light: 6, heavy: 2 }, red: { light: 2, heavy: 2 } },
   'tutorial.garrisonRadius': 80,
   'tutorial.clearRadius': 200,
   'tutorial.reinforcement': {

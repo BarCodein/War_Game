@@ -13,7 +13,7 @@ function aiWorld() {
       { faction: 'red', x: 1100, y: 100 },
     ],
   }));
-  // 红城驻军 2 + 3 名填位（满补给 → 生产暂停，隔离计数）
+  // 红城驻军 2 + 3 名填位（城市生产已关闭，兵力数量在整局中稳定，便于计数）
   world.spawnUnit('red', 'light', 1100, 100);
   world.spawnUnit('red', 'heavy', 1130, 100);
   for (let i = 0; i < 3; i += 1) world.spawnUnit('red', 'light', 1160 + i * 20, 100);
@@ -55,7 +55,7 @@ describe('scripted ai', () => {
     expect(world.units.filter(u => u.faction === 'red').length).toBe(5);
     runSimulation(world, [ai], 60.5);
     const redUnits = world.units.filter(u => u.faction === 'red');
-    expect(redUnits.length).toBe(7); // 5 驻军 + 2 增援（红城补给已满，无生产）
+    expect(redUnits.length).toBe(7); // 5 驻军 + 2 增援（生产已关闭，无额外产出）
     expect(redUnits.filter(u => u.command?.type === 'attackMove').length).toBe(2);
   });
 

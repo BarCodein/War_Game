@@ -54,15 +54,16 @@ describe('world integration', () => {
       },
     };
 
-    // 300s 预算：当前平衡（低伤害/高攻速、士气行军与交战消耗、水域可通行）下
-    // 蓝军约在 250s 攻陷红城；局部提前结束（world.winner 置位即停），加余量不增加耗时。
+    // 300s 预算：当前平衡（低伤害/高攻速、士气行军与交战消耗、水域可通行、**城市不生产**）下
+    // 蓝军约 45s 攻陷红城；局部提前结束（world.winner 置位即停），加余量不增加耗时。
     runSimulation(world, [redAi, blueCommander], 300);
 
     expect(world.winner).toBe('blue');
     expect(world.history.some(e => e.type === 'cityCaptured' && e.cityId === 'c2' && e.faction === 'blue')).toBe(true);
     expect(world.history.some(e => e.type === 'victory' && e.winner === 'blue')).toBe(true);
-    // 城市生产在整局中持续工作（红城兵力低于补给容量，对局中应有产出）
-    expect(world.units.filter(u => u.faction === 'red').length).toBeGreaterThan(2);
+    // 城市生产已关闭（values.cities.production.enabled = false）：整局兵力只来自部署与 AI 增援，
+    // 城市计时器全程为 0（旧版本这里靠自动生产补充兵员）
+    expect(world.cities.every(city => city.productionTimer === 0)).toBe(true);
     // 迷雾网格按阵营维护
     expect(world.fog.blue.some(v => v === 2)).toBe(true);
   });

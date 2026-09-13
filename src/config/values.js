@@ -55,7 +55,10 @@ export const values = {
 
   cities: {
     capture: { radius: 60, perUnitPerSecond: 0.05, capPerSecond: 0.15, decayPerSecond: 0.03 },
-    production: { interval: 12, unitType: 'light', pauseWhenSupplyFull: true },
+    // 生产：当前**关闭**（enabled: false）——双方兵力只来自关卡 forces 部署与 AI 增援，
+    // 不再随时间自动涨兵（避免拖时间自动获得单位，破坏关卡设计的兵力配比）。
+    // 逻辑仍保留在 supply.js，改回 true 即恢复「每 interval 秒产 1 个 unitType」的旧行为。
+    production: { enabled: false, interval: 12, unitType: 'light', pauseWhenSupplyFull: true },
     recovery: { radius: 100, hpPerSecond: 3, moralePerSecond: 5 },
     vision: 180,
   },
@@ -125,7 +128,7 @@ export const values = {
   // 教学关卡的规则性数值；地图几何体（地形格子/城市坐标/出生点）在关卡 JSON 中（architecture.md §7）
   tutorial: {
     map: { width: 1280, height: 800, midlineX: 640 },
-    forces: { blue: { light: 3, heavy: 1 }, red: { light: 2, heavy: 2 } },
+    forces: { blue: { light: 6, heavy: 2 }, red: { light: 2, heavy: 2 } },
     garrisonRadius: 80,
     clearRadius: 200, // 目标 3「清除信标周边敌军」的判定半径
     reinforcement: {

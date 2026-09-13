@@ -20,7 +20,8 @@
       "units": [
         { "type": "light", "count": 1 },
         { "type": "light", "count": 2, "offset": { "x": -30, "y": 30 }, "spacing": { "x": -20, "y": 0 } },
-        { "type": "heavy", "count": 1, "offset": { "x": 40, "y": -40 }, "spacing": { "x": 30, "y": 0 } }
+        { "type": "light", "count": 3, "offset": { "x": -20, "y": 50 }, "spacing": { "x": 20, "y": 0 } },
+        { "type": "heavy", "count": 2, "offset": { "x": 40, "y": -40 }, "spacing": { "x": 30, "y": 0 } }
       ]
     },
     {
