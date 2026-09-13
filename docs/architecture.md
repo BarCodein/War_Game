@@ -119,7 +119,7 @@ world.issueCommands(unitIds, command)           // 唯一入口，附带校验
 {
   "version": 1,
   "name": "断裂峡谷",
-  "size": { "width": 1280, "height": 720 },
+  "size": { "width": 1280, "height": 800 },
   "gridCellSize": 10,
   "terrain": { "width": 128, "height": 72, "cells": [0, 0, 2, "…"] },
   "background": "/assets/map_pics/mp.png",

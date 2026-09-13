@@ -6,7 +6,7 @@ new Phaser.Game({
   type: Phaser.AUTO,
   parent: 'battlefield',
   width: 1280,
-  height: 720,
+  height: 800,
   backgroundColor: '#193d3d',
   scale: {
     mode: Phaser.Scale.FIT,

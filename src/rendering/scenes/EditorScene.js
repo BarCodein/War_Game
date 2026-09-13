@@ -44,15 +44,18 @@ export class EditorScene extends Phaser.Scene {
 
   create() {
     document.body.classList.add('editor-mode');
-    const initial = this.mapData ?? loadFromStorage() ?? createNewMap('新地图', 1280, 720);
+    const initial = this.mapData ?? loadFromStorage() ?? createNewMap('新地图', 1280, 800);
     this.store = createEditorStore(initial);
     this.terrain = makeTerrain(this.store.mapData);
     this.tool = 'paint-plain';
     this.dragging = null; // { kind: 'city' | 'spawn', id }
     this.lastPaint = null;
 
-    // 相机缩放适配地图尺寸（画布逻辑分辨率 1280×720）
-    const zoom = Math.min(1280 / this.store.mapData.size.width, 720 / this.store.mapData.size.height);
+    // 相机缩放适配地图尺寸（画布逻辑分辨率取自实际画布尺寸，避免硬编码）
+    const zoom = Math.min(
+      this.scale.width / this.store.mapData.size.width,
+      this.scale.height / this.store.mapData.size.height,
+    );
     this.cameras.main.setZoom(zoom);
 
     this.terrainImage = null; // 地形烘焙纹理（drawTerrain 中生成）

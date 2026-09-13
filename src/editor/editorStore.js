@@ -29,7 +29,7 @@ export function createNewMap(name, width, height) {
   };
 }
 
-export function createEditorStore(initialMap = createNewMap('新地图', 1280, 720)) {
+export function createEditorStore(initialMap = createNewMap('新地图', 1280, 800)) {
   const state = { mapData: JSON.parse(JSON.stringify(initialMap)) };
   // 旧存档/旧地图没有 capturePoints 字段：补齐为空数组，避免新增操作崩溃
   if (!Array.isArray(state.mapData.capturePoints)) state.mapData.capturePoints = [];

@@ -88,14 +88,14 @@ war_game/
 ### `src/entries/game.js`
 游戏页（`game.html`）入口。创建 `Phaser.Game` 实例并注册场景：
 - `scene: [BootScene, GameScene, BenchScene]`（编辑器由 `editor.html` 单独承载）。
-- `parent: 'battlefield'`，逻辑分辨率 1280×720，`Scale.FIT` + 居中。
+- `parent: 'battlefield'`，逻辑分辨率 1280×800，`Scale.FIT` + 居中。
 - 背景色 `#193d3d`。
 - 导出：无。
 
 ### `src/entries/editor.js`
 编辑器页（`editor.html`）入口。创建 `Phaser.Game`：
 - `scene: [EditorScene]`。
-- 同样 `parent: 'battlefield'`，1280×720，`Scale.FIT`。
+- 同样 `parent: 'battlefield'`，1280×800，`Scale.FIT`。
 - 导出：无。
 
 ---

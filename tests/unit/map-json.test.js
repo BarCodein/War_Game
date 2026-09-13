@@ -8,7 +8,7 @@ describe('map json', () => {
     const map = parseMap(loadTutorialMap());
     expect(map.version).toBe(MAP_VERSION);
     expect(map.terrain.cols).toBe(128); // 10px 网格：1280 / 10
-    expect(map.terrain.rows).toBe(72);  // 720 / 10
+    expect(map.terrain.rows).toBe(80);  // 800 / 10
     expect(map.cities.map(c => c.faction).sort()).toEqual(['blue', 'red']);
     expect(map.spawns.map(s => s.faction).sort()).toEqual(['blue', 'red']);
     expect(map.capturePoints).toEqual([]); // 教学地图未放置占领点 → 缺省空数组
