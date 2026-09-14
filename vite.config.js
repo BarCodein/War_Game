@@ -34,6 +34,8 @@ const MIME = {
   '.gif': 'image/gif',
   '.svg': 'image/svg+xml',
   '.json': 'application/json',
+  '.mp3': 'audio/mpeg',
+  '.mp4': 'video/mp4',
 };
 
 function rootAssets() {

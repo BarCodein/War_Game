@@ -30,11 +30,12 @@ if (isAuthenticated()) {
     message.classList.toggle('success', isSuccess);
   }
 
-  loginTab.addEventListener('click', () => setMode('login'));
-  registerTab.addEventListener('click', () => setMode('register'));
+  loginTab.addEventListener('click', () => { window.playSfx?.('toggle'); setMode('login'); });
+  registerTab.addEventListener('click', () => { window.playSfx?.('toggle'); setMode('register'); });
 
   form.addEventListener('submit', (event) => {
     event.preventDefault();
+    window.playSfx?.('button');
     const result = mode === 'register'
       ? register(usernameInput.value, passwordInput.value)
       : login(usernameInput.value, passwordInput.value);
