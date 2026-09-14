@@ -1,9 +1,25 @@
-import { cpSync, createReadStream, existsSync } from 'node:fs';
+import { cpSync, createReadStream, existsSync, readdirSync } from 'node:fs';
 import { extname, resolve } from 'node:path';
 import { fileURLToPath, URL } from 'node:url';
 import { defineConfig } from 'vite';
 
 const root = fileURLToPath(new URL('.', import.meta.url));
+
+// 页面入口：自动收集根目录 + members/ 下的所有 .html。
+// 以前这里是手写列表，新增页面忘记登记时会出现「dev 能打开、build 后页面不存在」，
+// 而 vite preview / 多数静态托管的单页回退会把 404 变成首页，
+// 表现出来就是「点了某个入口跳回主页面」——很难排查，所以改成自动扫描。
+function pageEntries() {
+  const entries = {};
+  for (const [dir, prefix] of [[root, ''], [resolve(root, 'members'), 'members-']]) {
+    if (!existsSync(dir)) continue;
+    for (const file of readdirSync(dir)) {
+      if (!file.endsWith('.html')) continue;
+      entries[`${prefix}${file.slice(0, -'.html'.length)}`] = resolve(dir, file);
+    }
+  }
+  return entries;
+}
 
 // 项目根 assets/ 是美术资源目录（见 assets/texture/Readme），不在 public/ 下。
 // 该插件让它以 /assets/** 的 URL 对外提供：
@@ -40,29 +56,14 @@ function rootAssets() {
   };
 }
 
-// 多页构建：主页（落地页）、战役选择页、游戏页、地图编辑器页各自独立入口。
+// 多页构建：所有页面各自独立入口（见 pageEntries 自动扫描）。
 // 开发模式由 Vite dev server 直接提供这些 .html；build 时以 rollupOptions.input 产出多个静态页面。
 export default defineConfig({
   base: '/',
   plugins: [rootAssets()],
   build: {
     rollupOptions: {
-      input: {
-        home: `${root}index.html`,
-        login: `${root}login.html`,
-        battlechoose: `${root}battlechoose.html`,
-        game: `${root}game.html`,
-        editor: `${root}editor.html`,
-        battlebackground: `${root}battlebackground.html`,
-        story: `${root}story.html`,
-        introduce: `${root}introduce.html`,
-        loading: `${root}loading.html`,
-        membersMain: `${root}members/main.html`,
-        membersAbout: `${root}members/about.html`,
-        membersGroup: `${root}members/group.html`,
-        membersProgress: `${root}members/progress.html`,
-        member: `${root}members/member.html`,
-      },
+      input: pageEntries(),
     },
   },
 });
