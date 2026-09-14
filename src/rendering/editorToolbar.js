@@ -62,10 +62,12 @@ export function createEditorToolbar(scene, store, callbacks = {}) {
     if (!button) return;
     const { action, tool } = button.dataset;
     if (tool) {
+      window.playSfx?.('toggle');
       callbacks.onToolChange?.(tool);
       return;
     }
     if (!action) return;
+    window.playSfx?.('button');
     switch (action) {
       case 'new':
         dialog.hidden = false;

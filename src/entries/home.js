@@ -6,4 +6,15 @@ document.querySelectorAll('[data-i18n]').forEach((el) => {
   el.textContent = t(el.dataset.i18n);
 });
 document.title = t('home.title');
-document.querySelector('#logoutButton')?.addEventListener('click', logout);
+document.querySelector('#logoutButton')?.addEventListener('click', () => {
+  window.playSfx?.('shutdown');
+  // 稍作延迟，让关机音效先响起再跳转登录页
+  window.setTimeout(logout, 350);
+});
+
+// UI 音效：菜单卡片
+// 悬停（放大缩小）→ 轻盈滑动音（低音量）；点击进入 → 重按钮音
+document.querySelectorAll('.home-card').forEach((card) => {
+  card.addEventListener('mouseenter', () => window.playSfx?.('slide', 0.45));
+  card.addEventListener('click', () => window.playSfx?.('button'));
+});
