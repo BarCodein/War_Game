@@ -180,17 +180,17 @@
       </div>
     </div>
 
-    <!-- 中央相框：人像（★ 接口：替换 src） -->
+    <!-- 中央相框：人像（JS 按 ?level= 填充 src） -->
     <div class="loading-frame">
       <div class="loading-frame-inner">
-        <img id="loadingScene" src="./assets/picture/suyu.jpeg" alt="宿北战役指挥者粟裕">
+        <img id="loadingScene" src="" alt="战役指挥者">
       </div>
     </div>
 
-    <!-- 相框下方：合并的介绍文字 + 题词 -->
+    <!-- 相框下方：介绍文字 + 题词（JS 按 ?level= 填充） -->
     <div class="loading-text-block">
-      <p class="loading-text-main">宿北战役的指挥者——华中野战军司令员粟裕同志</p>
-      <p class="loading-text-quote">「试看峰山下，埋了戴之奇」—— 陈毅</p>
+      <p class="loading-text-main" id="loadingTextMain"></p>
+      <p class="loading-text-quote" id="loadingTextQuote"></p>
     </div>
 
     <!-- 左下角加载提示 -->
@@ -202,8 +202,48 @@
 
   </div>
 
+  <script src="/audio.js"></script>
+  <script>
+    /* =========================================================
+       加载页数据字典（参照 member.html / pagedata.js 的模式）：
+       页面框架对所有战役一样，只是人像/文字不同，
+       通过 URL 参数 ?level=<id> 切换展示；新增战役加一条即可。
+       ========================================================= */
+    var LOADING_DATA = {
+      liaoshen: {
+        portrait: './assets/texture/background1.png',
+        portraitAlt: '辽沈战役战场',
+        intro: '辽沈战役——解放东北全境的战略决战',
+        quote: '「封闭蒋军在东北加以各个歼灭」—— 毛泽东'
+      },
+      subei_battle: {
+        portrait: './assets/picture/suyu.jpeg',
+        portraitAlt: '宿北战役指挥者粟裕',
+        intro: '宿北战役的指挥者——华中野战军司令员粟裕同志',
+        quote: '「试看峰山下，埋了戴之奇」—— 陈毅'
+      }
+    };
+
+    /* ---------- 按 ?level= 填充人像与文字（默认辽沈 = 第一关） ---------- */
+    (function () {
+      var params = new URLSearchParams(window.location.search);
+      var level = params.get('level') || 'liaoshen';
+      var data = LOADING_DATA[level] || LOADING_DATA.liaoshen;
+
+      var portrait = document.getElementById('loadingScene');
+      if (portrait) {
+        portrait.src = data.portrait;
+        portrait.alt = data.portraitAlt;
+      }
+      var main = document.getElementById('loadingTextMain');
+      var quote = document.getElementById('loadingTextQuote');
+      if (main) main.textContent = data.intro;
+      if (quote) quote.textContent = data.quote;
+    })();
+  </script>
   <script>
     (function () {
+      window.playSfx && window.playSfx('loading');
       var fill = document.getElementById('loadingFill');
       var task = document.getElementById('loadingTask');
 
