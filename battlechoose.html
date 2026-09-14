@@ -74,14 +74,6 @@
           <span class="pin-dot"></span>
           <span class="pin-label">宿北战役</span>
         </div>
-        <div class="battle-pin unlocked" data-level="3" style="left:102%; top:24%;">
-          <span class="pin-dot"></span>
-          <span class="pin-label">平津战役</span>
-        </div>
-        <div class="battle-pin locked" data-level="4" style="left:62%; top:56%;">
-          <span class="pin-dot"></span>
-          <span class="pin-label">渡江战役</span>
-        </div>
 
       </div>
 
@@ -97,7 +89,7 @@
         <h3 id="previewName">宿北战役</h3>
         <div class="preview-date" id="previewDate">1946年12月</div>
         <p id="previewDesc">山东野战军与华中野战军联合作战，于江苏宿迁北部歼灭国民党军整编第69师，是解放战争战略防御阶段的重要转折。</p>
-        <a class="battle-btn" id="previewEnter" href="./battlebackground_subei.html">进入战役 &rarr;</a>
+        <a class="battle-btn" id="previewEnter" href="./battlebackground.html?level=subei_battle">进入战役 &rarr;</a>
       </aside>
     </div>
   </section>
@@ -358,11 +350,10 @@
 
       /* ---------- 关卡点交互 ---------- */
       // 战役数据（可扩展，作为接口由后端/JS 数据源填充）
+      // battlebackground.html / loading.html 通过 ?level= 参数展示对应战役内容
       var battleData = {
-        1: { name: '辽沈战役', date: '1948年9月 — 1948年11月', desc: '东北野战军发起辽沈战役，解放东北全境，奠定全国胜利基础。', href: './battlebackground.html' },
-        2: { name: '宿北战役', date: '1946年12月', desc: '山东野战军与华中野战军联合作战，于江苏宿迁北部歼灭国民党军整编第69师，是解放战争战略防御阶段的重要转折。', href: './battlebackground_subei.html' },
-        3: { name: '平津战役', date: '1948年11月 — 1949年1月', desc: '东北野战军与华北军区部队联合，和平解放北平，结束华北战事。', href: './battlebackground.html' },
-        4: { name: '渡江战役', date: '1949年4月', desc: '百万雄师过大江，解放南京，宣告国民党反动统治的覆灭。', href: './battlebackground.html' }
+        1: { name: '辽沈战役', date: '1948年9月 — 1948年11月', desc: '东北野战军发起辽沈战役，解放东北全境，奠定全国胜利基础。', href: './battlebackground.html?level=liaoshen' },
+        2: { name: '宿北战役', date: '1946年12月', desc: '山东野战军与华中野战军联合作战，于江苏宿迁北部歼灭国民党军整编第69师，是解放战争战略防御阶段的重要转折。', href: './battlebackground.html?level=subei_battle' }
       };
 
       var preview = document.getElementById('battlePreview');
@@ -421,6 +412,18 @@
         }
       });
     })();
+  </script>
+
+  <script src="/audio.js"></script>
+  <script>
+    // UI 音效：导航返回 / 跳过入场 / 缩放控件 / 关卡点 / 进入战役
+    window.bindSfx({
+      '.battle-nav a': 'click',
+      '#cutsceneSkip': 'button',
+      '.map-controls button': 'click',
+      '.battle-pin': 'click',
+      '#previewEnter': 'button'
+    });
   </script>
 </body>
 </html>
