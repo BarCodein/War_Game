@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { makePlainMap, makeWorld } from './helpers.js';
+import { advance, makePlainMap, makeWorld } from './helpers.js';
 import { planRoute, transitionToNewRoute, updateMovement } from '../../src/simulation/systems/movement.js';
+import { attackMoveCommand } from '../../src/simulation/commands.js';
 import { values } from '../../src/config/index.js';
 
 function riverWorldWithBridge() {
@@ -16,6 +17,32 @@ function riverWorldWithBridge() {
 }
 
 describe('planRoute（最短路径规划）', () => {
+  it('地图外的目标点被夹回地图内（否则单位会走进未渲染区域）', () => {
+    // 地图 1280×720，但游戏画布是 1280×800：画布下方 80px 不属于地图。
+    // terrain.passableAt() 会把格子索引夹到边缘格，所以地图外的坐标"看起来可通行"，
+    // 必须夹取，否则原始越界坐标会变成路径终点。
+    const world = makeWorld(makePlainMap({ width: 1280, height: 720 }));
+    const below = planRoute(world.terrain, 640, 360, [{ x: 640, y: 900 }]);
+    expect(below[below.length - 1]).toEqual({ x: 640, y: 720 });
+
+    const left = planRoute(world.terrain, 640, 360, [{ x: -50, y: 300 }]);
+    expect(left[left.length - 1]).toEqual({ x: 0, y: 300 });
+
+    const right = planRoute(world.terrain, 640, 360, [{ x: 5000, y: 100 }]);
+    expect(right[right.length - 1]).toEqual({ x: 1280, y: 100 });
+  });
+
+  it('越界命令下达后单位停在地图边界内', () => {
+    const world = makeWorld(makePlainMap({ width: 1280, height: 720 }));
+    const unit = world.spawnUnit('blue', 'light', 640, 360);
+    world.issueCommands([unit.id], attackMoveCommand({ x: 640, y: 900 }));
+    expect(unit.route.every(p => p.y <= 720 && p.y >= 0 && p.x >= 0 && p.x <= 1280)).toBe(true);
+
+    advance(world, 30);
+    expect(unit.y).toBeLessThanOrEqual(720); // 不会走出地图（更不会走到画布空白带里）
+    expect(unit.y).toBeGreaterThan(690);
+  });
+
   it('无障碍时保留原路径点', () => {
     const world = makeWorld(makePlainMap());
     const route = planRoute(world.terrain, 100, 100, [{ x: 200, y: 100 }, { x: 300, y: 100 }]);

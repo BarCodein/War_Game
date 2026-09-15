@@ -22,7 +22,7 @@ export default {
   'hud.battlefield.title': '前线态势',
   'hud.selection.none': '未选择单位',
   'hud.selection.count': '{n} 个单位已选择',
-  'hud.tip': '左键选择 · Shift 增减选 · 从已选单位拖动绘制轨迹 · 右键移动 / 攻击',
+  'hud.tip': '左键点击选择 · 直接从单位按住左键拖出路径即可移动 · Shift 追加选择 · 右键移动 / 攻击',
   'hud.legend.friendly': '己方',
   'hud.legend.hostile': '敌方',
   'hud.legend.city': '城市',
@@ -111,6 +111,8 @@ export default {
   'editor.status.loaded': '已载入本地存档',
   'editor.status.noSave': '没有找到本地存档',
   'editor.status.exported': '已导出地图文件',
+  'editor.status.canvasFitted': '地图已补齐到画布尺寸（新增区域为平原）',
+  'editor.status.largerThanCanvas': '地图大于游戏画布，游戏内只能看到左上部分',
   'editor.importError': '导入失败：不是有效的地图 JSON',
   'hud.exitPlaytest': '返回编辑器',
   // 主页（落地页）

@@ -597,14 +597,27 @@ function simplify(points) {
   return simplified;
 }
 
+// 把世界坐标夹进地图矩形。
+// 必需：terrain.passableAt() 会把格子索引夹到边缘格，因此地图外的坐标"看起来可通行"，
+// 若直接把它当成路径终点，单位会走出地图，进入画布上根本没有渲染的区域。
+export function clampToMap(terrain, point) {
+  const maxX = terrain.cols * terrain.cellSize;
+  const maxY = terrain.rows * terrain.cellSize;
+  return {
+    x: Math.max(0, Math.min(maxX, point.x)),
+    y: Math.max(0, Math.min(maxY, point.y)),
+  };
+}
+
 // 下达命令时整条规划最短路径：对每个途经点逐段用 A* 绕开水域，返回去掉共线点的路径点。
 // move 与 attackMove 共用（attack-forward 攻击前进，见 gdd.md §4）——
 // 调用方在 applyCommand 时规划，使轨迹显示的是真实的绕行路径。
 export function planRoute(terrain, startX, startY, waypoints) {
   const points = [];
-  let cx = startX;
-  let cy = startY;
-  for (const wp of waypoints) {
+  let cx = Math.max(0, Math.min(terrain.cols * terrain.cellSize, startX));
+  let cy = Math.max(0, Math.min(terrain.rows * terrain.cellSize, startY));
+  for (const waypoint of waypoints) {
+    const wp = clampToMap(terrain, waypoint); // 地图外的目标点夹回地图内
     if (segmentBlocked(terrain, cx, cy, wp.x, wp.y)) {
       const detour = findPath(terrain, cx, cy, wp.x, wp.y);
       if (detour && detour.length) {
@@ -615,7 +628,7 @@ export function planRoute(terrain, startX, startY, waypoints) {
       // 无路可达时不可穿透不可通行地形，放弃该无法到达的路径点
     } else {
       if (terrain.passableAt(wp.x, wp.y)) {
-        points.push({ x: wp.x, y: wp.y });
+        points.push(wp);
         cx = wp.x;
         cy = wp.y;
       }

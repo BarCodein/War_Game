@@ -18,7 +18,7 @@ export default {
   'hud.battlefield.title': 'Frontline',
   'hud.selection.none': 'No units selected',
   'hud.selection.count': '{n} unit(s) selected',
-  'hud.tip': 'Left click to select · Shift to add · Drag from selected units to draw a route · Right click to move / attack',
+  'hud.tip': 'Left click to select · Drag straight from a unit to move it (no pre-selection) · Shift to add · Right click to move / attack',
   'hud.legend.friendly': 'Friendly',
   'hud.legend.hostile': 'Hostile',
   'hud.legend.city': 'City',
@@ -101,6 +101,8 @@ export default {
   'editor.status.loaded': 'Local save loaded',
   'editor.status.noSave': 'No local save found',
   'editor.status.exported': 'Map file exported',
+  'editor.status.canvasFitted': 'Map padded to canvas size (new area is plain)',
+  'editor.status.largerThanCanvas': 'Map is larger than the game canvas — only the top-left part shows in game',
   'editor.importError': 'Import failed: not a valid map JSON',
   'hud.exitPlaytest': 'Back to editor',
   // Home (landing page)

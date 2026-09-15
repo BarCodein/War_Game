@@ -66,6 +66,43 @@ describe('victory：关卡任务规则（world.mess）', () => {
     expect(world.winner).toBe('red');
   });
 
+  it('守多个据点：丢一个不算输，全部丢光才立即判负', () => {
+    const world = makeWorld(makePlainMap({
+      capturePoints: [
+        { id: 'p1', x: 300, y: 300, faction: 'blue' },
+        { id: 'p2', x: 900, y: 300, faction: 'blue' },
+      ],
+    }));
+    world.mess = { mode: 'defend', faction: 'blue', time: null, points: [...world.capturePoints] };
+
+    world.capturePoints[0].faction = 'red';
+    advance(world, 0.5);
+    expect(world.winner).toBeNull(); // 还剩 p2 → 继续守
+
+    world.capturePoints[1].faction = 'red';
+    advance(world, 1 / 60);
+    expect(world.winner).toBe('red'); // 全丢立败
+  });
+
+  it('到时限结算：还有据点不在手里 → 防守失败；全部守住 → 防守方胜', () => {
+    const late = makeWorld(makePlainMap({
+      capturePoints: [
+        { id: 'p1', x: 300, y: 300, faction: 'blue' },
+        { id: 'p2', x: 900, y: 300, faction: 'red' },
+      ],
+    }));
+    late.mess = { mode: 'defend', faction: 'blue', time: 1, points: [...late.capturePoints] };
+    advance(late, 0.5);
+    expect(late.winner).toBeNull(); // 时限内还有据点在手里
+    advance(late, 0.7);
+    expect(late.winner).toBe('red'); // 到点结算：仍有据点不在手里 → 防守失败
+
+    const held = makeWorld(pointMap()); // p1 属于蓝方，全部守住
+    held.mess = { mode: 'defend', faction: 'blue', time: 1, points: [...held.capturePoints] };
+    advance(held, 1.5);
+    expect(held.winner).toBe('blue');
+  });
+
   it('进攻方在时限内拿下全部据点即获胜', () => {
     const world = makeWorld(pointMap()); // p1 本来就是蓝方（进攻方）的
     world.mess = { mode: 'attack', faction: 'blue', time: 300, points: [world.capturePoints[0]] };
