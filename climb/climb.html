@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>睡衣登山大赛</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap"
+    rel="stylesheet"
+  />
+  <style>
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      margin: 0;
+      background: radial-gradient(circle at 50% 20%, #1d2b3a 0%, #0a0a0a 70%);
+      height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      font-family: 'Press Start 2P', 'Microsoft YaHei', monospace;
+      color: #fff;
+      -webkit-tap-highlight-color: transparent;
+    }
+    #wrap {
+      position: relative;
+      width: min(100vw, 177.78vh);
+      aspect-ratio: 16 / 9;
+      max-height: 100vh;
+      box-shadow: 0 0 0 4px #000, 0 0 60px rgba(0,0,0,0.8);
+    }
+    canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+      image-rendering: pixelated;
+      image-rendering: crisp-edges;
+      background: #000;
+    }
+
+    /* ---------- overlays ---------- */
+    .overlay {
+      position: absolute;
+      inset: 0;
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      gap: 18px;
+      padding: 4% 6%;
+      background: rgba(6, 10, 16, 0.82);
+      backdrop-filter: blur(3px);
+      z-index: 20;
+    }
+    .overlay.show { display: flex; }
+
+    .overlay h1 {
+      margin: 0;
+      font-size: clamp(20px, 4.4vw, 44px);
+      letter-spacing: 2px;
+      color: #ffe066;
+      text-shadow: 3px 3px 0 #000, 0 0 18px rgba(255,224,102,0.45);
+    }
+    .overlay .sub {
+      margin: 0;
+      font-size: clamp(9px, 1.5vw, 14px);
+      line-height: 1.9;
+      color: #cfe6ff;
+    }
+    .howto {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 8px 10px;
+      max-width: 640px;
+    }
+    .howto span {
+      font-size: clamp(8px, 1.2vw, 12px);
+      padding: 7px 10px;
+      background: rgba(255,255,255,0.08);
+      border: 2px solid rgba(255,255,255,0.22);
+      border-radius: 4px;
+      color: #fff;
+      white-space: nowrap;
+    }
+
+    .btn {
+      font-family: inherit;
+      font-size: clamp(10px, 1.5vw, 15px);
+      padding: 14px 30px;
+      color: #fff;
+      background: #2b6cb0;
+      border: 3px solid #000;
+      border-radius: 6px;
+      cursor: pointer;
+      letter-spacing: 1px;
+      transition: transform 0.08s ease, background 0.15s ease;
+    }
+    .btn:hover { background: #3b82f6; }
+    .btn:active { transform: translateY(3px); }
+    .btn.primary {
+      background: #e0a02a;
+      color: #241a05;
+      box-shadow: 0 6px 0 #8a5f10;
+    }
+    .btn.primary:hover { background: #ffc04d; }
+    .btn.primary:active { box-shadow: 0 2px 0 #8a5f10; }
+    .btn.ghost {
+      background: transparent;
+      border-color: rgba(255,255,255,0.35);
+      font-size: clamp(8px, 1.1vw, 11px);
+      padding: 9px 16px;
+    }
+
+    .btnrow { display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; }
+
+    /* ---------- on-screen controls ---------- */
+    #touch {
+      position: absolute;
+      inset: 0;
+      display: none;
+      justify-content: space-between;
+      align-items: flex-end;
+      padding: 3%;
+      pointer-events: none;
+      z-index: 15;
+    }
+    #touch.show { display: flex; }
+    .pad { display: flex; gap: 12px; pointer-events: none; }
+    .tbtn {
+      pointer-events: auto;
+      font-family: inherit;
+      font-size: clamp(12px, 1.8vw, 18px);
+      width: clamp(52px, 8vw, 74px);
+      height: clamp(52px, 8vw, 74px);
+      border-radius: 50%;
+      color: #fff;
+      background: rgba(20,30,45,0.7);
+      border: 3px solid rgba(255,255,255,0.5);
+      cursor: pointer;
+      user-select: none;
+      touch-action: none;
+    }
+    .tbtn:active { background: rgba(230,180,60,0.85); color: #000; }
+    .tbtn.big {
+      width: clamp(64px, 10vw, 92px);
+      height: clamp(64px, 10vw, 92px);
+      background: rgba(224,160,42,0.75);
+      border-color: #ffe066;
+      color: #241a05;
+    }
+  </style>
+</head>
+<body>
+  <div id="wrap">
+    <canvas></canvas>
+
+    <!-- ---------- start menu ---------- -->
+    <div id="menu" class="overlay show">
+      <h1>睡衣登山大赛</h1>
+      <p class="sub">穿着睡衣的士兵，在限定时间内爬上山顶！<br>小心深坑、滚石和山贼。</p>
+      <div class="howto">
+        <span>← → 移动</span>
+        <span>空格 跳跃</span>
+        <span>J 射击</span>
+        <span>K 大刀</span>
+      </div>
+      <div class="btnrow">
+        <button id="btnStart" class="btn primary">开始游戏</button>
+        <button id="btnSound" class="btn ghost">音效：开</button>
+      </div>
+      <p class="sub">手机可直接使用屏幕上的圆形按钮操作</p>
+    </div>
+
+    <!-- ---------- win / lose ---------- -->
+    <div id="endScreen" class="overlay">
+      <h1 id="endTitle">介于两石之间十分中正</h1>
+      <p id="endSub" class="sub"></p>
+      <div class="btnrow">
+        <button id="btnAgain" class="btn primary">再来一次</button>
+      </div>
+    </div>
+
+    <!-- ---------- touch controls ---------- -->
+    <div id="touch">
+      <div class="pad left">
+        <button class="tbtn" data-key="left">◀</button>
+        <button class="tbtn" data-key="right">▶</button>
+      </div>
+      <div class="pad right">
+        <button class="tbtn" data-key="slash">刀</button>
+        <button class="tbtn" data-key="shoot">射</button>
+        <button class="tbtn big" data-key="jump">跳</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="climb.js"></script>
+</body>
+</html>

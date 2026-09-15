@@ -204,6 +204,19 @@
 
   <script src="/audio.js"></script>
   <script>
+    /* 关卡 id 三重兜底：?level= → #level= → sessionStorage。
+       静态服务器的 cleanUrls 会把 "…html?level=x" 301 重写成不带 .html 的路径，
+       并**丢掉查询参数**（实测 npx serve 14.x）；只认 ?level= 就会走错关卡。
+       与 battlebackground.html / src/level-link.js 里的规则保持一致。 */
+    window.resolveCampaignLevel = function () {
+      var params = new URLSearchParams(window.location.search);
+      var hashParams = new URLSearchParams(String(window.location.hash || '').replace(/^#/, ''));
+      var stored = null;
+      try { stored = window.sessionStorage.getItem('war-of-dots.campaign'); } catch (e) { stored = null; }
+      // 只认 #level=<id>：裸 hash（#bench 之类）是别的用途，不能当关卡 id
+      return params.get('level') || hashParams.get('level') || stored || null;
+    };
+
     /* =========================================================
        加载页数据字典（参照 member.html / pagedata.js 的模式）：
        页面框架对所有战役一样，只是人像/文字不同，
@@ -221,14 +234,24 @@
         portraitAlt: '宿北战役指挥者粟裕',
         intro: '宿北战役的指挥者——华中野战军司令员粟裕同志',
         quote: '「试看峰山下，埋了戴之奇」—— 陈毅'
+      },
+      xian_battle: {
+        portrait: './assets/picture/jieshi.png',
+        portraitAlt: '宿北战役指挥者粟裕',
+        intro: '西安华清池睡衣登山大赛',
+        quote: '「 优 势 在 我 ！」—— 常公凯申'
       }
     };
 
-    /* ---------- 按 ?level= 填充人像与文字（默认辽沈 = 第一关） ---------- */
+    /* ---------- 按关卡 id 填充人像与文字（缺省用字典里的第一条） ---------- */
     (function () {
-      var params = new URLSearchParams(window.location.search);
-      var level = params.get('level') || 'liaoshen';
-      var data = LOADING_DATA[level] || LOADING_DATA.liaoshen;
+      var level = window.resolveCampaignLevel();
+      // 兜底同样不能写死字典里不存在的键（之前写的是 LOADING_DATA.liaoshen，
+      // 而字典里只有 tashan/subei/xian → data 为 undefined → 下面读 portrait 直接抛错）
+      var key = LOADING_DATA[level] ? level : Object.keys(LOADING_DATA)[0];
+      var data = LOADING_DATA[key];
+      if (!data) return;
+      try { window.sessionStorage.setItem('war-of-dots.campaign', key); } catch (e) { /* 忽略 */ }
 
       var portrait = document.getElementById('loadingScene');
       if (portrait) {
@@ -264,9 +287,13 @@
           progress = 100;
           clearInterval(timer);
           if (task) task.textContent = '准备就绪';
-          // 加载完成后跳转 game.html；若从战役背景页带入 ?level= 参数则透传
-          var level = new URLSearchParams(window.location.search).get('level');
-          var target = level ? './game.html?level=' + encodeURIComponent(level) : './game.html';
+          // 加载完成后跳转：关卡 id 用同一套三重兜底解析（不能只读 ?level=，会被静态服务器丢掉），
+          // 并且把 #level= 一起带过去，保证下一跳也不丢。
+          var level = window.resolveCampaignLevel();
+          var target = level
+            ? './game.html?level=' + encodeURIComponent(level) + '#level=' + encodeURIComponent(level)
+            : './game.html';
+          if (level === 'xian_battle') target = './climb/climb.html'; // 西安事变进登山小游戏
           setTimeout(function () {
             window.location.href = target;
           }, 600);

@@ -79,6 +79,9 @@
 
   </div>
 
+  <!-- 轻量富文本渲染：先转义再放行白名单标签（<br>/<strong>…），
+       必须在下面的战役数据脚本之前同步加载，保证 window.richText 已就绪 -->
+  <script src="/richText.js"></script>
   <script>
     /* =========================================================
        战役数据字典（参照 member.html / pagedata.js 的模式）：
@@ -112,42 +115,75 @@
         objective: '集中优势兵力，抓住敌军分散冒进的战机，首先围歼整编第69师于宿北地区；打破国民党军对华东解放区的进攻，扭转华东战场的不利局面。',
         history: '1946年6月全面内战爆发后，国民党军向华东解放区发起大规模进攻。宿北战役是山东野战军与华中野战军首次协同作战，全歼国民党军整编第69师，毙其师长戴之奇，是华东战场战略防御阶段的重要转折。',
         loadingHref: './loading.html?level=subei_battle'
+      },
+      xian_battle: {
+        title: '西安事变',
+        subtitle: '1936年12月12日 · 西安华清池',
+        video: './assets/video/xian.mp4',
+        mapImg: './assets/picture/xian.png',
+        mapAlt: '介于两石',
+        forcesHtml:
+          '<strong>我方部队：</strong>东北军士兵登山搜寻<br><br>' +
+          '<strong>敌方部队：</strong>蒋介石逃往后山',
+        objective: '登上山顶，抓获蒋介石',
+        history: ' 校长玩夜跑<br>学良全军满山找<br> 光头不得了<br>   最中正',
+        loadingHref: './loading.html?level=xian_battle'
       }
     };
 
     /* ---------- 按 ?level= 填充页面内容（缺省用字典里的第一场战役） ---------- */
     (function () {
       var params = new URLSearchParams(window.location.search);
-      var level = params.get('level');
-      // 注意：这里必须能兜住"没有 ?level= 或 id 写错"的情况。
+      var hashParams = new URLSearchParams(String(window.location.hash || '').replace(/^#/, ''));
+      var stored = null;
+      try { stored = window.sessionStorage.getItem('war-of-dots.campaign'); } catch (e) { stored = null; }
+
+      // 关卡 id 三重兜底：?level= → #level= → sessionStorage。
+      // 静态服务器的 cleanUrls 会把 "/battlebackground.html?level=x" 301 重写成
+      // "/battlebackground"，**查询参数会被丢掉**（实测 npx serve 14.x）；
+      // 只认 ?level= 的话这里就退回字典第一项 —— 表现就是"点宿北却显示塔山"。
+      var requested = params.get('level') || hashParams.get('level') || stored || '';
+      var level = CAMPAIGNS[requested] ? requested : null;
+      // 注意：这里必须能兜住"没有 id 或 id 写错"的情况。
       // 之前兜底写的是 CAMPAIGNS.liaoshen，但字典里根本没有这个键 →
       // data 为 undefined → 下面第一行 data.title 抛 TypeError → 整段脚本中断，
       // 标题/态势图/文案/开始按钮/视频源全都不会设置（看起来就是"视频没换"）。
       var data = CAMPAIGNS[level] || CAMPAIGNS[Object.keys(CAMPAIGNS)[0]];
       if (!data) return;
+      try { window.sessionStorage.setItem('war-of-dots.campaign', level); } catch (e) { /* 忽略 */ }
 
       document.title = '沙盘战争 — ' + data.title;
       document.getElementById('bbgTitle').textContent = data.title;
       document.getElementById('bbgSubtitle').textContent = data.subtitle;
       document.getElementById('bbgIntroTitle').textContent = data.title;
       document.getElementById('bbgIntroSubtitle').textContent = data.subtitle;
+      // 显式说明"没找到你点的那一关"，不静默显示别的战役
+      if (requested && !level) {
+        document.getElementById('bbgSubtitle').textContent =
+          data.subtitle + '（未找到战役「' + requested + '」，显示默认战役）';
+      }
 
       var situation = document.getElementById('battleSituation');
       situation.src = data.mapImg;
       situation.alt = data.mapAlt;
 
-      // 敌我情况含 <strong>/<br> 富文本，用 innerHTML
-      document.getElementById('bbgForces').innerHTML = data.forcesHtml;
-      document.getElementById('bbgObjective').textContent = data.objective;
-      document.getElementById('battleContext').textContent = data.history;
+      // 三个文本字段允许写少量富文本（<br> 换行、<strong> 加粗），统一走 richText()：
+      // 之前 history 用 textContent 渲染，<br> 会被当成普通文字显示出来
+      // （西安事变那条历史的 "…<br>…" 就是这么露出来的）。
+      var render = window.richText || function (text) { return String(text == null ? '' : text); };
+      document.getElementById('bbgForces').innerHTML = render(data.forcesHtml);
+      document.getElementById('bbgObjective').innerHTML = render(data.objective);
+      document.getElementById('battleContext').innerHTML = render(data.history);
 
-      // 开始指挥 → 对应战役的加载页
+      // 开始指挥 → 对应战役的加载页（同样带上 #level=，避免被静态服务器重写掉查询参数）
       var startBtn = document.getElementById('startBattleBtn');
       if (startBtn) {
-        startBtn.setAttribute('href', data.loadingHref);
+        var loadingHref = data.loadingHref
+          + (level ? (data.loadingHref.indexOf('#') < 0 ? '#level=' + encodeURIComponent(level) : '') : '');
+        startBtn.setAttribute('href', loadingHref);
         startBtn.addEventListener('click', function (e) {
           e.preventDefault();
-          window.location.href = data.loadingHref;
+          window.location.href = loadingHref;
         });
       }
 

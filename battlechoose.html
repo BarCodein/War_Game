@@ -61,16 +61,28 @@
         <!-- ★ 背景地图接口（替换 src 即可换图） -->
         <img class="map-img" id="mapImg" src="./assets/texture/index.png" alt="中国军事地图" draggable="false">
 
-        <!-- 关卡点（绝对定位在 canvas 上，坐标 = img 元素自身的百分比；
-             为了和放大后的图片"贴紧"，坐标按 220% 画布基准设定，
-             并由 JS 缩放后自动重新位置化） -->
-        <div class="battle-pin unlocked" data-level="1" style="left:40%; top:18%;">
+        <!-- 关卡点（绝对定位在 .map-canvas 上，left/top 是 canvas 的百分比）
+             ⚠️ 坐标必须落在 canvas 的 60% ~ 160% 区间内，否则页面上看不到：
+             .map-canvas 撑满 viewport（100%），里面的 .map-img 是它的 220%，
+             而 resetMap() 会把这张大图居中，于是初始可视区域正好是 canvas 的
+             60%~160%（x/y 都是）——超出这一带的点被推到视口外。
+             实测（Chrome 1440×900 → viewport 1232×620，transform
+             translate(-739.2px,-372px) scale(1)）：旧坐标 40%/18% 与 80%/46%
+             的视口坐标是 (-246,-258) 和 (244,-86)，两点都在视口外。
+             另外要避开右上角的预览卡（right:24px top:24px，宽 280px）
+             与右下角的缩放控件。 -->
+        <div class="battle-pin unlocked" data-level="1" style="left:122%; top:80%;">
           <span class="pin-dot"></span>
           <span class="pin-label">辽沈战役</span>
         </div>
-        <div class="battle-pin current" data-level="2" style="left:80%; top:46%;">
+        <div class="battle-pin current" data-level="2" style="left:143%; top:112%;">
           <span class="pin-dot"></span>
           <span class="pin-label">宿北战役</span>
+        </div>
+        <!-- 第三关：西安（西安事变）—— 跳转链接由脚本里的 battleData[3].level 提供 -->
+        <div class="battle-pin unlocked" data-level="3" style="left:108%; top:123%;">
+          <span class="pin-dot"></span>
+          <span class="pin-label">西安</span>
         </div>
 
       </div>
@@ -348,11 +360,24 @@
 
       /* ---------- 关卡点交互 ---------- */
       // 战役数据（可扩展，作为接口由后端/JS 数据源填充）
-      // battlebackground.html / loading.html 通过 ?level= 参数展示对应战役内容
+      // level 是关卡 id，跳转时会同时写进 ?level= 与 #level=：
+      // 静态服务器（如 npx serve 的 cleanUrls）会把 "/x.html?level=y" 301 重写成
+      // "/x" 并丢掉查询参数，只有 hash 一定保留；另外还会写一份 sessionStorage 兜底。
       var battleData = {
-        1: { name: '辽沈战役', date: '1948年9月 — 1948年11月', desc: '东北野战军发起辽沈战役，解放东北全境，奠定全国胜利基础。', href: './battlebackground.html?level=tashan_battle' },
-        2: { name: '宿北战役', date: '1946年12月', desc: '山东野战军与华中野战军联合作战，于江苏宿迁北部歼灭国民党军整编第69师，是解放战争战略防御阶段的重要转折。', href: './battlebackground.html?level=subei_battle' }
+        1: { name: '辽沈战役', date: '1948年9月 — 1948年11月', desc: '东北野战军发起辽沈战役，解放东北全境，奠定全国胜利基础。', level: 'tashan_battle' },
+        2: { name: '宿北战役', date: '1946年12月', desc: '山东野战军与华中野战军联合作战，于江苏宿迁北部歼灭国民党军整编第69师，是解放战争战略防御阶段的重要转折。', level: 'subei_battle' },
+        3: { name: '西安', date: '1936年12月', desc: '回到了36年12月的西安', level: 'xian_battle' }
       };
+
+      function battleHref(level) {
+        if (!level) return './battlebackground.html';
+        var id = encodeURIComponent(level);
+        return './battlebackground.html?level=' + id + '#level=' + id;
+      }
+
+      function rememberLevel(level) {
+        try { if (level) window.sessionStorage.setItem('war-of-dots.campaign', level); } catch (e) { /* 忽略 */ }
+      }
 
       var preview = document.getElementById('battlePreview');
       var previewName = document.getElementById('previewName');
@@ -372,11 +397,12 @@
           pin.classList.add('current');
 
           // 填充预览卡
-          var data = battleData[lv] || { name: '未知战役', date: '', desc: '', href: './battlebackground.html' };
+          var data = battleData[lv] || { name: '未知战役', date: '', desc: '', level: null };
           previewName.textContent = data.name;
           previewDate.textContent = data.date;
           previewDesc.textContent = data.desc;
-          previewEnter.href = data.href;
+          previewEnter.href = battleHref(data.level);
+          rememberLevel(data.level);
           preview.classList.add('show');
 
           // 自动放大聚焦到该关卡
@@ -392,14 +418,16 @@
         var pinCenterY = pinRect.top - rect.top + pinRect.height / 2;
 
         var targetScale = 2.0; // 自动聚焦目标缩放
-        // 计算平移，让 pin 居中
-        var newTx = rect.width / 2 - pinCenterX * (targetScale / scale);
-        var newTy = rect.height / 2 - pinCenterY * (targetScale / scale);
-        // 简化：直接以 pin 为中心
-        tx = rect.width / 2 - pinCenterX * targetScale / scale + tx;
-        ty = rect.height / 2 - pinCenterY * targetScale / scale + ty;
+        // 视口坐标 = tx + scale * 画布坐标，pin 当前的画布坐标 = (pinCenter - tx) / scale。
+        // 想让它缩放后落在视口正中：(pinCenter - tx) / scale * targetScale + tx' = 视口中心。
+        // 旧写法是 tx = 视口中心 - pinCenter * (targetScale/scale) + tx，
+        // 把旧 tx 加了进来（应为按比例扣掉），结果点关卡后地图飞到左上角、关卡点被推出视口。
+        var ratio = targetScale / scale;
+        tx = rect.width / 2 - (pinCenterX - tx) * ratio;
+        ty = rect.height / 2 - (pinCenterY - ty) * ratio;
         scale = targetScale;
 
+        clampPan(); // 和其他交互一样做边界约束，避免把地图拖出视口留下空白
         applyTransform();
       }
 
