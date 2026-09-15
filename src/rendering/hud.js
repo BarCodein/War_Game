@@ -1,6 +1,7 @@
 import { t } from '../i18n/index.js';
 import { values } from '../config/index.js';
 import { saveProgress } from '../entries/battlechoose-data.js';
+import { levelHref, rememberLevelId } from '../level-link.js';
 
 // HUD（DOM 实现，gdd.md §11 布局）：编队列表、城市状态、任务进度、事件日志、
 // 顶栏控制与胜利结算。文案全部走 i18n；按 performance.hudRefreshMs 节流刷新。
@@ -61,7 +62,8 @@ export function createHud(scene, world, controller, selection, orders) {
     const currentIndex = levels.findIndex(level => level.id === scene.campaignId);
     const nextLevel = currentIndex >= 0 ? levels[currentIndex + 1] : null;
     if (nextLevel) {
-      window.location.href = `/game.html?level=${encodeURIComponent(nextLevel.id)}`;
+      rememberLevelId(nextLevel.id);
+      window.location.href = levelHref('/game.html', nextLevel.id);
       return;
     }
     window.location.href = '/battlechoose.html';

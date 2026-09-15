@@ -101,6 +101,13 @@ war_game/
 - 同样 `parent: 'battlefield'`，1280×800，`Scale.FIT`。
 - 导出：无。
 
+### `src/level-link.js`
+关卡定位（把"要玩哪一关"从 URL 里解析出来，并在页面间跳转时带上）：
+- `levelIdFromLocation()`：`?level=<id>` → `#level=<id>`（只认带 `level=` 的 hash；裸 hash 是 `#bench` 这类标记，不能当关卡 id）。
+- `rememberLevelId()` / `recallLevelId()`：用 `sessionStorage` 记住最近一次选择；`resolveLevelId()` 按 查询参数 → hash → 存储 → 缺省值 兜底；`levelHref(page, id)` 生成同时带查询参数与 hash 的地址。
+- **为什么需要**：静态服务器的 `cleanUrls` 会把 `/game.html?level=x` **301 重写成 `/game` 并丢掉查询参数**（`npx serve` 默认开启，实测 `Location: /battlebackground`）——只认查询参数就会加载到默认关卡，表现是"点宿北却显示塔山"。服务器侧另由 `public/serve.json`（`cleanUrls: false`，构建后被复制到 `dist/serve.json`）关掉这个重写；`battlebackground.html` / `loading.html` 这两个 classic script 页面内置同一套兜底规则（见 `tests/unit/campaign-pages.test.js` 的契约测试）。
+- **代价与补偿**：关掉 `cleanUrls` 后 `npx serve` 不再把 `/login` 解析成 `/login.html`，手输的、收藏夹里的干净 URL，以及浏览器缓存的旧 301，都会直接 **404**（外部托管（GitHub Pages 等）默认支持干净 URL，所以同一份 dist"外网能开、localhost 404"）。`public/serve.json` 因此额外补了两条"无扩展名 → `.html`"的 rewrite：`/:page([^/.]+)`（根目录页面，如 `/login`）与 `/:dir/:page([^/.]+)`（`members/`、`climb/` 下的页面）。实测 `/login`、`/battlechoose`、`/members/about`、`/climb/climb` 均 200，且**不产生重定向**、查询参数原样保留。
+
 ---
 
 ## 三、配置（`src/config/`）

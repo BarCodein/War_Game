@@ -1,4 +1,5 @@
 import { LEVELS_INDEX_PATH, levelPath } from '../simulation/level.js';
+import { levelHref, rememberLevelId } from '../level-link.js';
 
 // 关卡索引与战役进度（本地存储）。
 // 关卡本身（地图、兵力、增援、AI 脚本）由 public/assets/levels/*.json 提供，
@@ -44,9 +45,12 @@ export function saveProgress(levelId, data) {
 
 /**
  * 进入关卡：只把关卡 id 交给 URL，其余（地图/兵力/增援/AI）由引擎读关卡 JSON 得到。
+ * 同时写入 sessionStorage 并带上 #level= —— 静态服务器的 cleanUrls 会重写掉查询参数，
+ * 只带 ?level= 的话会被重写成 /game 从而丢掉关卡 id（详见 src/level-link.js）。
  * @param {string} levelId
  */
 export function startLevel(levelId) {
   if (!levelId) return;
-  window.location.href = `/game.html?level=${encodeURIComponent(levelId)}`;
+  rememberLevelId(levelId);
+  window.location.href = levelHref('/game.html', levelId);
 }

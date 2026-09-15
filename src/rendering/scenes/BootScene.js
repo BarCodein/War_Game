@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { UNIT_TEXTURES } from '../unitRenderer.js';
 import { parseLevel, validateLevelReferences, LEVELS_INDEX_PATH, levelPath } from '../../simulation/level.js';
+import { resolveLevelId, rememberLevelId } from '../../level-link.js';
 
 // 游戏页启动场景（architecture.md §10）：把 URL 解析为「关卡」再启动游戏。
 //   1. ?level=<id>   → 加载 /assets/levels/<id>.json（标准关卡格式，含地图/兵力/增援/AI）
@@ -61,8 +62,11 @@ export class BootScene extends Phaser.Scene {
       console.error('[BootScene] fromEditor=1 但 sessionStorage 中没有试玩地图，回退到默认关卡');
     }
 
-    // 关卡：?level=<id> 优先，否则索引中的第一关
-    const levelId = params.get('level') || levelIndex[0]?.id || DEFAULT_LEVEL_ID;
+    // 关卡：?level=<id> → #level=<id> → sessionStorage → 索引第一关。
+    // 后两者是为静态服务器的 cleanUrls 兜底：它会把 ?level=x 连同查询参数一起重写掉
+    // （详见 src/level-link.js），只认查询参数的话就会错误地加载默认关卡。
+    const levelId = resolveLevelId({ fallback: levelIndex[0]?.id ?? DEFAULT_LEVEL_ID });
+    rememberLevelId(levelId);
     let level = null;
     let levelError = null;
     try {

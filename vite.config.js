@@ -5,13 +5,20 @@ import { defineConfig } from 'vite';
 
 const root = fileURLToPath(new URL('.', import.meta.url));
 
-// 页面入口：自动收集根目录 + members/ 下的所有 .html。
+// 页面入口：自动收集根目录与各一级子目录（members/、climb/）里的所有 .html。
 // 以前这里是手写列表，新增页面忘记登记时会出现「dev 能打开、build 后页面不存在」，
 // 而 vite preview / 多数静态托管的单页回退会把 404 变成首页，
 // 表现出来就是「点了某个入口跳回主页面」——很难排查，所以改成自动扫描。
+const PAGE_DIRS = [
+  ['', ''],             // 根目录
+  ['members', 'members-'],
+  ['climb', 'climb-'],  // 西安事变的登山小游戏
+];
+
 function pageEntries() {
   const entries = {};
-  for (const [dir, prefix] of [[root, ''], [resolve(root, 'members'), 'members-']]) {
+  for (const [sub, prefix] of PAGE_DIRS) {
+    const dir = sub ? resolve(root, sub) : root;
     if (!existsSync(dir)) continue;
     for (const file of readdirSync(dir)) {
       if (!file.endsWith('.html')) continue;
