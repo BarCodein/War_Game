@@ -256,14 +256,14 @@ war_game/
 
 ### `src/input/selection.js`
 单位选择：
-- 只维护选中 id 集合（`selected`），`isSelected`、`clear`、`onChange`。
+- 只维护选中 id 集合（`selected`），`isSelected`、`select(ids, { additive })`、`clear`、`onChange`。
 - 交互判定（bugfix）：**按下即命中己方单位 → 本次为点击单选，绝不进入框选**；只有按下空地并拖动超过阈值才框选。
 - `getDragRect()` 供渲染层画选框；轨迹绘制期间由 `setRouteBlocked` 复位。
 
 ### `src/input/orders.js`
 指挥输入：
 - 右键空地 → `attackMove`；右键目视敌军 → `attack`。
-- 从已选单位左键拖动 → 采样多路径点 `move` 轨迹（单位间按 `routeUnitOffset` 错开）。
+- 左键从己方单位拖动 → 采样多路径点 `move` 轨迹（单位间按 `routeUnitOffset` 错开）。**不需要先框选**：按下命中的单位会被立即设为当前选择（Shift 为追加），拖动超过 `dragBoxThreshold` 才下达移动命令；只点击不拖动则把选择**收拢到点中的这个单位**、不下达命令（框选之后也能直接单击切换选择）。单位重叠时取**最近**的一个。
 - `isRouting()` / `getCurrentRoute()` / `onOrder()`。
 
 ### `src/input/keyboard.js`

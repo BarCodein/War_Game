@@ -95,6 +95,13 @@ export function createSelection(scene, world) {
     isSelected(id) {
       return selected.has(id);
     },
+    // 直接设置选择（输入层在"从未选中的单位起笔"时用：先把该单位设为当前选择，
+    // 再按拖动与否决定是"点选"还是"直接画出移动路径"）
+    select(ids, { additive = false } = {}) {
+      if (!additive) selected.clear();
+      for (const id of ids) selected.add(id);
+      notify();
+    },
     clear() {
       selected.clear();
       notify();

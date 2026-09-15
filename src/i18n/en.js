@@ -18,7 +18,7 @@ export default {
   'hud.battlefield.title': 'Frontline',
   'hud.selection.none': 'No units selected',
   'hud.selection.count': '{n} unit(s) selected',
-  'hud.tip': 'Left click to select · Shift to add · Drag from selected units to draw a route · Right click to move / attack',
+  'hud.tip': 'Left click to select · Drag straight from a unit to move it (no pre-selection) · Shift to add · Right click to move / attack',
   'hud.legend.friendly': 'Friendly',
   'hud.legend.hostile': 'Hostile',
   'hud.legend.city': 'City',
