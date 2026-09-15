@@ -1,0 +1,291 @@
+{
+  "version": 1,
+  "id": "tashan_battle",
+  "name": "塔山阻击战",
+  "subtitle": "TASHAN DEFEND BATTLE",
+  "type": "defensive",
+  "difficulty": "教学",
+  "description": "坚守塔山阵地，击退敌军的海陆协同进攻",
+  "map": "/assets/maps/tashan.json",
+
+  "anchors": {
+    "northLine": { "spawnId": "s16" },
+    "blueBase": { "cityId": "c1" },
+    "roadblock": { "spawnId": "s16" },
+    "redBase": { "cityId": "c8" },
+    "eastHook": { "spawnId": "s2" },
+    "sea": { "spawnId": "s28" },
+    "dayushan": { "capturePointId": "p1" },
+    "tashan": {"capturePointId": "p3"},
+    "baitaishan": {"capturePointId": "p6"}
+  },
+
+  "forces": [
+    
+    {
+      "faction": "blue",
+      "at": { "spawnId": "s3" },
+      "units": [
+        { "type": "heavy", "count": 1   }
+      ]
+    },
+    {
+      "faction": "blue",
+      "at": { "spawnId": "s5" },
+      "units": [
+        { "type": "heavy", "count": 1   }
+      ]
+    },
+    {
+      "faction": "blue",
+      "at": { "spawnId": "s6" },
+      "units": [
+        { "type": "light", "count": 1 }
+      ]
+    },
+    {
+      "faction": "blue",
+      "at": { "spawnId": "s7" },
+      "units": [
+        { "type": "light", "count": 1 }
+      ]
+    },
+    {
+      "faction": "blue",
+      "at": { "spawnId": "s9" },
+      "units": [
+        { "type": "light", "count": 1 }
+      ]
+    },{
+      "faction": "blue",
+      "at": { "spawnId": "s9" },
+      "units": [
+        { "type": "light", "count": 2 }
+      ]
+    },
+    {
+      "faction": "blue",
+      "at": { "spawnId": "s10" },
+      "units": [
+        { "type": "light", "count": 1 }
+      ]
+    },
+    {
+      "faction": "blue",
+      "at": { "spawnId": "s11" },
+      "units": [
+        { "type": "light", "count": 1 }
+      ]
+    },
+    {
+      "faction": "blue",
+      "at": { "spawnId": "s12" },
+      "units": [
+        { "type": "light", "count": 1 }
+      ]
+    },
+    {
+      "faction": "blue",
+      "at": { "spawnId": "s13" },
+      "units": [
+        { "type": "light", "count": 1 }
+      ]
+    },
+    {
+      "faction": "blue",
+      "at": { "spawnId": "s14" },
+      "units": [
+        { "type": "heavy", "count": 1 }
+      ]
+    },
+    {
+      "faction": "blue",
+      "at": { "spawnId": "s19" },
+      "units": [
+        { "type": "light", "count": 2 }
+      ]
+    },
+    {
+      "faction": "blue",
+      "at": { "spawnId": "s20" },
+      "units": [
+        { "type": "light", "count": 1 }
+      ]
+    },
+    {
+      "faction": "blue",
+      "at": { "spawnId": "s21" },
+      "units": [
+        { "type": "heavy", "count": 1 }
+      ]
+    },
+    {
+      "faction": "blue",
+      "at": { "spawnId": "s22" },
+      "units": [
+        { "type": "light", "count": 2 }
+      ]
+    },
+    {
+      "faction": "blue",
+      "at": { "spawnId": "s23" },
+      "units": [
+        { "type": "light", "count": 1 }
+      ]
+    },
+    {
+      "faction": "blue",
+      "at": { "spawnId": "s24" },
+      "units": [
+        { "type": "light", "count": 1 }
+      ]
+    },
+    {
+      "faction": "blue",
+      "at": { "spawnId": "s25" },
+      "units": [
+        { "type": "light", "count": 1 }
+      ]
+    },
+    {
+      "faction": "red",
+      "at": { "spawnId": "s16" },
+      "units": [
+        { "type": "heavy", "count": 2 }
+      ]
+    },
+    {
+      "faction": "red",
+      "at": { "spawnId": "s17" },
+      "units": [
+        { "type": "light", "count": 1 }
+      ]
+    },
+    {
+      "faction": "red",
+      "at": { "spawnId": "s18" },
+      "units": [
+        { "type": "light", "count": 1 }
+      ]
+    },
+    {
+      "faction": "red",
+      "at": { "spawnId": "s15" },
+      "units": [
+        { "type": "light", "count": 1 }
+      ]
+    },
+    {
+      "faction": "red",
+      "at": { "spawnId": "s2" },
+      "units": [
+        { "type": "light", "count": 1 }
+      ]
+    }
+
+  ],
+
+  "ai": {
+    "faction": "red",
+    "fallback": { "anchor": "blueBase" },
+    "triggers": [
+      {
+        "id": "sea_landing",
+        "at": { "time": 25 },
+        "actions": [
+          {
+            "type": "spawn",
+            "unitType": "light",
+            "count": 2,
+            "at": { "anchor": "sea" },
+            "spacing": { "x": 0, "y": 24 },
+            "order": { "type": "attackMove", "target": { "anchor": "dayushan" } }
+          }
+        ]
+      },
+      {
+        "id": "firstWave",
+        "at": { "time": 30 },
+        "actions": [
+          {
+            "type": "spawn",
+            "unitType": "light",
+            "count": 4,
+            "at": { "anchor": "redBase" },
+            "spacing": { "x": 0, "y": 24 },
+            "order": { "type": "attackMove", "target": { "anchor": "tashan" } }
+          },
+          {
+            "type": "spawn",
+            "unitType": "light",
+            "count": 4,
+            "at": { "anchor": "eastHook" },
+            "spacing": { "x": 0, "y": 24 },
+            "order": { "type": "attackMove", "target": { "anchor": "baitaishan" } }
+          }
+        ]
+      },
+      {
+        "id": "retreat",
+        "at": { "time": 60 },
+        "actions": [
+          { "type": "attackMove" ,"target": { "anchor": "redBase" }}
+        ]
+      },
+      {
+        "id": "secondWave",
+        "at": { "time": 75 },
+        "actions": [
+          {
+            "type": "spawn",
+            "unitType": "light",
+            "count": 3,
+            "at": { "anchor": "eastHook" },
+            "spacing": { "x": 40, "y": 0 },
+            "order": { "type": "attackMove", "target": { "anchor": "baitaishan" } }
+          },
+          {
+            "type": "spawn",
+            "unitType": "heavy",
+            "count": 1,
+            "at": { "anchor": "roadblock" },
+            "spacing": { "x": 0, "y": 24 },
+            "order": { "type": "attackMove", "target": { "anchor": "tashan" } }
+          }
+        ]
+      },
+      {
+        "id": "95division",
+        "at": { "time": 120 },
+        "actions": [
+          {
+            "type": "spawn",
+            "unitType": "heavy",
+            "count": 4,
+            "at": { "anchor": "redBase" },
+            "spacing": { "x": 40, "y": 0 },
+            "order": { "type": "attackMove", "target": { "anchor": "tashan" } }
+          },
+          {
+            "type": "spawn",
+            "unitType": "light",
+            "count": 2,
+            "at": { "anchor": "eastHook" },
+            "spacing": { "x": 0, "y": 24 },
+            "order": { "type": "attackMove", "target": { "anchor": "baitaishan" } }
+          }
+        ]
+      },
+      {
+        "id": "assault",
+        "at": { "time": 120 },
+        "repeatEvery": 10,
+        "actions": [
+          { "type": "attackNearest" }
+        ]
+      }
+    ]
+  },
+
+  "victory": { "mode": "defend", "faction": "blue", "time": 300 }
+}

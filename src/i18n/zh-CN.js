@@ -111,6 +111,8 @@ export default {
   'editor.status.loaded': '已载入本地存档',
   'editor.status.noSave': '没有找到本地存档',
   'editor.status.exported': '已导出地图文件',
+  'editor.status.canvasFitted': '地图已补齐到画布尺寸（新增区域为平原）',
+  'editor.status.largerThanCanvas': '地图大于游戏画布，游戏内只能看到左上部分',
   'editor.importError': '导入失败：不是有效的地图 JSON',
   'hud.exitPlaytest': '返回编辑器',
   // 主页（落地页）

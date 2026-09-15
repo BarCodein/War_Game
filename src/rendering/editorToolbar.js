@@ -19,7 +19,9 @@ export function loadFromStorage() {
   }
 }
 
-const SIZE_PRESETS = { '1280x800': [1280, 800], '1280x720': [1280, 720], '1920x1080': [1920, 1080], '960x540': [960, 540] };
+// 尺寸预设：游戏画布固定 1280×800，比它小的地图会被编辑器补齐（见 editor/mapResize.js），
+// 比它大的地图在游戏里只能看到左上部分（状态栏会提示）。
+const SIZE_PRESETS = { '1280x800': [1280, 800], '1920x1080': [1920, 1080] };
 
 export function createEditorToolbar(scene, store, callbacks = {}) {
   const toolbar = document.querySelector('#editorToolbar');
@@ -41,10 +43,39 @@ export function createEditorToolbar(scene, store, callbacks = {}) {
     statusEl.classList.toggle('error', isError);
   }
 
+  // 新建对话框的尺寸下拉框要反映「地图目前尺寸」：
+  // 预设之外的尺寸（例如导入的 1600×900）临时补一个选项，
+  // 否则下拉框显示的尺寸与地图实际尺寸不一致，看起来像"可编辑尺寸不匹配"。
+  const presetOptions = [...sizeSelect.options].map(option => option.value);
+  function syncSizeSelect() {
+    const { width, height } = store.mapData.size;
+    const value = `${width}x${height}`;
+    for (const option of [...sizeSelect.options]) {
+      if (!presetOptions.includes(option.value)) option.remove(); // 清掉上一张自定义尺寸
+    }
+    if (!presetOptions.includes(value)) {
+      const option = document.createElement('option');
+      option.value = value;
+      option.textContent = `${width} × ${height}`;
+      sizeSelect.appendChild(option);
+    }
+    sizeSelect.value = value;
+  }
+
   function syncStatus() {
     const errors = store.errors();
-    if (errors.length > 0) setStatus(`⚠ ${t('editor.status.invalid')}：${errors.join('；')}`, true);
-    else setStatus(t('editor.status.valid'));
+    // 状态栏始终带上「地图当前尺寸」：这一栏是判断"可编辑范围与画布是否一致"最直接的地方
+    const { width, height } = store.mapData.size;
+    if (errors.length > 0) {
+      setStatus(`⚠ ${t('editor.status.invalid')}：${errors.join('；')}`, true);
+      return;
+    }
+    // 大于画布的地图在游戏里只能看到左上 1280×800，提示一下（小于画布的地图已被编辑器补齐）
+    if (width > scene.scale.width || height > scene.scale.height) {
+      setStatus(`⚠ ${t('editor.status.largerThanCanvas')}（画布 ${scene.scale.width}×${scene.scale.height}）`, true);
+      return;
+    }
+    setStatus(`${t('editor.status.valid')} · ${width}×${height}`);
   }
 
   function downloadMap(mapData) {
@@ -70,8 +101,9 @@ export function createEditorToolbar(scene, store, callbacks = {}) {
     window.playSfx?.('button');
     switch (action) {
       case 'new':
-        dialog.hidden = false;
         nameInput.value = store.mapData.name;
+        syncSizeSelect(); // 下拉框先对齐当前地图尺寸
+        dialog.hidden = false;
         break;
       case 'confirmNew': {
         const [width, height] = SIZE_PRESETS[sizeSelect.value];

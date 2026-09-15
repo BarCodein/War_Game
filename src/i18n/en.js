@@ -101,6 +101,8 @@ export default {
   'editor.status.loaded': 'Local save loaded',
   'editor.status.noSave': 'No local save found',
   'editor.status.exported': 'Map file exported',
+  'editor.status.canvasFitted': 'Map padded to canvas size (new area is plain)',
+  'editor.status.largerThanCanvas': 'Map is larger than the game canvas — only the top-left part shows in game',
   'editor.importError': 'Import failed: not a valid map JSON',
   'hud.exitPlaytest': 'Back to editor',
   // Home (landing page)

@@ -2,6 +2,8 @@ import Phaser from 'phaser';
 import { makeTerrain } from '../../simulation/map.js';
 import { createNewMap, createEditorStore } from '../../editor/editorStore.js';
 import { createEditorToolbar, loadFromStorage } from '../editorToolbar.js';
+import { fitMapToCanvas } from '../../editor/mapResize.js';
+import { fitZoom, mapPixelSize, needsTerrainRebuild } from '../editorView.js';
 import { values } from '../../config/index.js';
 
 // 地图编辑器（REQUIREMENTS.md §4.6）：绘制/擦除地形、放置/移动/删除城市、出生点与占领点、
@@ -47,19 +49,17 @@ export class EditorScene extends Phaser.Scene {
     document.body.classList.add('editor-mode');
     const initial = this.mapData ?? loadFromStorage() ?? createNewMap('新地图', 1280, 800);
     this.store = createEditorStore(initial);
+    // 可编辑区域 = 画布：地图比画布小时先补齐，否则画布上会留下点不动、
+    // 试玩时也不渲染的空白带（见 editor/mapResize.js）
+    this.ensureCanvasSize();
     this.terrain = makeTerrain(this.store.mapData);
     this.tool = 'paint-plain';
     this.dragging = null; // { kind: 'city' | 'spawn', id }
     this.lastPaint = null;
 
-    // 相机缩放适配地图尺寸（画布逻辑分辨率取自实际画布尺寸，避免硬编码）
-    const zoom = Math.min(
-      this.scale.width / this.store.mapData.size.width,
-      this.scale.height / this.store.mapData.size.height,
-    );
-    this.cameras.main.setZoom(zoom);
-
     this.terrainImage = null; // 地形烘焙纹理（drawTerrain 中生成）
+    this.fitCamera();         // 相机缩放适配当前地图尺寸
+
     this.objectGraphics = this.add.graphics().setDepth(5);
     this.drawTerrain();
     this.drawObjects();
@@ -71,7 +71,11 @@ export class EditorScene extends Phaser.Scene {
       },
       onPlay: () => this.testPlay(),
       onMapChange: () => {
+        // 新建 / 载入 / 导入都会换掉整张地图：先补齐到画布尺寸，再让地形访问层、
+        // 相机缩放、烘焙纹理都跟着当前尺寸走，否则可编辑范围与画布对不上
+        this.ensureCanvasSize();
         this.terrain = makeTerrain(this.store.mapData);
+        this.fitCamera();
         this.drawTerrain();
         this.drawObjects();
       },
@@ -84,6 +88,8 @@ export class EditorScene extends Phaser.Scene {
       this.dragging = null;
       this.lastPaint = null;
     });
+    // 窗口尺寸变化（FIT 缩放下画布逻辑尺寸一般不变，但保险起见重新适配一次）
+    this.scale.on('resize', () => this.fitCamera());
 
     if (import.meta.env.DEV) {
       window.__editor = { store: this.store, scene: this };
@@ -91,6 +97,26 @@ export class EditorScene extends Phaser.Scene {
         delete window.__editor;
       });
     }
+  }
+
+  // 把地图补齐到至少等于画布尺寸（只扩不裁，新增格为平原）。
+  // 游戏画布固定 1280×800，比它小的地图（例如预设里的 1280×720）会在画布上留下
+  // 既点不动、试玩时也不渲染的空白带，所以打开/新建/导入时统一补齐。
+  ensureCanvasSize() {
+    const { mapData, resized } = fitMapToCanvas(this.store.mapData, this.scale.width, this.scale.height);
+    if (!resized) return false;
+    this.store.loadMapData(mapData);
+    console.info(`[editor] 地图已补齐到画布尺寸 ${mapData.size.width}×${mapData.size.height}（新增区域为平原）`);
+    return true;
+  }
+
+  // 相机缩放适配当前地图尺寸：新建 / 载入 / 导入不同尺寸的地图后必须重新适配，
+  // 否则画布显示范围与地图尺寸不匹配（大地图右侧底部点不到，小地图四周留白）
+  fitCamera() {
+    const { width, height } = mapPixelSize(this.store.mapData);
+    const camera = this.cameras.main;
+    camera.setZoom(fitZoom(width, height, this.scale.width, this.scale.height));
+    camera.centerOn(width / 2, height / 2); // 尺寸小于画布时四周留白均分，而不是挤在左上角
   }
 
   handleDown(pointer) {
@@ -188,6 +214,19 @@ export class EditorScene extends Phaser.Scene {
   drawTerrain() {
     // 烘焙为纹理：画笔修改时重生成，平时以单个 Image 显示
     const terrain = this.terrain;
+    const width = terrain.cols * terrain.cellSize;
+    const height = terrain.rows * terrain.cellSize;
+
+    // 尺寸变了必须丢弃旧纹理：Graphics.generateTexture 对已存在的 key 是"画到旧画布上"，
+    // 不会改变画布尺寸——不重建的话，地图放大后新增区域永远画不出来（看起来像尺寸不匹配）
+    const texture = this.textures.exists('editor-terrain') ? this.textures.get('editor-terrain') : null;
+    const source = texture ? texture.getSourceImage() : null;
+    if (this.terrainImage && needsTerrainRebuild(source, { width, height })) {
+      this.terrainImage.destroy();
+      this.terrainImage = null;
+      this.textures.remove('editor-terrain');
+    }
+
     const graphics = this.make.graphics({ x: 0, y: 0, add: false });
     for (let cy = 0; cy < terrain.rows; cy += 1) {
       for (let cx = 0; cx < terrain.cols; cx += 1) {
@@ -196,7 +235,7 @@ export class EditorScene extends Phaser.Scene {
         graphics.fillRect(cx * terrain.cellSize, cy * terrain.cellSize, terrain.cellSize, terrain.cellSize);
       }
     }
-    graphics.generateTexture('editor-terrain', terrain.cols * terrain.cellSize, terrain.rows * terrain.cellSize);
+    graphics.generateTexture('editor-terrain', width, height);
     graphics.destroy();
     if (!this.terrainImage) {
       this.terrainImage = this.add.image(0, 0, 'editor-terrain').setOrigin(0).setDepth(0);

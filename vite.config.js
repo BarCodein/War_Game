@@ -1,4 +1,4 @@
-import { cpSync, createReadStream, existsSync, readdirSync } from 'node:fs';
+import { cpSync, createReadStream, existsSync, readdirSync, statSync } from 'node:fs';
 import { extname, resolve } from 'node:path';
 import { fileURLToPath, URL } from 'node:url';
 import { defineConfig } from 'vite';
@@ -48,7 +48,30 @@ function rootAssets() {
         const file = resolve(srcDir, `.${urlPath}`);
         // 路径穿越保护；文件不存在时交回后续中间件（例如 public/assets 下的地图）
         if (!file.startsWith(srcDir) || !existsSync(file)) return next();
+
+        const size = statSync(file).size;
         res.setHeader('Content-Type', MIME[extname(file).toLowerCase()] ?? 'application/octet-stream');
+        res.setHeader('Accept-Ranges', 'bytes');
+
+        // 支持 HTTP Range 请求。视频必须支持：浏览器的媒体栈会按 Range 去取元数据，
+        // 尤其是 moov 在文件尾部的非 faststart MP4——不支持 Range 时它只能把整个
+        // 文件下完才可能出画面（实测 tashan.mp4 就是这种：115MB，moov 在尾部）。
+        const match = /^bytes=(\d*)-(\d*)$/.exec(req.headers.range ?? '');
+        if (match && (match[1] !== '' || match[2] !== '')) {
+          const suffix = match[1] === '';
+          let start = suffix ? size - Number(match[2]) : Number(match[1]);
+          let end = (suffix || match[2] === '') ? size - 1 : Number(match[2]);
+          start = Math.max(0, Math.min(start, size - 1));
+          end = Math.max(start, Math.min(end, size - 1));
+          res.statusCode = 206;
+          res.setHeader('Content-Range', `bytes ${start}-${end}/${size}`);
+          res.setHeader('Content-Length', String(end - start + 1));
+          if (req.method === 'HEAD') return res.end();
+          return createReadStream(file, { start, end }).pipe(res);
+        }
+
+        res.setHeader('Content-Length', String(size));
+        if (req.method === 'HEAD') return res.end();
         createReadStream(file).pipe(res);
       });
     },

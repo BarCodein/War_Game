@@ -47,18 +47,49 @@ test.describe('地图编辑器', () => {
     expect(await page.evaluate(() => window.__editor.store.mapData.cities.length)).toBe(2);
   });
 
-  test('新建地图：名称与尺寸', async ({ page }) => {
+  test('新建地图：名称与尺寸（尺寸与游戏画布一致）', async ({ page }) => {
     await openEditor(page);
     await page.click('[data-action="new"]');
     await expect(page.locator('#newMapDialog')).toBeVisible();
     await page.fill('#mapName', '测试峡谷');
-    await page.selectOption('#mapSize', '960x540');
+    await page.selectOption('#mapSize', '1280x800');
     await page.click('[data-action="confirmNew"]');
     const info = await page.evaluate(() => ({
       name: window.__editor.store.mapData.name,
       size: window.__editor.store.mapData.size,
+      terrain: `${window.__editor.store.mapData.terrain.width}x${window.__editor.store.mapData.terrain.height}`,
     }));
-    expect(info).toEqual({ name: '测试峡谷', size: { width: 960, height: 540 } });
+    expect(info).toEqual({ name: '测试峡谷', size: { width: 1280, height: 800 }, terrain: '128x80' });
+    await expect(page.locator('#editorStatus')).toContainText('1280×800');
+  });
+
+  test('载入小于画布的存档：自动补齐到画布尺寸（回归：画布边缘不可编辑）', async ({ page }) => {
+    await openEditor(page);
+    // 1280×720 的地图：画布是 1280×800，底部 80px 原本点不动、试玩也不渲染
+    await page.evaluate(() => {
+      const cells = new Array(128 * 72).fill(0);
+      cells[0] = 2; // 左上角水域，用于确认补齐时原有地形没被动过
+      const tiny = {
+        version: 1, name: '小图', size: { width: 1280, height: 720 }, gridCellSize: 10,
+        terrain: { width: 128, height: 72, cells },
+        cities: [{ id: 'c1', x: 100, y: 600, faction: 'blue' }, { id: 'c2', x: 1100, y: 100, faction: 'red' }],
+        spawns: [{ id: 's1', faction: 'blue', x: 100, y: 600 }, { id: 's2', faction: 'red', x: 1100, y: 100 }],
+        capturePoints: [], objectives: [],
+      };
+      localStorage.setItem('war-of-dots.custom-map', JSON.stringify({ savedAt: Date.now(), mapData: tiny }));
+    });
+    await page.click('[data-action="load"]');
+    const info = await page.evaluate(() => ({
+      size: window.__editor.store.mapData.size,
+      terrain: `${window.__editor.store.mapData.terrain.width}x${window.__editor.store.mapData.terrain.height}`,
+      cells: window.__editor.store.mapData.terrain.cells.length,
+      keepOld: window.__editor.store.mapData.terrain.cells[0],
+      newCell: window.__editor.store.mapData.terrain.cells[72 * 128], // 新增的第一行第一格
+    }));
+    expect(info).toEqual({
+      size: { width: 1280, height: 800 }, terrain: '128x80', cells: 128 * 80, keepOld: 2, newCell: 0,
+    });
+    await expect(page.locator('#editorStatus')).toContainText('地图有效');
   });
 
   test('保存到 localStorage 并载入恢复', async ({ page }) => {

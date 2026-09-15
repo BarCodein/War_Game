@@ -58,6 +58,7 @@ war_game/
 │  ├─ rendering/               # 渲染层（只读世界状态）
 │  │  ├─ hud.js                #    DOM HUD 界面
 │  │  ├─ editorToolbar.js      #    DOM 编辑器工具栏
+│  │  ├─ editorView.js         #    编辑器视图纯函数（缩放适配/纹理重建判定）
 │  │  ├─ terrainRenderer.js    #    静态地形烘焙纹理
 │  │  ├─ fogRenderer.js        #    迷雾罩层
 │  │  ├─ unitRenderer.js       #    单位/城市/血条/裂纹/虚影
@@ -68,7 +69,8 @@ war_game/
 │  │     ├─ EditorScene.js     #      编辑器主场景
 │  │     └─ BenchScene.js      #      性能基准场景
 │  └─ editor/
-│     └─ editorStore.js        # 编辑器纯数据状态
+│     ├─ editorStore.js        # 编辑器纯数据状态
+│     └─ mapResize.js          # 地图补齐到画布尺寸（纯数据）
 └─ tests/
    ├─ unit/                    # 18 个 Vitest 测试文件（规则确定性）
    └─ e2e/                     # 7 个 Playwright 测试文件（浏览器流程）
@@ -167,8 +169,8 @@ war_game/
 关卡（Level）标准格式 v1——**"一局游戏"的完整规格**（`architecture.md` §7.1）：
 - 字段：`id` / `name` / `subtitle` / `type`（`offensive` 进攻 | `defensive` 防守 | `annihilative` 歼灭，白名单见 `LEVEL_TYPES`）/ `difficulty` / `map`（引用地图路径）/ `anchors`（命名锚点表）/ `forces`（编队式兵力）/ `ai`（事件→动作脚本）/ `victory`（胜负条件，见 `buildMission`）。
 - `validateLevel()` 结构 + 语义校验（阵营、单位类型、坐标引用与锚点定义、触发条件与动作类型、`repeatEvery > 0`）；`parseLevel()` 失败即抛错并聚合原因。
-- **坐标引用 PointRef**：`{ x, y }` / `{ spawn }` / `{ spawnId }` / `{ city }` / `{ cityId }` / `{ anchor }`，统一由 `resolvePoint(ref, world, anchors)` 解析（顺序：绝对坐标 → 命名锚点 → spawnId → spawn → cityId → city；解析不到返回 `null`）。`resolveAnchor` / `resolveTarget` 为同一函数的历史别名。
-- `parseAnchors()` 校验命名锚点表（禁止锚点引用锚点）；`validateLevelReferences(level, mapData)` 在地图载入后交叉校验 `spawnId` / `cityId` / `anchor` 是否真实存在（`BootScene` 调用，仅告警）。
+- **坐标引用 PointRef**：`{ x, y }` / `{ spawn }` / `{ spawnId }` / `{ city }` / `{ cityId }` / `{ capturePointId }` / `{ anchor }`，统一由 `resolvePoint(ref, world, anchors)` 解析（顺序：绝对坐标 → 命名锚点 → spawnId → spawn → cityId → capturePointId → city；解析不到返回 `null`）。`resolveAnchor` / `resolveTarget` 为同一函数的历史别名。
+- `parseAnchors()` 校验命名锚点表（禁止锚点引用锚点）；`validateLevelReferences(level, mapData)` 在地图载入后交叉校验 `spawnId` / `cityId` / `capturePointId` / `anchor` 是否真实存在（`BootScene` 调用，仅告警）。
 - `deployForces(world, forces, anchors)` 按数据部署：落点 = 锚点 + `offset` + `spacing × i`；编队的 `objective` 会写到单位上（`unit.objective`），供歼灭胜负条件识别「指定单位」。
 - `buildMission(level, world)` 把 `victory` 解析成运行时任务规则（`world.mess`）：`{ mode, faction, time, points }`；`captureAll` / 未声明 → `null`。
 - 常量：`LEVEL_VERSION`、`LEVEL_TYPES`、`VICTORY_MODES`、`OBJECTIVE_ANNIHILATE`、`FORCE_OBJECTIVES`、`AI_ACTION_TYPES`、`FACTIONS`、`LEVELS_INDEX_PATH`、`levelPath(id)`。
@@ -185,6 +187,7 @@ war_game/
 - `updateMovement`：沿路径行进；交战中冻结；溃逃单位不受指挥、向最近己方城市全速撤退、无路可退/被困超时投降。
 - `findPath`：A*（4 方向，水域不可通行，森林代价更高；终点不可通行就近取格），含模块级 `pathCache` 确定性共享。
 - `planRoute`：下达命令时对每个途经点逐段 A*，返回去掉共线点的真实路径（`move`/`attackMove` 共用）。
+- `clampToMap`：把目标点夹进地图矩形——`terrain.passableAt()` 会把格子索引夹到边缘格，因此**地图外的坐标看起来也可通行**，不夹取的话单位会走出地图、进入画布上未渲染的区域。
 - `segmentBlocked`、`simplify`、`separateOverlaps`（软排斥）。
 
 ### `src/simulation/systems/combat.js`
@@ -218,7 +221,7 @@ war_game/
 ### `src/simulation/systems/victory.js`
 胜负判定（写 `winner`/`endTime`，推 `victory` 事件）：
 - **基础规则（始终生效）**：一方失去全部城市即告负，另一方获胜。
-- **关卡任务规则（可选，读 `world.mess`）**：`defendVictory`（坚守到时限 / 据点易主即败）、`attackVictory`（时限内拿下全部据点）、`annihilationVictory`（**消灭全部指定单位**——`unit.objective === 'annihilate'` 的敌军；未标记的敌军不计入；声明了 `time` 则超时判负）。`world.mess` 为 `null` 时直接跳过——未声明任务的关卡只走基础规则。
+- **关卡任务规则（可选，读 `world.mess`）**：`defendVictory`（据点全丢立即判负；到时限结算——仍有据点不在手里则防守失败，全部守住即胜）、`attackVictory`（时限内拿下全部据点）、`annihilationVictory`（**消灭全部指定单位**——`unit.objective === 'annihilate'` 的敌军；未标记的敌军不计入；声明了 `time` 则超时判负）。`world.mess` 为 `null` 时直接跳过——未声明任务的关卡只走基础规则。
 - `world.mess` 由 `GameScene` 用 `level.js` 的 `buildMission(level, world)` 写入（来源是关卡 JSON 的 `victory`）。
 
 ---
@@ -284,6 +287,7 @@ DOM 编辑器工具栏：
 - 保存/载入（localStorage）、导出（下载 JSON）、导入（文件 API）、新建对话框、试玩入口、校验状态栏。
 - `createEditorToolbar(scene, store, callbacks)` 采集 `#editorToolbar` 等 DOM，按 `[data-i18n]` 填充文案。
 - 操作只改 `editorStore`，画布刷新由 EditorScene 回调完成。
+- 「新建」对话框的尺寸下拉框会先对齐**地图当前尺寸**（预设之外的尺寸临时补一个选项），避免下拉框显示的尺寸与地图实际尺寸不一致。
 
 ### `src/rendering/terrainRenderer.js`
 静态地形：
@@ -327,7 +331,11 @@ DOM 编辑器工具栏：
 ### `src/rendering/scenes/EditorScene.js`
 编辑器主场景：
 - `init()`：读 `?fromPlaytest=1` → 从 `sessionStorage` 恢复试玩前的编辑地图，否则 null。
-- `create()`：载入/新建地图、建 store、画地形（烘焙纹理）/对象、建工具栏、绑指针事件。
+- `create()`：载入/新建地图、建 store、`ensureCanvasSize()`、`fitCamera()`、画地形（烘焙纹理）/对象、建工具栏、绑指针事件。
+- `ensureCanvasSize()`：把小于画布的地图补齐到画布尺寸（见 `editor/mapResize.js`）——可编辑区域 = 画布，否则画布边缘那条区域点不动、试玩时也不渲染。
+- `fitCamera()`：按**当前**地图尺寸重算缩放并居中——新建/载入/导入不同尺寸的地图后必须重新适配，否则可编辑范围与画布对不上。缩放与"是否需要重建烘焙纹理"的规则抽在 `rendering/editorView.js`（纯函数，有单测）。
+- `onMapChange` 回调（新建/载入/导入）：重建 `terrain` 访问层 → `fitCamera()` → `drawTerrain()` → `drawObjects()`，四者都跟着当前尺寸走。
+- `drawTerrain()`：尺寸变化时先销毁并移除旧纹理再重新烘焙——Phaser 的 `Graphics.generateTexture` 对已存在的 key 只会画到旧画布上，不会改变画布尺寸（`phaser/src/gameobjects/graphics/Graphics.js:1510`）。
 - 工具：绘制/擦除地形、放置/移动/删除城市与出生点、`hitObject`。
 - `testPlay()`：校验可玩 → 把当前地图写 `sessionStorage` 并跳转 `/game.html?fromEditor=1`。
 
@@ -344,6 +352,11 @@ DOM 编辑器工具栏：
 编辑器纯数据状态（**无 DOM/Phaser 依赖，可单测**）：
 - `createNewMap(name, width, height)`：新建地图（默认双阵营城市/出生点，保证可玩）。
 - `createEditorStore(initialMap)`：`mapData` getter、`errors()`（复用 `validateMap`）、绘制/擦除地形（含 `paintSegment` 半格采样）、增删移/城市与出生点、`rename`、`loadMapData`。
+
+### `src/editor/mapResize.js`
+地图补齐到画布尺寸（**纯数据，可单测**）：
+- `fitMapToCanvas(mapData, minWidth, minHeight)`：只扩不裁，把 `size` 与 `terrain` 一起补齐到至少画布尺寸，新增格为平原，原有地形逐格保留（宽度变化时按行重排），城市/出生点/占领点坐标不动。
+- 为什么需要：游戏画布固定 1280×800，比它小的地图（编辑器预设里原本有 1280×720）会在画布上留下既点不动、试玩时也不渲染的空白带；命令目标虽然已被 `clampToMap` 夹住，但地图本身补齐才是根治。
 
 ---
 
