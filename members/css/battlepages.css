@@ -251,6 +251,7 @@ h1, h2, h3, h4 {
     align-items: center;
     justify-content: center;
     transition: opacity .7s ease;
+    cursor: pointer;
 }
 .cutscene-overlay.fade-out {
     opacity: 0;
@@ -299,6 +300,7 @@ h1, h2, h3, h4 {
     line-height: 1.9;
     margin: 0 auto;
 }
+/* 点击任意位置跳过 — 右上角提示 */
 .cutscene-skip {
     /* 固定在视频右上角 */
     position: absolute;
@@ -306,22 +308,14 @@ h1, h2, h3, h4 {
     right: 28px;
     z-index: 3;
     padding: 10px 26px;
-    background: rgba(20, 12, 6, 0.55);
-    backdrop-filter: blur(4px);
-    -webkit-backdrop-filter: blur(4px);
-    border: 1px solid rgba(245, 240, 232, 0.4);
-    color: var(--cream);
+    background: rgba(20, 12, 6, 0.35);
+    border: 1px dashed rgba(245, 240, 232, 0.35);
+    color: rgba(245, 240, 232, 0.75);
     font-size: 0.8rem;
     letter-spacing: 2px;
-    cursor: pointer;
-    transition: all .2s ease;
+    pointer-events: none;
     border-radius: 2px;
     font-family: inherit;
-}
-.cutscene-skip:hover {
-    border-color: var(--brass);
-    color: var(--brass);
-    background: rgba(20, 12, 6, 0.75);
 }
 /* 开场文字标题的渐隐动画（视频播 5 秒后触发） */
 .cutscene-content {
@@ -562,6 +556,7 @@ h1, h2, h3, h4 {
     justify-content: center;
     overflow: hidden;
     transition: opacity .8s ease;
+    cursor: pointer;
 }
 .bbg-intro-overlay.fade-out {
     opacity: 0;
@@ -646,27 +641,21 @@ h1, h2, h3, h4 {
     0%, 100% { transform: scale(0.6); opacity: 0.4; }
     50%      { transform: scale(1);   opacity: 1; }
 }
-/* 跳过按钮 — 右上角 */
+/* 点击任意位置跳过 — 右上角提示 */
 .bbg-intro-skip {
     position: absolute;
     top: 24px;
     right: 24px;
     padding: 10px 22px;
-    background: rgba(0, 0, 0, 0.55);
-    border: 1px solid rgba(255, 255, 255, 0.4);
-    color: var(--cream);
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px dashed rgba(255, 255, 255, 0.35);
+    color: rgba(245, 240, 232, 0.75);
     font-family: "SimHei", sans-serif;
     font-size: 0.85rem;
     letter-spacing: 2px;
-    cursor: pointer;
+    pointer-events: none;
     border-radius: 2px;
-    transition: all .2s ease;
     z-index: 5;
-}
-.bbg-intro-skip:hover {
-    border-color: var(--brass);
-    color: var(--brass);
-    background: rgba(0, 0, 0, 0.8);
 }
 /* 入场标题 — 屏中央底部 */
 .bbg-intro-title {

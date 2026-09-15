@@ -26,8 +26,6 @@
       <h1>沙盘战争</h1>
       <p>选择一场战役，重返那段决定民族命运的烽火岁月。<br>运筹帷幄，决胜千里。</p>
     </div>
-    <!-- 跳过按钮：固定在视频右上角 -->
-    <button class="cutscene-skip" id="cutsceneSkip">跳过 ▶</button>
   </div>
 
   <!-- ==================== 导航条 ==================== -->
@@ -106,7 +104,6 @@
 
     (function () {
       var overlay = document.getElementById('cutsceneOverlay');
-      var skipBtn = document.getElementById('cutsceneSkip');
       var video = document.getElementById('cutsceneVid');
       var content = document.getElementById('cutsceneContent');
 
@@ -129,7 +126,8 @@
         }, 700);
       }
 
-      if (skipBtn) skipBtn.addEventListener('click', endCutscene);
+      // 点击 overlay 任意位置 → 跳过过场动画
+      if (overlay) overlay.addEventListener('click', endCutscene);
 
       if (video) {
         // 视频加载失败/不存在 → 直接结束过场，不卡死
@@ -416,10 +414,9 @@
 
   <script src="/audio.js"></script>
   <script>
-    // UI 音效：导航返回 / 跳过入场 / 缩放控件 / 关卡点 / 进入战役
+    // UI 音效：导航返回 / 缩放控件 / 关卡点 / 进入战役
     window.bindSfx({
       '.battle-nav a': 'click',
-      '#cutsceneSkip': 'button',
       '.map-controls button': 'click',
       '.battle-pin': 'click',
       '#previewEnter': 'button'
