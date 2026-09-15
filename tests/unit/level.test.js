@@ -42,7 +42,13 @@ describe('level：教学关已转为标准格式', () => {
     const levels = loadLevelIndex().levels;
     expect(levels.length).toBeGreaterThan(0);
     for (const entry of levels) {
-      const level = parseLevel(loadLevel(entry.id));
+      // 索引里登记了关卡但文件不存在/格式非法时给出明确提示（而不是一句 ENOENT）
+      let level;
+      try {
+        level = parseLevel(loadLevel(entry.id));
+      } catch (err) {
+        throw new Error(`关卡索引里的 "${entry.id}" 载入失败：请检查 /assets/levels/${entry.id}.json 是否存在且格式合法\n${err.message}`);
+      }
       expect(level.id).toBe(entry.id);
       expect(entry.name).toBeTruthy();
       expect(entry.subtitle).toBeTruthy();
@@ -100,6 +106,40 @@ describe('level：引擎按数据部署兵力', () => {
     expect(resolveTarget({ cityId: 'c9' }, world)).toBeNull();
     expect(resolveTarget({ city: 'red' }, world)).toEqual({ x: 1080, y: 160 });
     expect(resolveTarget({ city: 'neutral' }, world)).toBeNull();
+  });
+
+  it('坐标引用可指向占领点：{ capturePointId }（含命名锚点与悬空引用检查）', () => {
+    const mapData = makePlainMap({
+      capturePoints: [{ id: 'p1', x: 640, y: 300, faction: 'neutral' }],
+    });
+    const world = new World(mapData);
+    expect(resolvePoint({ capturePointId: 'p1' }, world)).toEqual({ x: 640, y: 300 });
+    expect(resolvePoint({ capturePointId: 'p9' }, world)).toBeNull();
+
+    // 命名锚点可以指向占领点，再被 forces[].at 引用
+    const raw = {
+      version: 1,
+      id: 'crest',
+      type: 'defensive',
+      map: '/assets/maps/x.json',
+      anchors: { crest: { capturePointId: 'p1' } },
+      forces: [{ faction: 'blue', at: { anchor: 'crest' }, units: [{ type: 'light', count: 1 }] }],
+      victory: { mode: 'defend', faction: 'blue', time: 60 },
+    };
+    const level = parseLevel(raw);
+    expect(resolvePoint(level.forces[0].at, world, level.anchors)).toEqual({ x: 640, y: 300 });
+    expect(validateLevelReferences(level, mapData)).toEqual([]);
+    const spawned = deployForces(world, level.forces, level.anchors);
+    expect(spawned).toHaveLength(1);
+    expect({ x: spawned[0].x, y: spawned[0].y }).toEqual({ x: 640, y: 300 });
+
+    // 占领点 id 写错：结构上合法，交叉校验会指出
+    const dangling = parseLevel({
+      ...raw,
+      anchors: { crest: { capturePointId: 'p9' } },
+    });
+    expect(validateLevelReferences(dangling, mapData))
+      .toContainEqual(expect.stringContaining('地图中不存在占领点 "p9"'));
   });
 
   it('多出生点：{ spawnId } 可指定任意一个，{ spawn } 只取第一个', () => {
@@ -227,6 +267,57 @@ describe('level：宿北战役（歼灭关卡 · 山地隘口）', () => {
   });
 });
 
+describe('level：塔山阻击战（防守关卡 · 坚守时限）', () => {
+  const level = parseLevel(loadLevel('tashan_battle'));
+  const mapData = loadMap('tashan');
+
+  it('引用有效：红军从北侧进攻，蓝军在南侧布防，落点均可通行', () => {
+    expect(level.id).toBe('tashan_battle');
+    expect(level.type).toBe('defensive');
+    expect(level.map).toBe('/assets/maps/tashan.json');
+    expect(validateLevelReferences(level, mapData)).toEqual([]);
+
+    const world = new World(mapData);
+    const spawned = deployForces(world, level.forces, level.anchors);
+    const declared = level.forces.reduce((sum, force) => sum
+      + force.units.reduce((n, unit) => n + unit.count, 0), 0);
+    expect(spawned).toHaveLength(declared);
+    expect(spawned.every(u => world.terrain.passableAt(u.x, u.y))).toBe(true);
+
+    // 这一关的战术前提：敌军自北向南进攻，蓝军守住南侧阵地
+    const red = spawned.filter(u => u.faction === 'red');
+    const blue = spawned.filter(u => u.faction === 'blue');
+    expect(red.length).toBeGreaterThan(0);
+    expect(blue.length).toBeGreaterThan(0);
+    expect(Math.max(...red.map(u => u.y))).toBeLessThan(Math.min(...blue.map(u => u.y)));
+  });
+
+  it('胜利条件是防守：坚守 time 秒即胜', () => {
+    const world = new World(mapData);
+    deployForces(world, level.forces, level.anchors);
+    world.mess = buildMission(level, world);
+    expect(world.mess).toMatchObject({ mode: 'defend', faction: 'blue', time: 300 });
+  });
+
+  // 跑满 300 秒时限（防守关的判定点），300 秒 × 1/60 步长在 CI 上约 5～7 秒，
+  // 超出 Vitest 默认的 5 秒，因此显式给足超时预算
+  it('这关能跑完：红军按脚本（多波增援）进攻并在时限内分出胜负', () => {
+    const world = new World(mapData);
+    deployForces(world, level.forces, level.anchors);
+    world.mess = buildMission(level, world);
+    const redAi = new ScriptedAI(world, { faction: 'red', script: level.ai, anchors: level.anchors });
+
+    runSimulation(world, [redAi], 305);
+
+    // 不断言谁赢（兵力配比由关卡策划调整），只保证关卡能跑完、不软锁
+    expect(['blue', 'red']).toContain(world.winner);
+    // 增援确实进场了：红方累计生成数应明显多于初始部署
+    const declaredRed = level.forces.filter(f => f.faction === 'red')
+      .reduce((sum, force) => sum + force.units.reduce((n, unit) => n + unit.count, 0), 0);
+    expect(world.units.filter(u => u.faction === 'red').length).toBeGreaterThan(declaredRed);
+  }, 20000);
+});
+
 describe('level：胜负条件（victory → buildMission）', () => {
   const base = () => ({
     version: 1,
@@ -328,10 +419,13 @@ describe('level：非法关卡被拦截', () => {
     badAnchor.forces[0].at = { spawn: 'green' };
     expect(validateLevel(badAnchor).some(e => e.includes('invalid anchor'))).toBe(true);
 
-    // 引用了未定义的命名锚点 → 结构合法但语义非法
+    // 引用了未定义的命名锚点 → 结构合法但语义非法；报错要直接点出名字（大小写写错是常见坑）
     const unknownNamedAnchor = base();
-    unknownNamedAnchor.forces[0].at = { anchor: 'nope' };
-    expect(validateLevel(unknownNamedAnchor).some(e => e.includes('invalid anchor'))).toBe(true);
+    unknownNamedAnchor.anchors = { redBase: { x: 1, y: 2 } };
+    unknownNamedAnchor.forces[0].at = { anchor: 'redbase' }; // 名字区分大小写
+    const anchorError = validateLevel(unknownNamedAnchor).find(e => e.includes('未定义的命名锚点'));
+    expect(anchorError).toContain('"redbase"');
+    expect(anchorError).toContain('已定义的锚点：redBase');
 
     // 命名锚点之间禁止链式引用
     const chained = base();

@@ -18,6 +18,15 @@
       "difficulty": "教学",
       "order": 2,
       "description": "教学战役。学习基础指挥：选择单位、移动路径、攻击前进。歼灭敌军"
+    },
+    {
+      "id": "tashan_battle",
+      "name": "塔山阻击战",
+      "subtitle": "TASHAN BATTLE",
+      "type": "defensive",
+      "difficulty": "教学",
+      "order": 3,
+      "description": "坚守塔山阵地，击退敌军的海陆协同进攻"
     }
   ]
 }

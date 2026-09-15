@@ -35,22 +35,24 @@ function endGame(world, winner) {
   world.events.push({ type: 'victory', winner, at: world.time });
 }
 
-// 防守胜利判定：mess.faction 指防守方
-// - 坚守到时限（mess.time，秒；未声明则不限时）→ 防守方胜
-// - 任一据点（mess.points）不再属于防守方 → 该据点当前归属方胜（丢点即败）
+// 防守胜利判定：mess.faction 指防守方，mess.points 是要守的据点（缺省 = 地图上全部占领点）
+// - 时限内：**据点全丢立即判负**；只要还有任何一个据点在手里就继续守
+// - 到达时限：还有据点不在防守方手里 → 防守失败（由占住该据点的阵营获胜）；全部守住 → 防守方胜
+// - 没有可守的据点（points 为空）→ 据点规则不参与判定，只看时限
 function defendVictory(world, mess) {
   if (world.winner || !mess) return;
   const fac = mess.faction;
+  const points = mess.points ?? [];
+
   if (Number.isFinite(mess.time) && world.time > mess.time) {
-    endGame(world, fac);
+    const lost = points.find(point => point.faction !== fac);
+    endGame(world, lost ? lost.faction : fac);
     return;
   }
-  for (const point of mess.points ?? []) {
-    if (point.faction !== fac) {
-      endGame(world, point.faction);
-      return;
-    }
-  }
+
+  if (points.length === 0) return; // 没有据点可守 → 不做据点判定
+  if (points.some(point => point.faction === fac)) return; // 还有据点在手里 → 继续守
+  endGame(world, fac === 'blue' ? 'red' : 'blue'); // 全丢立败
 }
 
 // 进攻胜利判定：mess.faction 指进攻方
