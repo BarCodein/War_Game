@@ -45,8 +45,7 @@
       <h1 id="bbgIntroTitle"></h1>
       <p id="bbgIntroSubtitle"></p>
     </div>
-    <!-- 跳过按钮：固定在右上角 -->
-    <button class="bbg-intro-skip" id="bbgIntroSkip">跳过入场 &rarr;</button>
+    <!-- 点击任意位置跳过入场 -->
   </div>
 
   <div class="bbg-shell">
@@ -173,7 +172,6 @@
       var overlay = document.getElementById('bbgIntroOverlay');
       var video = document.getElementById('bbgIntroVid');
       var content = document.getElementById('bbgIntroContent');
-      var skipBtn = document.getElementById('bbgIntroSkip');
       if (!overlay) return;
 
       var finished = false;
@@ -195,7 +193,8 @@
         }, 700);
       }
 
-      if (skipBtn) skipBtn.addEventListener('click', endIntro);
+      // 点击 overlay 任意位置 → 跳过入场
+      overlay.addEventListener('click', endIntro);
 
       if (video) {
         video.addEventListener('error', endIntro);
@@ -222,10 +221,9 @@
 
   <script src="/audio.js"></script>
   <script>
-    // UI 音效：导航返回 / 跳过入场 / 开始指挥
+    // UI 音效：导航返回 / 开始指挥
     window.bindSfx({
       '.battle-nav a': 'click',
-      '#bbgIntroSkip': 'button',
       '#startBattleBtn': 'button'
     });
   </script>

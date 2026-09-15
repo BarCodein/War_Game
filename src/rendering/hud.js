@@ -248,7 +248,23 @@ export function createHud(scene, world, controller, selection, orders) {
     if (!world.winner || status.victoryShown) return;
     status.victoryShown = true;
     const win = world.winner === 'blue';
-    if (win && !scene.fromEditor && scene.campaignId) {
+
+    // 正式对局：直接跳转独立结算页 result.html（不弹内嵌结算窗口）。
+    // result.html 按胜负提供 重新开始/下一战场 + 返回主界面 按钮。
+    if (!scene.fromEditor) {
+      if (win && scene.campaignId) {
+        saveProgress(scene.campaignId, { completed: true, wins: 1 });
+      }
+      const params = new URLSearchParams();
+      params.set('result', win ? 'victory' : 'defeat');
+      if (scene.campaignId) params.set('level', scene.campaignId);
+      params.set('t', formatTime(world.endTime ?? world.time));
+      window.location.href = `/result.html?${params.toString()}`;
+      return;
+    }
+
+    // 编辑器试玩：保留内嵌结算（返回目标永远是编辑器，不走战役结算流程）。
+    if (win && scene.campaignId) {
       saveProgress(scene.campaignId, { completed: true, wins: 1 });
       const levels = scene.levelIndex ?? [];
       const currentIndex = levels.findIndex(level => level.id === scene.campaignId);
