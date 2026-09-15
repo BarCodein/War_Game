@@ -131,6 +131,10 @@ world.issueCommands(unitIds, command)           // 唯一入口，附带校验
 ```
 
 - `cells`：0 平原 / 1 森林 / 2 水域 / 3 桥梁 / 4 山地 / 5 高山 / 6 道路（`gdd.md` §5），行优先。
+- **地图尺寸应与游戏画布一致（1280×800）**：画布由 `game.html` 固定、相机不平移，因此
+  - 小于画布的地图（例如 1280×720）会在画布上留下一条**既不渲染、又属于游戏视野**的空白带；编辑器打开/新建/导入时会自动把地图**补齐**到画布尺寸（`editor/mapResize.js`：只扩不裁，新增格为平原，原有地形与对象坐标不动）；
+  - 大于画布的地图在游戏里只能看到左上 1280×800（编辑器状态栏会提示）；
+  - 模拟层另有兜底：`movement.js` 的 `clampToMap()` 把命令目标夹进地图矩形，所以即使地图与画布不一致，单位也不会走进地图外那片区域。
 - `cities[].id` / `capturePoints[].id` 必填且**全局唯一**（重复会被校验拦截）；`spawns[].id` 可选——缺省时 `parseMap()` 自动补 `s1`、`s2`…（跳过已占用的名字），因此旧地图无需改动即可被关卡用 `{ spawnId }` 精确引用（编辑器新增的出生点也遵循同一命名）。
 - `capturePoints`（可选）：占领点数组，`faction` 为 `neutral` | `blue` | `red`；被占领后**仅提供视野**，不提供补给/士气/生产/恢复，也不计入胜负（`gdd.md` §7.1）。缺省为空数组。
 - 读取流程：**结构校验（schema）→ 可玩性校验（双方至少 1 出生点与 1 城市、尺寸/格子一致）→ 版本迁移链（version < 当前版本时逐级升级）**，失败即拒绝载入并报错。
@@ -202,9 +206,10 @@ world.issueCommands(unitIds, command)           // 唯一入口，附带校验
   | `{ spawnId: 's1' }` | 指定 id 的出生点（**多出生点地图用这个**，顺序无关） |
   | `{ city: 'blue' \| 'red' }` | 该阵营**当前**拥有的第一座城市（调用时解析，跟随城市易主） |
   | `{ cityId: 'c2' }` | 指定 id 的城市（城市 id 必填且唯一） |
+  | `{ capturePointId: 'p1' }` | 指定 id 的占领点（编辑器里放的「中立 / 蓝 / 红占领点」）。占领点位置固定、只有归属会易主，因此适合当作阵地/集结点的具名坐标 |
   | `{ anchor: 'eastGate' }` | 引用本关 `anchors` 表里的命名锚点 |
 
-  解析顺序为 绝对坐标 → 命名锚点 → `spawnId` → `spawn` → `cityId` → `city`；解析不到时返回 `null`，调用方跳过该点位而不是崩溃。`anchors` 用来给常用坐标起名（可复用同一坐标、改一处即全局生效），**不允许锚点引用锚点**（无链式引用）。
+  解析顺序为 绝对坐标 → 命名锚点 → `spawnId` → `spawn` → `cityId` → `capturePointId` → `city`；解析不到时返回 `null`，调用方跳过该点位而不是崩溃。`anchors` 用来给常用坐标起名（可复用同一坐标、改一处即全局生效），**不允许锚点引用锚点**（无链式引用）。
 - **兵力部署（编队式）**：`at` 为任意 PointRef；第 *i* 个单位的落点 = 锚点 + `offset` + `spacing × i`（两者缺省为 0）。可读性好且移动出生点后无需逐单位改坐标。
 - **编队目标 `objective`（可选）**：给整条编队打标记，部署时写到单位上（`unit.objective`）。当前只有 `"annihilate"`：该编队部署出的单位属于**歼灭胜负条件的「指定单位」**（见下表 `annihilative`）。写法：`{ "faction": "red", "objective": "annihilate", "at": { "spawnId": "s16" }, "units": [ … ] }`。AI 在 `ai.triggers` 里临时生成的增援不受此标记影响。
 - **AI 脚本（事件 → 动作）**：`at` 支持 `{ time }`（经过秒数）与 `{ enemyCrossX }`（任一敌军越过该 x）；条件**首次满足时立即执行一次** `actions`，若给了 `repeatEvery` 则此后每 *n* 秒再执行一次。动作类型：`spawn` / `attackNearest` / `attackMove` / `hold`；所有目标同样是 PointRef（如 `{ city: 'blue' }` 在**调用时**解析，跟随城市易主）。新增行为只需扩展动作类型与 `level.js` 的校验，引擎其余部分不变。
@@ -215,7 +220,7 @@ world.issueCommands(unitIds, command)           // 唯一入口，附带校验
   | `victory.mode`（或 `type`） | 判定 |
   | --- | --- |
   | `captureAll`（缺省） | 不额外判定，只用基础规则 |
-  | `defend` | `faction` 为防守方：坚守到 `time` 即胜；任一 `points` 据点易主 → 该据点当前归属方胜 |
+  | `defend` | `faction` 为防守方：**据点全丢立即判负**（只要还有据点在手里就继续守）；到 `time` 结算——仍有据点不在手里则防守失败，全部守住则防守方胜。`points` 缺省 = 地图上全部占领点 |
   | `attack` | `faction` 为进攻方：`time` 内拿下全部 `points` 即胜；超时判负 |
   | `annihilative` | `faction` 为我方：**消灭全部「指定单位」**即胜——指定单位 = 编队上标了 `"objective": "annihilate"` 的那些单位（未标记的敌军死光不算达成）；声明了 `time` 则超时判负 |
 

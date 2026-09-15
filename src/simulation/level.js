@@ -18,12 +18,13 @@ import { values } from '../config/index.js';
 // Force      { faction, at: PointRef, units: [{ type, count, offset?, spacing? }] }
 //            第 i 个单位的落点 = 锚点坐标 + offset + spacing × i（offset / spacing 省略即 0）
 //
-// PointRef（坐标引用）——at / target / fallback / anchors 的值都用它，六选一：
+// PointRef（坐标引用）——at / target / fallback / anchors 的值都用它，七选一：
 //   { x, y }               绝对坐标
 //   { spawn: 'blue' }      该阵营在地图中的【第一个】出生点（兼容写法；多出生点请用 spawnId）
 //   { spawnId: 's3' }      指定 id 的出生点（编辑器产出的出生点自带 id；手写地图的出生点会在解析时自动补 id）
 //   { city: 'blue' }       该阵营当前拥有的第一座城市（调用时解析，跟随城市易主）
 //   { cityId: 'c2' }       指定 id 的城市（城市 id 在地图中必填）
+//   { capturePointId: 'p1' } 指定 id 的占领点（编辑器里放的「中立/蓝/红占领点」；位置固定，归属易主不影响坐标）
 //   { anchor: 'east' }     引用本关 anchors 表中的命名锚点
 //
 // AiScript   { faction, fallback?: PointRef, triggers: Trigger[] }
@@ -60,6 +61,7 @@ function isPointRef(ref) {
   if (isNonEmptyString(ref.spawnId)) return true;
   if (FACTIONS.includes(ref.city)) return true;
   if (isNonEmptyString(ref.cityId)) return true;
+  if (isNonEmptyString(ref.capturePointId)) return true;
   if (isNonEmptyString(ref.anchor)) return true;
   return false;
 }
@@ -98,9 +100,21 @@ export function validateLevel(data) {
 
   const { anchors, errors: anchorErrors } = parseAnchors(data);
   errors.push(...anchorErrors);
-  // 引用了命名锚点时，该名字必须已定义
+  // 引用了命名锚点时，该名字必须已定义。
+  // 锚点名区分大小写（JSON 键是精确匹配），写错时直接点出「哪个名字没定义 + 本关已定义的名字有哪些」，
+  // 否则只会得到一句泛泛的 invalid anchor，很难定位（例如 redBase 写成 redbase、roadblock 写成 redblock）。
   const refOk = (ref) => isPointRef(ref) && (!isNonEmptyString(ref.anchor) || Boolean(anchors[ref.anchor]));
-  const refHint = '{x,y} | {spawn} | {spawnId} | {city} | {cityId} | {anchor}';
+  const refHint = '{x,y} | {spawn} | {spawnId} | {city} | {cityId} | {capturePointId} | {anchor}';
+  const definedNames = Object.keys(anchors);
+  const anchorListHint = definedNames.length
+    ? `（本关已定义的锚点：${definedNames.join(' / ')}）`
+    : '（本关没有定义任何 anchors）';
+  const refError = (ref, where) => {
+    if (isNonEmptyString(ref?.anchor) && !anchors[ref.anchor]) {
+      return `${where} 引用了未定义的命名锚点 "${ref.anchor}"${anchorListHint}`;
+    }
+    return `${where} invalid anchor (need ${refHint})`;
+  };
 
   // 兵力部署
   if (!Array.isArray(data.forces) || data.forces.length === 0) {
@@ -108,7 +122,7 @@ export function validateLevel(data) {
   } else {
     data.forces.forEach((force, fi) => {
       if (!force || !FACTIONS.includes(force.faction)) errors.push(`forces[${fi}] invalid faction`);
-      if (!refOk(force.at)) errors.push(`forces[${fi}] invalid anchor (need ${refHint})`);
+      if (!refOk(force.at)) errors.push(refError(force.at, `forces[${fi}].at`));
       // 编队目标（可选）：标记为歼灭目标的编队，其单位会带上 unit.objective
       if (force?.objective !== undefined && !FORCE_OBJECTIVES.includes(force.objective)) {
         errors.push(`forces[${fi}] invalid objective: ${force.objective} (expected ${FORCE_OBJECTIVES.join(' | ')})`);
@@ -130,7 +144,7 @@ export function validateLevel(data) {
   if (data.ai !== undefined) {
     const ai = data.ai;
     if (!ai || !FACTIONS.includes(ai.faction)) errors.push('ai invalid faction');
-    if (ai?.fallback !== undefined && !refOk(ai.fallback)) errors.push(`ai invalid fallback target (need ${refHint})`);
+    if (ai?.fallback !== undefined && !refOk(ai.fallback)) errors.push(refError(ai.fallback, 'ai.fallback'));
     if (!Array.isArray(ai?.triggers) || ai.triggers.length === 0) {
       errors.push('ai.triggers must be a non-empty array');
     } else {
@@ -155,17 +169,17 @@ export function validateLevel(data) {
           if (action.type === 'spawn') {
             if (!values.units[action.unitType]) errors.push(`${where} unknown unitType`);
             if (!Number.isInteger(action.count) || action.count < 1) errors.push(`${where} count must be a positive integer`);
-            if (!refOk(action.at)) errors.push(`${where} invalid anchor (need ${refHint})`);
+            if (!refOk(action.at)) errors.push(refError(action.at, `${where}.at`));
             if (action.spacing !== undefined && !isPoint(action.spacing)) errors.push(`${where} invalid spacing`);
             if (action.order !== undefined && !['attackMove', 'hold'].includes(action.order?.type)) {
               errors.push(`${where} order.type must be attackMove | hold`);
             }
             if (action.order?.type === 'attackMove' && !refOk(action.order.target)) {
-              errors.push(`${where} order.target invalid (need ${refHint})`);
+              errors.push(refError(action.order.target, `${where}.order.target`));
             }
           }
           if (action.type === 'attackMove' && !refOk(action.target)) {
-            errors.push(`${where} invalid target (need ${refHint})`);
+            errors.push(refError(action.target, `${where}.target`));
           }
         });
       });
@@ -257,7 +271,7 @@ export function buildMission(level, world) {
 // ---------- 坐标解析 ----------
 
 // 坐标引用 → 世界坐标。anchors 为本关的命名锚点表（可选）。
-// 解析顺序：绝对坐标 → 命名锚点 → 出生点 id → 阵营首个出生点 → 城市 id → 阵营首座城市。
+// 解析顺序：绝对坐标 → 命名锚点 → 出生点 id → 阵营首个出生点 → 城市 id → 占领点 id → 阵营首座城市。
 // 解析不到（引用不存在）时返回 null，调用方跳过而不是崩溃。
 export function resolvePoint(ref, world, anchors = {}) {
   if (!ref || typeof ref !== 'object') return null;
@@ -281,6 +295,11 @@ export function resolvePoint(ref, world, anchors = {}) {
     const city = world.cities.find(c => c.id === ref.cityId);
     return city ? { x: city.x, y: city.y } : null;
   }
+  if (isNonEmptyString(ref.capturePointId)) {
+    // 占领点位置固定（只有归属会易主），因此可以安全地当作出生点/目标点使用
+    const point = (world.capturePoints ?? []).find(p => p.id === ref.capturePointId);
+    return point ? { x: point.x, y: point.y } : null;
+  }
   if (FACTIONS.includes(ref.city)) {
     const city = world.cities.find(c => c.faction === ref.city);
     return city ? { x: city.x, y: city.y } : null;
@@ -292,7 +311,7 @@ export function resolvePoint(ref, world, anchors = {}) {
 export const resolveAnchor = resolvePoint;
 export const resolveTarget = resolvePoint;
 
-// 交叉校验：把关卡里引用的 spawnId / cityId / anchor 与真实地图对照，找出拼错或已删除的目标。
+// 交叉校验：把关卡里引用的 spawnId / cityId / capturePointId / anchor 与真实地图对照，找出拼错或已删除的目标。
 // 需要地图数据，因此单独成一个函数（BootScene 拿到地图后调用，仅告警不致命）。
 export function validateLevelReferences(level, mapData) {
   const errors = [];
@@ -306,6 +325,7 @@ export function validateLevelReferences(level, mapData) {
     if (isNonEmptyString(ref.anchor) && !anchors[ref.anchor]) errors.push(`${where}: 未定义的命名锚点 "${ref.anchor}"`);
     if (isNonEmptyString(ref.spawnId) && !spawnIds.has(ref.spawnId)) errors.push(`${where}: 地图中不存在出生点 "${ref.spawnId}"`);
     if (isNonEmptyString(ref.cityId) && !cityIds.has(ref.cityId)) errors.push(`${where}: 地图中不存在城市 "${ref.cityId}"`);
+    if (isNonEmptyString(ref.capturePointId) && !pointIds.has(ref.capturePointId)) errors.push(`${where}: 地图中不存在占领点 "${ref.capturePointId}"`);
   };
 
   for (const [name, ref] of Object.entries(anchors)) check(ref, `anchors["${name}"]`);
