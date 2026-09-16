@@ -44,26 +44,37 @@
 
 - 敌我单位**足够接近（圆点视觉接触）**后**自动交战**，无需玩家下令——交战距离为「双方半径和 + 容忍值（`config.combat.contactTolerance`）」，比按攻击距离更严格；超出接触距离不战斗。
 - **目标选择**：优先攻击当前目标直至其死亡，否则选取接触范围内最近的敌人；无目标时恢复行军/驻守。
-- **伤害公式**：`最终伤害 = 基础伤害 × 防御者地形修正 × 防御者身份`（地形修正见 §5）。
+- **伤害公式**：`最终伤害 = 基础伤害 × 攻方士气倍率 × 防御者地形修正 × 血量比例（combat.hp_dps_ratio）× 防御姿态（combat.defend）× 溃逃/失序易伤（combat.disorderedDamageTaken）`（地形修正见 §5）。
+  防御姿态：防御者原地不动（无路线）时 ×0.75；**溃逃(rout) / 失序(unordered) 的部队阵型散乱，承受伤害 ×1.5**，且这两类单位不还手（见下）——所以打崩敌军后追击的收益很高。
 - **攻击间隔**：每单位独立冷却计时，首次接触立即攻击。
 - **碰撞规则**（暂定）：单位之间为软排斥（无硬碰撞），互不阻挡移动；单位可以进入水域，但进入水域范围后按水域速度倍率减速。
 - **攻击前进/脱离战斗**：move 与 attackMove 均沿**预定路线**行军（下令时整条规划最短路径，进入水域时按水域倍率减速）；途中接触敌军即停下交战，敌军离开或清空后沿路线继续。红方脚本只使用 attackMove/hold，行为一致。
+- **急行军**（`forced: true`）：按住 **E + 右键**（= 急行军 attackMove，点在敌人身上也是它，靠近后照常交战）或 **E + 左键拖出轨迹**（= 急行军 move）下达；E + Shift 沿用追加/排队。
+  - **速度**：除水域之外的地形 `×1.5`（与地形、士气速度倍率**叠乘**，例：道路 40×1.25×1.5 = 75 px/s）；水面上不给加成、仍按水域倍率走。
+  - **代价**：行军士气用 `-10/s` **取代**普通行军的 `-5/s`（仍乘地形士气系数与进攻因子）；每秒掉 **1.5 血**（走 `World.damageUnit`，**计入结算伤亡**；掉光即力竭阵亡，`cause = forcedMarch`）。
+  - **后果**：单独一支急行军（无城市/友军加成）约 9 s 士气见底 → 未受攻击时进入**失序**原地停下（§6），所以急行军需要城市/友军/补给支撑，不能无脑常开。
+  - **接敌**：与普通行军一致——停下交战，敌军清空后**继续急行军**（状态不丢）。
+  - **表现**：急行军轨迹用**暗红**绘制（普通行军为深灰/墨绿），HUD 操作提示带一行说明。
 
 ## 5. 地形（§8-2、§8-5）
 
-| 地形 | 通行 | 移动倍率 | 防御修正 | 视野规则 |
-|---|---|---|---|---|
-| 平原 | 可 | 1.0 | 1.0 | 正常 |
-| 森林 | 可 | 0.6 | 0.85 | 位于森林中的敌军，仅当己方单位距其 ≤60 时可见 |
-| 水域 | 可 | 0.4 | — | 正常（无实体可藏） |
-| 桥梁 | 可 | 1.0 | 0.9 | 正常 |
-| 山地 | 可 | 0.65 | 0.75 | 正常 |
-| 高山 | 不可 | — | — | 正常 |
-| 道路 | 可 | 1.25 | 1.0 | 正常 |
+| 地形 | 通行 | 移动倍率 | 防御修正 | 攻击倍率 | 视野规则 |
+|---|---|---|---|---|---|
+| 平原 | 可 | 1.0 | 1.0 | 1.0 | 正常 |
+| 森林 | 可 | 0.6 | 0.85 | 1.0 | 位于森林中的敌军，仅当己方单位距其 ≤60 时可见 |
+| 水域 | 可 | 0.4 | — | **0.5** | 正常（无实体可藏） |
+| 桥梁 | 可 | 1.0 | 0.9 | 1.0 | 正常 |
+| 山地 | 可 | 0.65 | 0.75 | 1.0 | 正常 |
+| 高山 | 不可 | — | — | — | 正常 |
+| 道路 | 可 | 1.25 | 1.0 | 1.0 | 正常 |
 
 - 逻辑网格：格子 10 px，编码 `0 平原 / 1 森林 / 2 水域 / 3 桥梁 / 4 山地 / 5 高山 / 6 道路`，用于通行性、寻路成本与视野阻挡。
 - **移动与寻路（暂定）**：右键指令默认直线行进，路径与不可通行地形相交时在逻辑网格上 A* 绕行并缓存路径；批量单位共享路径缓存以控制开销。
 - 道路上的单位移动速度提高至 1.25 倍，移动士气消耗降低至普通地形的 50%。
+- **水域的代价**（站在水里就生效，与是否移动无关）：
+  1. **攻击力 ×0.5**——水里站不稳，输出打对折（按**攻方所在地形**算，与防御修正无关）；
+  2. **每秒损失 1 点血**——环境损耗，与补给是否充足无关；走 `World.damageUnit` 计入伤亡，掉光即**溺水阵亡**（`cause = water`）。
+  桥梁是独立地形（`bridge` ≠ `water`），过桥不受这两条影响。
 
 ## 6. 士气系统（§8-1）
 
@@ -77,7 +88,8 @@
 | 附近己方城市（≤120 px） | +5 /s |
 | 补给充足 | +1 /s |
 | 补给不足 | −2 /s |
-| 交战中（正在被攻击） | −10 /s（持续围攻需 ~80 s 才溃逃，保证攻城可行） |
+| 交战中（正被敌方瞄准，`underFire`） | −8 /s（持续围攻需 ~80 s 才溃逃，保证攻城可行） |
+| 参战中但**没被瞄准**（`state = combat` 且未被打，如两个单位打同一个敌人时只有前排被还击） | −3 /s（比面对面的少，但同样会累积到溃逃） |
 | 移动中 | -5 /s |
 | 进攻因子 | 1.3 （进攻消耗更多的士气） |
 | 附近友军阵亡（≤100 px，阵亡瞬间） | −10 |
@@ -210,6 +222,11 @@
 - **右栏**：任务进度面板、战场通讯（事件日志）、快捷键说明。
 - **操作**：左键单击选择（框选后可直接单击另一个单位切换选择）、拖动框选、Shift 追加选择、**直接从单位按住左键拖出轨迹即可移动（无需先框选）**、右键移动/攻击移动/攻击指定单位；空格暂停，Esc 取消选择。
 - **反馈文本**全部走 i18n 模块，中文优先。
+- **结算界面**（独立页 `result.html`，胜利/失败都跳转）：胜负大字、原因、用时，以及**双方伤亡**——
+  `?result=victory|defeat&level=<id>&t=<用时>&casualtiesBlue=<我方>&casualtiesRed=<敌军>`。
+  伤亡 = 该阵营**损失的血量**（`stats.hpPerCasualty` = 1，即 1 点血 = 1 点伤亡），
+  由 `World.damageUnit()` 在扣血处累计（战斗伤害 + 补给损耗；治疗不计、超杀不计），
+  结算页据此显示两张对阵卡片与战损比；缺参数时该板块不显示（兼容旧链接）。
 
 布局草图（详细视觉以原型 `styles.css` 为参考，MVP 在阶段 3 迁移）：
 
@@ -238,9 +255,10 @@
 | units.light：hp / damage / attackInterval / range / speed / radius / vision | 60 / 0.8 / 0.2 s / 40 / 40 / 14 / 140 |
 | units.heavy：hp / damage / attackInterval / range / speed / radius / vision | 80 / 1 / 0.2 s / 40 / 40 / 14 / 160 |
 | combat.defend | 0.75（防守方承受伤害系数） |
+| combat.disorderedDamageTaken | 1.5（溃逃 rout / 失序 unordered 的部队承受伤害倍率） |
 | combat.hp_dps_ratio | 0.8（血量低于该比例后攻击力随血量线性下降） |
 | morale.initial / min / max | 80 / 0 / 100 |
-| morale.perSecond：friendlyNearby / cityNearby / supplied / unsupplied / inCombat / moving / attack | +2 / +5 / +1 / −2 / −8 / −5（/s），进攻倍率 ×1.3 |
+| morale.perSecond：friendlyNearby / cityNearby / supplied / unsupplied / inCombat / inCombatSupport / moving / attack | +2 / +5 / +1 / −2 / −8 / −3 / −5（/s），进攻倍率 ×1.3 |
 | morale.ranges：friendly / city / allyDeath | 60 / 120 / 100（px） |
 | morale.onAllyDeath | −10 |
 | morale.thresholds：weakenedBelow / shakenBelow / routAt | 60 / 30 / 0 |
@@ -249,6 +267,7 @@
 | morale.rout：recoverPerSecond / stopAt / stuckSeconds | +8 /s / 20 / 5 s |
 | morale.unordered：recoverPerSecond / stopAt / stuckSeconds | +10 /s / 20 / 5 s |
 | movement.routSpeedMultiplier | 0.6 |
+| movement.forcedMarch：speedMultiplier / moralePerSecond / hpPerSecond | ×1.5（水域除外，与地形倍率叠乘）/ −10 /s（取代普通行军的 −5 /s）/ 1.5 /s（计入伤亡，可力竭阵亡） |
 | cities.capture：radius / perUnitPerSecond / capPerSecond / decayPerSecond | 60 / 5% / 15% / 3% |
 | cities.production：enabled / interval / unitType / pauseWhenSupplyFull | false（**生产已关闭**）/ 12 s / light / true |
 | cities.recovery：radius / hpPerSecond / moralePerSecond | 100 / +3 /s / +5 /s |
@@ -257,6 +276,7 @@
 | capturePoints.capture：radius / perUnitPerSecond / capPerSecond / decayPerSecond | 60 / 5% / 15% / 3% |
 | supply：capacityPerCity / attritionHpPerSecond / attritionMoralePerSecond | 5 / −1 /s / −2 /s |
 | fog：forestSpotDistance / showLastKnownGhost | 60 / true |
+| stats.hpPerCasualty | 1（多少点血量损失记作 1 点伤亡；结算页双方伤亡即按此换算） |
 | controlLine：cellSize / refreshTicks / temporalSmoothing / fieldBlurPasses / pathSmoothing / neutralEpsilon | 20 px / 6 tick（10 Hz）/ 0.35 / 0（**必须为 0**，否则单位所在格会 5% 概率被判给敌方）/ 2（Chaikin 切角轮数）/ 0 |
 | controlLine：partitionMap / partitionFillValue | true（把无影响力格子按最近阵营归属，控制线铺满全图）/ 0.01（填充弱值，远小于真实下限 2.5） |
 | controlLine.guaranteeUnitCell | true（**单位所在格的硬保证**：每个存活单位脚下那一格强制归自己阵营，最小幅度翻转；否则攻城时城市核心圈 60px/强度 120 会压过单位身体的 100，多个敌人贴身也会叠过你） |
@@ -269,6 +289,8 @@
 | terrain.passable：平原 / 森林 / 水域 / 桥梁 / 山地 / 高山 / 道路 / 城镇 | 可 / 可 / 可 / 可 / 可 / 不可 / 可 / 可 |
 | terrain.moveMultiplier：平原 / 森林 / 水域 / 桥梁 / 山地 / 高山 / 道路 / 城镇 | 1.0 / 0.6 / 0.4 / 1.0 / 0.65 / 0 / 1.25 / 1.0 |
 | terrain.defenseModifier：平原 / 森林 / 桥梁 / 山地 / 道路 / 城镇 | 1.0 / 0.85 / 0.9 / 0.75 / 1.0 / 0.6 |
+| terrain.attackMultiplier：平原 / 森林 / 水域 / 桥梁 / 山地 / 道路 | 1.0 / 1.0 / **0.5** / 1.0 / 1.0 / 1.0（按攻方所在地形） |
+| terrain.waterHpPerSecond | 1（身处水域每秒损失的血量，计入伤亡；可溺水阵亡） |
 | terrain.moraleMoveMultiplier：平原 / 森林 / 水域 / 桥梁 / 山地 / 高山 / 道路 / 城镇 | 1.0 / 1.0 / 1.0 / 1.0 / 1.0 / 1.0 / 0.5 / 1.0 |
 
 ### 交互与 UI 数值

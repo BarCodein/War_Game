@@ -3,6 +3,19 @@ import { values } from '../config/index.js';
 import { saveProgress } from '../entries/battlechoose-data.js';
 import { levelHref, rememberLevelId } from '../level-link.js';
 
+// 结算页 URL 参数（纯函数，便于单测）：
+//   result=victory|defeat · level=<关卡 id> · t=<用时> · casualtiesBlue/casualtiesRed=<双方伤亡>
+// 伤亡 = 己方/敌方**损失的血量**（1 点血 = 1 点伤亡），由 World.damageUnit 累计。
+export function resultQuery({ win, campaignId, timeText, casualties }) {
+  const params = new URLSearchParams();
+  params.set('result', win ? 'victory' : 'defeat');
+  if (campaignId) params.set('level', campaignId);
+  params.set('t', timeText);
+  params.set('casualtiesBlue', String(Math.round(casualties?.blue ?? 0)));
+  params.set('casualtiesRed', String(Math.round(casualties?.red ?? 0)));
+  return params.toString();
+}
+
 // HUD（DOM 实现，gdd.md §11 布局）：编队列表、城市状态、任务进度、事件日志、
 // 顶栏控制与胜利结算。文案全部走 i18n；按 performance.hudRefreshMs 节流刷新。
 export function createHud(scene, world, controller, selection, orders) {
@@ -257,11 +270,13 @@ export function createHud(scene, world, controller, selection, orders) {
       if (win && scene.campaignId) {
         saveProgress(scene.campaignId, { completed: true, wins: 1 });
       }
-      const params = new URLSearchParams();
-      params.set('result', win ? 'victory' : 'defeat');
-      if (scene.campaignId) params.set('level', scene.campaignId);
-      params.set('t', formatTime(world.endTime ?? world.time));
-      window.location.href = `/result.html?${params.toString()}`;
+      const params = resultQuery({
+        win,
+        campaignId: scene.campaignId,
+        timeText: formatTime(world.endTime ?? world.time),
+        casualties: world.casualties,
+      });
+      window.location.href = `/result.html?${params}`;
       return;
     }
 

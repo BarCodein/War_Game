@@ -34,10 +34,14 @@ export function updateCombat(world, dt) {
     if (unit.cooldown > 0) continue;
     const stats = values.units[unit.type];
     const effects = effectsFor(unit.morale);
+    // 攻方所在地形也影响输出：水域里攻击力打对折（values.terrain.attackMultiplier）
     const damage = (stats.damage * effects.damageMultiplier * 
-      world.terrain.defenseModifierAt(enemy.x, enemy.y) * calcDamageRatio(unit));
-    const recieved_damage = damage* mode;
-    enemy.hp -= recieved_damage;
+      world.terrain.defenseModifierAt(enemy.x, enemy.y) * calcDamageRatio(unit) *
+      world.terrain.attackMultiplierAt(unit.x, unit.y));
+    // 溃逃/失序的部队阵型散乱：承受伤害 ×1.5（gdd.md §4）
+    const disordered = enemy.state === 'rout' || enemy.state === 'unordered';
+    const recieved_damage = damage * mode * (disordered ? values.combat.disorderedDamageTaken : 1);
+    world.damageUnit(enemy, recieved_damage); // 扣血 + 记伤亡（gdd.md §11）
     unit.cooldown = stats.attackInterval;
     if (enemy.hp <= 0) world.killUnit(enemy, 'combat');
   }

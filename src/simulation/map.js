@@ -124,6 +124,13 @@ export function makeTerrain(mapData) {
     defenseModifierAt(x, y) {
       return values.terrain.defenseModifier[nameByCode[this.terrainAt(x, y)]] ?? 1;
     },
+    // 攻方所在地形的攻击倍率（水域 0.5：水里站不稳）
+    attackMultiplierAt(x, y) {
+      return values.terrain.attackMultiplier[nameByCode[this.terrainAt(x, y)]] ?? 1;
+    },
+    isWaterAt(x, y) {
+      return this.terrainAt(x, y) === values.terrain.codes.water;
+    },
     moraleMoveMultiplierAt(x, y) {
       return values.terrain.moraleMoveMultiplier[nameByCode[this.terrainAt(x, y)]] ?? 1;
     },

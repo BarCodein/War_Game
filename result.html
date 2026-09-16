@@ -52,6 +52,56 @@
       min-height: 18px;
     }
 
+    /* 伤亡统计（URL 参数带入）：两张对阵卡片 + 一行战损比 */
+    .casualty-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-top: 6px;
+    }
+    .casualty-card {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      padding: 14px 18px;
+      background: var(--paper-warm);
+      border: 1px solid var(--wood-mid);
+      border-left-width: 5px;
+      box-shadow: var(--shadow-sm);
+    }
+    .casualty-card.own { border-left-color: var(--military-green); }
+    .casualty-card.enemy { border-left-color: var(--dark-red); }
+    .casualty-name {
+      font-size: 0.76rem;
+      letter-spacing: 2px;
+      color: var(--text-muted);
+    }
+    .casualty-value {
+      font-size: 1.9rem;
+      line-height: 1.1;
+      color: var(--dark-red-deep);
+      font-variant-numeric: tabular-nums;
+    }
+    .casualty-card.own .casualty-value { color: var(--military-green-deep); }
+    .casualty-ratio {
+      margin-top: 12px;
+      text-align: right;
+      color: var(--text-mid);
+      font-size: 0.82rem;
+      letter-spacing: 2px;
+      min-height: 18px;
+    }
+    .casualty-note {
+      margin-top: 8px;
+      color: var(--text-muted);
+      font-size: 0.74rem;
+      letter-spacing: 1px;
+      line-height: 1.6;
+    }
+    @media (max-width: 480px) {
+      .casualty-grid { grid-template-columns: 1fr; }
+    }
+
     /* 按钮组 */
     .bbg-start {
       display: flex;
@@ -97,6 +147,22 @@
       <p class="result-meta" id="resultTime"></p>
     </section>
 
+    <!-- ==================== 双方伤亡（URL 参数带入，缺参数时整块隐藏） ==================== -->
+    <section class="bbg-section" id="casualtyPanel" hidden>
+      <h2 id="casualtyLabel">双方伤亡</h2>
+      <div class="casualty-grid">
+        <div class="casualty-card own">
+          <span class="casualty-name">我方 · 蓝军</span>
+          <strong class="casualty-value" id="casualtyOwn">0</strong>
+        </div>
+        <div class="casualty-card enemy">
+          <span class="casualty-name">敌军 · 红军</span>
+          <strong class="casualty-value" id="casualtyEnemy">0</strong>
+        </div>
+      </div>
+      <p class="casualty-ratio" id="casualtyRatio"></p>
+    </section>
+
     <!-- ==================== 按钮（同 bbg-start） ==================== -->
     <div class="bbg-start">
       <a class="battle-btn" id="resultPrimary" href="./battlechoose.html">重新开始</a>
@@ -110,6 +176,8 @@
        结算数据字典：新增结算类型在这里加一条。
        原因支持多行：字符串里用 \n 换行即可。
        URL 参数：?result=victory|defeat&level=<id>&reason=<可选>&t=<用时>
+                 &casualtiesBlue=<我方伤亡>&casualtiesRed=<敌军伤亡>
+       （伤亡 = 损失的血量，1 点血 = 1 点伤亡；缺这两个参数时伤亡整块不显示）
        ========================================================= */
     var RESULT_DATA = {
       victory: {
@@ -150,6 +218,31 @@
 
       document.getElementById('resultReason').textContent = reason || data.reason;
       if (timeText) document.getElementById('resultTime').textContent = '用时 ' + timeText;
+
+      /* =========================================================
+         双方伤亡：URL 参数 casualtiesBlue / casualtiesRed
+         （1 点损失的血量 = 1 点伤亡，由模拟层 World.damageUnit 累计）。
+         老链接 / 直接打开没有这两个参数时，整块不显示。
+         ========================================================= */
+      var hasCasualties = params.has('casualtiesBlue') || params.has('casualtiesRed');
+      if (hasCasualties) {
+        var ownLoss = Math.max(0, Math.round(Number(params.get('casualtiesBlue')) || 0));
+        var enemyLoss = Math.max(0, Math.round(Number(params.get('casualtiesRed')) || 0));
+        document.getElementById('casualtyPanel').hidden = false;
+        document.getElementById('casualtyLabel').classList.toggle('lose', isDefeat);
+        document.getElementById('casualtyOwn').textContent = String(ownLoss);
+        document.getElementById('casualtyEnemy').textContent = String(enemyLoss);
+        var ratioEl = document.getElementById('casualtyRatio');
+        if (ownLoss > 0 && enemyLoss > 0) {
+          ratioEl.textContent = '战损比（我方 : 敌军） 1 : ' + (enemyLoss / ownLoss).toFixed(1);
+        } else if (enemyLoss > 0) {
+          ratioEl.textContent = '我方零伤亡';
+        } else if (ownLoss > 0) {
+          ratioEl.textContent = '敌军零伤亡';
+        } else {
+          ratioEl.textContent = '双方均无伤亡';
+        }
+      }
 
       var primary = document.getElementById('resultPrimary');
       var subtitleEl = document.getElementById('resultSubtitle');

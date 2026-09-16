@@ -1,13 +1,16 @@
 // 统一命令接口：人类输入、脚本敌军（ai.js）与未来 AI 共用（REQUIREMENTS.md §4.5）。
 // 命令经 world.issueCommands 下发并附带校验；格式见 architecture.md §5。
+//
+// `forced: true` = **急行军**（gdd.md §4）：除了水域之外的地形提速 1.5×，
+// 代价是行军士气 -12/s 且每秒掉 0.5 血。move / attackMove / appendRoute / enqueueRoute 都支持。
 export const commandTypes = ['move', 'attackMove', 'attack', 'hold', 'appendRoute', 'enqueueRoute', 'lock'];
 
-export function moveCommand(path) {
-  return { type: 'move', path };
+export function moveCommand(path, { forced = false } = {}) {
+  return { type: 'move', path, forced };
 }
 
-export function attackMoveCommand(target) {
-  return { type: 'attackMove', target };
+export function attackMoveCommand(target, { forced = false } = {}) {
+  return { type: 'attackMove', target, forced };
 }
 
 export function attackCommand(targetId) {
@@ -22,17 +25,20 @@ export function holdCommand() {
   return { type: 'hold' };
 }
 
-export function appendRouteCommand(path) {
-  return { type: 'appendRoute', path };
+export function appendRouteCommand(path, { forced = false } = {}) {
+  return { type: 'appendRoute', path, forced };
 }
 
-export function enqueueRouteCommand(target) {
-  return { type: 'enqueueRoute', target };
+export function enqueueRouteCommand(target, { forced = false } = {}) {
+  return { type: 'enqueueRoute', target, forced };
 }
 
 export function validateCommand(command) {
   if (!command || typeof command !== 'object') throw new Error('[commands] command must be an object');
   if (!commandTypes.includes(command.type)) throw new Error(`[commands] unknown command type: ${command.type}`);
+  if (command.forced !== undefined && typeof command.forced !== 'boolean') {
+    throw new Error('[commands] forced must be a boolean');
+  }
   if (command.type === 'move') {
     if (!Array.isArray(command.path) || command.path.length === 0 || command.path.some(p => !isPoint(p))) {
       throw new Error('[commands] move requires a non-empty path of { x, y } points');

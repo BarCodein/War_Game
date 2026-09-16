@@ -40,6 +40,10 @@ export class World {
     this.controlLineTick = 0;
     this.events = [];   // 本 tick 产生的事件（morale 消费 unitDied 后于 tick 末清空）
     this.history = [];  // 事件日志（HUD 战场通讯用）
+    // 伤亡统计（gdd.md §11）：按阵营累计**实际损失的血量**，1 点血 = 1 点伤亡。
+    // 战斗扣血与补给损耗都走 damageUnit()，所以这里是唯一的记账入口；
+    // 治疗（城市恢复）不算伤亡，只有"损失"才算。
+    this.casualties = { blue: 0, red: 0 };
     this.winner = null;
     this.endTime = null;
     // 关卡任务规则（可选）：由 GameScene 用 level.js 的 buildMission() 写入。
@@ -70,6 +74,19 @@ export class World {
       if (unit.state === 'dead' || unit.state === 'rout' || unit.state === 'unordered' || !ids.has(unit.id)) continue;
       applyCommand(this, unit, command);
     }
+  }
+
+  // 扣血 + 记伤亡（唯一入口）：返回本次实际损失的血量。
+  // 「1 点损失的血量 = 1 点伤亡」（values.stats.hpPerCasualty），
+  // 超杀不算：只剩 5 血时挨 100 伤害，只记 5 点伤亡（没有"损失"更多血）。
+  // 治疗不走这里，所以城市恢复不会抵消已有伤亡。
+  damageUnit(unit, amount) {
+    if (!(amount > 0) || unit.state === 'dead') return 0;
+    const lost = Math.min(amount, Math.max(0, unit.hp));
+    unit.hp -= amount;
+    const bucket = this.casualties?.[unit.faction];
+    if (bucket !== undefined) this.casualties[unit.faction] = bucket + lost / values.stats.hpPerCasualty;
+    return lost;
   }
 
   killUnit(unit, cause) {
@@ -114,6 +131,14 @@ function applyCommand(world, unit, command) {
   unit.command = command;
   unit.targetId = null;
   unit.lockedTargetId = null; // 任何新指令都清除锁定追击状态
+  // 急行军标志：move / attackMove / appendRoute / enqueueRoute 可带 forced；
+  // 其余命令（hold / attack / lock）一律按普通行军。
+  if (command.type === 'move' || command.type === 'attackMove'
+    || command.type === 'appendRoute' || command.type === 'enqueueRoute') {
+    unit.forcedMarch = command.forced === true;
+  } else {
+    unit.forcedMarch = false;
+  }
   if (command.type === 'hold') {
     unit.route = [];
     unit.routeIndex = 0;
@@ -195,7 +220,7 @@ function activateNextQueuedRoute(world, unit) {
     unit.routeIndex = 0;
     unit.pathDirty = true;
     unit.state = 'moving';
-    unit.command = { type: 'move', path: route };
+    unit.command = { type: 'move', path: route, forced: unit.forcedMarch === true };
     return;
   }
   if (unit.routeIndex >= unit.route.length) {

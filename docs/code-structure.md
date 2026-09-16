@@ -143,7 +143,8 @@ war_game/
 - 构造：`parseMap` 解析地图、建立单位数组、双阵营迷雾网格、空间分区。
 - `spawnUnit` / `spawnInitial` / `killUnit` / `nearestOwnCity`。
 - `issueCommands(unitIds, command)`：**统一命令入口**，人类/脚本/AI 共用；溃逃与阵亡单位不受指挥。
-- `tick(dt)`：固定系统顺序执行 `movement → combat → morale → supply → capture → fog → victory`，保证确定性；tick 未把事件推入 `history`。
+- `damageUnit(unit, amount)`：**扣血 + 记伤亡的唯一入口**（`gdd.md §11`）——返回本次实际损失的血量，并按 `values.stats.hpPerCasualty`（1 点血 = 1 点伤亡）累加到 `world.casualties[faction]`。战斗扣血（`combat.js`）与补给损耗（`supply.js`）都走它；**治疗直接改 hp、不走它**，所以恢复不会抵消伤亡；只剩 5 血时挨 100 伤害只记 5 点（超杀不算）。结算时由 hud 拼成 URL 参数交给 `result.html`。
+- `tick(dt)`：固定系统顺序执行 `movement → combat → morale → supply → capture → fog → controlLine → victory`，保证确定性；tick 未把事件推入 `history`。
 - `applyCommand`：把命令写进单位并规划路径（`planRoute`，A* 绕行水域）；`move`/`attackMove` 都真实显示绕行路径。
 
 ### `src/simulation/map.js`
@@ -218,6 +219,8 @@ war_game/
 - `updateMovement`：沿路径行进；交战中冻结；溃逃单位不受指挥、向最近己方城市全速撤退、无路可退/被困超时投降。
 - `findPath`：A*（4 方向，水域不可通行，森林代价更高；终点不可通行就近取格），含模块级 `pathCache` 确定性共享。
 - `planRoute`：下达命令时对每个途经点逐段 A*，返回去掉共线点的真实路径（`move`/`attackMove` 共用）。
+- `forcedMarchMultiplier(world, unit)`：急行军速度倍率——除水域之外的地形 `values.movement.forcedMarch.speedMultiplier`（1.5，与地形/士气倍率叠乘），水面上返回 1（不给加成）。
+- 急行军代价在 `moveAlongRoute` 里结算：每秒 `hpPerSecond` 掉血（走 `world.damageUnit`，计入伤亡），掉光即 `killUnit(unit, 'forcedMarch')`。溃逃（`ignoreMoraleEffects`）不参与。
 - `clampToMap`：把目标点夹进地图矩形——`terrain.passableAt()` 会把格子索引夹到边缘格，因此**地图外的坐标看起来也可通行**，不夹取的话单位会走出地图、进入画布上未渲染的区域。
 - `segmentBlocked`、`simplify`、`separateOverlaps`（软排斥）。
 
@@ -225,12 +228,13 @@ war_game/
 战斗系统：
 - 交战判定：距离 ≤ 双方半径和 + `contactTolerance`（**接触才开打**，比按攻击距离更严格）。
 - 目标选择：优先当前目标直至死亡，否则取接触范围内最近（`config.combat.targetPriority`）。
-- 伤害 = 基础 × 士气削弱 × 防御者地形修正；每单位独立攻击冷却，首次接触立即攻击。
+- 伤害 = 基础 × 士气削弱 × 防御者地形修正 × 血量比例 × **攻方地形修正**（`values.terrain.attackMultiplier`，站在水里 ×0.5）× 防御姿态（`combat.defend`，防御者原地不动时 ×0.75）× **溃逃/失序易伤**（`combat.disorderedDamageTaken`，目标处于 `rout`/`unordered` 时 ×1.5）；每单位独立攻击冷却，首次接触立即攻击。
 - **attack-forward**：`move` 与 `attackMove` 都沿路线行军，接敌停下交战，敌军清空后恢复行军。
 
 ### `src/simulation/systems/morale.js`
 士气系统：
 - 每秒修正（友军/城市/补给/交战）；友军阵亡瞬间 −10。
+- 交战消耗分两档：**正被敌方瞄准**（`underFire`）吃全额 `inCombat`（−8/s）；**参战但没被瞄准**（`state = 'combat'` 且未被打，例如两个单位打同一个敌人时只有前排被还击）吃较少的 `inCombatSupport`（−3/s）——两者都乘进攻因子 `mode`。
 - 阈值效果（削弱/动摇 → 伤害与速度倍率 `effectsFor`）。
 - 归零即溃逃；溃逃恢复、无城可退立即投降、被困超时投降。
 
@@ -238,6 +242,7 @@ war_game/
 补给与城市维护：
 - 每单位就近分配到一座己方城市，每城容量 5，超出者补给不足。
 - 己方城市附近恢复生命 +3/s；城市生产当前**关闭**（`values.cities.production.enabled = false`；逻辑保留：12s/轻型，补给满或被围暂停）；补给不足损耗。
+- **环境损耗**：身处水域的单位每秒掉 `terrain.waterHpPerSecond`（1）点血（走 `world.damageUnit`，计入伤亡），掉光即溺水阵亡（`cause = 'water'`）；桥梁是独立地形，不算水域。
 
 ### `src/simulation/systems/capture.js`
 城市占领：
@@ -310,6 +315,8 @@ war_game/
 DOM HUD：
 - 读取/订阅暂停、速度、选择、订单；`els` 集合采集所有 HUD DOM 元素。
 - `renderUnitList`/`renderCityCard`/`renderMission`/`renderEvents`/`renderTimer`/`renderVictory`。
+- `resultQuery({ win, campaignId, timeText, casualties })`：**结算页 URL 参数**（纯函数，可单测）——
+  `result` / `level` / `t` / `casualtiesBlue` / `casualtiesRed`（伤亡取整）；`renderVictory` 用它跳转 `result.html`。
 - **toast 顶部弹窗已移除**（`showToast` 为 no-op），进度只保留在右侧战场通讯日志。
 - `returnFromGame`：`fromEditor` 时跳转 `/editor.html?fromPlaytest=1`，否则 `reload` 重开教学关。
 

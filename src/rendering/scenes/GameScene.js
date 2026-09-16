@@ -14,6 +14,9 @@ import { createKeyboard } from '../../input/keyboard.js';
 import { createGameController } from '../../controllers/gameController.js';
 import { t } from '../../i18n/index.js';
 
+// 急行军轨迹配色（gdd.md §4）：暗红，与普通行军的深灰/墨绿轨道区分。
+const FORCED_ROUTE_COLOR = 0x8c1d1d;
+
 // 轨迹末端箭头：沿行进方向在终点画一个实心三角。
 function drawArrow(graphics, x0, y0, x1, y1, color) {
   const angle = Math.atan2(y1 - y0, x1 - x0);
@@ -178,23 +181,27 @@ export class GameScene extends Phaser.Scene {
     if (this.orders.isRouting()) {
       const route = this.orders.getCurrentRoute();
       if (route.length > 1) {
-        this.overlayGraphics.lineStyle(4, 0x2f2f2f, 0.82);
+        // 急行军轨迹换色（暗红），与普通行军（深灰）区分
+        const color = this.orders.isForcedRouting() ? FORCED_ROUTE_COLOR : 0x2f2f2f;
+        this.overlayGraphics.lineStyle(4, color, 0.82);
         this.overlayGraphics.beginPath();
         this.overlayGraphics.moveTo(route[0].x, route[0].y);
         for (let i = 1; i < route.length; i += 1) this.overlayGraphics.lineTo(route[i].x, route[i].y);
         this.overlayGraphics.strokePath();
         drawArrow(this.overlayGraphics, route[route.length - 2].x, route[route.length - 2].y,
-          route[route.length - 1].x, route[route.length - 1].y, 0x2f2f2f);
+          route[route.length - 1].x, route[route.length - 1].y, color);
       }
     }
     // 行军/攻击前进轨迹（move 与 attackMove 均持续显示，含末端箭头）：
     // 未到达终点前不消失，直到单位到达/命令结束；已走过/阵亡/溃逃/到达自然消失。
+    // 急行军的轨迹改用暗红，一眼能看出哪些部队在急行军。
     const routeColor = 0x1f2b24; // 加深轨迹颜色（截图效果）
     const queueColor = 0x3a4a3d;
-    this.overlayGraphics.lineStyle(3, routeColor, 0.9);
     for (const unit of this.world.units) {
       if (unit.faction !== 'blue' || unit.state === 'dead' || unit.state === 'rout') continue;
       if (unit.route.length > 0 && unit.routeIndex < unit.route.length) {
+        const color = unit.forcedMarch ? FORCED_ROUTE_COLOR : routeColor;
+        this.overlayGraphics.lineStyle(3, color, 0.9);
         this.overlayGraphics.beginPath();
         this.overlayGraphics.moveTo(unit.x, unit.y);
         for (let i = unit.routeIndex; i < unit.route.length; i += 1) {
@@ -205,10 +212,10 @@ export class GameScene extends Phaser.Scene {
         const beforeIndex = lastIndex - 1;
         const end = unit.route[lastIndex];
         const start = beforeIndex >= unit.routeIndex ? unit.route[beforeIndex] : { x: unit.x, y: unit.y };
-        drawArrow(this.overlayGraphics, start.x, start.y, end.x, end.y, routeColor);
+        drawArrow(this.overlayGraphics, start.x, start.y, end.x, end.y, color);
       }
       if (!unit.pendingQueue?.length) continue;
-      this.overlayGraphics.lineStyle(2, queueColor, 0.75);
+      this.overlayGraphics.lineStyle(2, unit.forcedMarch ? FORCED_ROUTE_COLOR : queueColor, 0.75);
       let tail = unit.route.length > unit.routeIndex
         ? unit.route[unit.route.length - 1]
         : { x: unit.x, y: unit.y };

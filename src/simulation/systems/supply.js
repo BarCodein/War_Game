@@ -1,10 +1,11 @@
 import { values } from '../../config/index.js';
 
-// 补给与城市维护（gdd.md §7、§8）：
+// 补给与城市维护（gdd.md §7、§8；损耗见 §5）：
 // 1. 每单位就近分配到一座己方城市，每城容量 5，超出者补给不足；
 // 2. 己方城市附近恢复生命（+3/s）；
 // 3. 城市生产：当前关闭（values.cities.production.enabled = false）；
-// 4. 补给不足单位损耗（hp −1/s，士气修正由 morale 系统读取 supplied 标记）。
+// 4. 补给不足单位损耗（hp −1/s，士气修正由 morale 系统读取 supplied 标记）；
+// 5. 环境损耗：身处水域的单位 hp −1/s（可溺水阵亡）。
 export function updateSupply(world, dt) {
   // 1. 分配
   const claimants = new Map(); // cityId → [{ unit, dist }]
@@ -51,10 +52,19 @@ export function updateSupply(world, dt) {
     }
   }
 
-  // 4. 损耗：补给不足 hp −1/s
+  // 4. 损耗：补给不足 hp −1/s（非战斗减员，同样计入伤亡：1 点损失的血量 = 1 点伤亡）
   for (const unit of world.units) {
     if (unit.state === 'dead' || unit.supplied) continue;
-    unit.hp -= values.supply.attritionHpPerSecond * dt;
+    world.damageUnit(unit, values.supply.attritionHpPerSecond * dt);
     if (unit.hp <= 0) world.killUnit(unit, 'attrition');
+  }
+
+  // 5. 环境损耗：身处水域 hp −1/s（gdd.md §5）。与补给无关，站在水里就掉；
+  // 桥梁不算水域（地形码 bridge ≠ water），所以过桥不受影响。同样计入伤亡，可溺水阵亡。
+  for (const unit of world.units) {
+    if (unit.state === 'dead') continue;
+    if (!world.terrain.isWaterAt(unit.x, unit.y)) continue;
+    world.damageUnit(unit, values.terrain.waterHpPerSecond * dt);
+    if (unit.hp <= 0) world.killUnit(unit, 'water');
   }
 }

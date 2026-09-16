@@ -7,11 +7,19 @@ import { values } from '../config/index.js';
 // 指挥输入（gdd.md §11）：右键空地 → attackMove，右键目视敌军 → attack；
 // 左键从己方单位拖动 → 多路径点 move 轨迹（**不需要先框选**：从哪个单位起笔就指挥哪个单位，
 // Shift 起笔则追加到当前选择）。只产出命令（world.issueCommands），与战斗逻辑完全解耦（AGENTS.md）。
+//
+// **急行军**（gdd.md §4）：按住 E 时，右键 = 急行军 attackMove（点敌人也是它，靠近后照常交战）、
+// E + 左键拖轨迹 = 急行军 move；E + Shift 的组合沿用追加/排队，只是命令带 forced: true。
 export function createOrders(scene, world, selection) {
   let routeMode = false;
   let currentRoute = [];
   let pressedUnit = null; // 本次按下命中的己方单位（决定"单击收拢选择"的目标）
+  let forcedRoute = false; // 本次拖出的轨迹是否急行军（按下时按 E 的状态定一次）
   const listeners = new Set();
+
+  // E 键状态：pointer 事件里拿不到字母键，所以单独挂一个 Key 对象。
+  const forcedKey = scene.input.keyboard?.addKey?.('E') ?? null;
+  const forcedHeld = () => Boolean(forcedKey?.isDown);
 
   function notify(type) {
     for (const listener of listeners) listener(type);
@@ -61,6 +69,7 @@ export function createOrders(scene, world, selection) {
     pressedUnit = pressed;
     if (pressed || (shiftHeld && selection.selected.size > 0)) {
       routeMode = true;
+      forcedRoute = forcedHeld(); // 按下时按一次 E 的状态决定这条轨迹是否急行军
       currentRoute = [p];
       selection.setRouteBlocked(true);
     }
@@ -82,9 +91,8 @@ export function createOrders(scene, world, selection) {
     const drawn = currentRoute.length > 1 && routeLength(currentRoute) >= values.input.dragBoxThreshold;
     if (drawn) {
       const offset = values.input.routeUnitOffset;
-      const commandFactory = pointer.event?.shiftKey || pointer.shiftKey
-        ? appendRouteCommand
-        : moveCommand;
+      const append = pointer.event?.shiftKey || pointer.shiftKey;
+      const commandFactory = append ? appendRouteCommand : moveCommand;
 
       // 预计算轨迹相对于起点的相对位移向量
       const startPoint = currentRoute[0];
@@ -99,17 +107,17 @@ export function createOrders(scene, world, selection) {
         if (!unit || unit.state === 'dead' || unit.state === 'rout') return;
         const anchor = getRouteAnchor(unit);
         // 将相对位移叠加到单位自身的当前位置（或锚点，用于追加路径）
-        const basePos = commandFactory === appendRouteCommand ? anchor : { x: unit.x, y: unit.y };
+        const basePos = append ? anchor : { x: unit.x, y: unit.y };
         const drawnRoute = relativeRoute.map(delta => ({
           x: basePos.x + delta.x + shift,
           y: basePos.y + delta.y + shift,
         }));
-        const path = commandFactory === appendRouteCommand
+        const path = append
           ? [anchor, ...drawnRoute.slice(1)] // 第一个点是 anchor 自身，去重
           : drawnRoute;
-        world.issueCommands([id], commandFactory(path));
+        world.issueCommands([id], commandFactory(path, { forced: forcedRoute }));
       });
-      notify(commandFactory === appendRouteCommand ? 'queueAppend' : 'route');
+      notify(append ? 'queueAppend' : (forcedRoute ? 'routeForced' : 'route'));
     } else if (pressedUnit) {
       // 没拖动 = 单击：把选择**收拢到点中的这个单位**（Shift 为追加）。
       // 这一步是必需的：轨迹绘制会把 selection 的 pointerup 挡掉，
@@ -120,6 +128,7 @@ export function createOrders(scene, world, selection) {
     }
     pressedUnit = null;
     currentRoute = [];
+    forcedRoute = false;
   });
 
   function getRouteAnchor(unit) {
@@ -135,10 +144,16 @@ export function createOrders(scene, world, selection) {
     const ids = [...selection.selected];
     if (ids.length === 0) return;
     const p = { x: pointer.worldX, y: pointer.worldY };
+    const forced = forcedHeld(); // 按住 E：急行军（点敌人也是急行军 attackMove，靠近后照常交战）
 
     if (pointer.event?.shiftKey || pointer.shiftKey) {
-      ids.forEach(id => world.issueCommands([id], enqueueRouteCommand(p)));
+      ids.forEach(id => world.issueCommands([id], enqueueRouteCommand(p, { forced })));
       notify('queueQueue');
+      return;
+    }
+    if (forced) {
+      world.issueCommands(ids, attackMoveCommand(p, { forced: true }));
+      notify('orderForcedMove');
       return;
     }
     const enemy = world.units.find(unit => unit.state !== 'dead' && unit.faction !== 'blue'
@@ -156,6 +171,10 @@ export function createOrders(scene, world, selection) {
   return {
     isRouting() {
       return routeMode;
+    },
+    // 当前正在拖的轨迹是否急行军（渲染层据此换色）
+    isForcedRouting() {
+      return routeMode && forcedRoute;
     },
     getCurrentRoute() {
       return currentRoute;
