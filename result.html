@@ -220,6 +220,37 @@
       if (timeText) document.getElementById('resultTime').textContent = '用时 ' + timeText;
 
       /* =========================================================
+         战绩入库（成就页读取）：war-of-dots.level-stats
+         { <levelId>: { cleared, bestTime, bestCasualties, plays } }
+         - cleared 只在胜利时置位；bestTime 取最快的通关用时（秒）；bestCasualties 取最低的我方伤亡
+         - 存不下（隐私模式/配额满）就算了，不影响结算页本身
+         ========================================================= */
+      function timeToSeconds(text) {
+        var m = /^(\d+):(\d{2})$/.exec(text || '');
+        return m ? Number(m[1]) * 60 + Number(m[2]) : null;
+      }
+      if (levelId) {
+        try {
+          var all = JSON.parse(localStorage.getItem('war-of-dots.level-stats') || '{}');
+          var entry = all[levelId] || {};
+          var seconds = timeToSeconds(timeText);
+          var ownLoss = params.has('casualtiesBlue')
+            ? Math.max(0, Math.round(Number(params.get('casualtiesBlue')) || 0))
+            : null;
+          entry.plays = (entry.plays || 0) + 1;
+          if (result === 'victory') {
+            entry.cleared = true;
+            if (seconds != null && (entry.bestTime == null || seconds < entry.bestTime)) entry.bestTime = seconds;
+            if (ownLoss != null && (entry.bestCasualties == null || ownLoss < entry.bestCasualties)) {
+              entry.bestCasualties = ownLoss;
+            }
+          }
+          all[levelId] = entry;
+          localStorage.setItem('war-of-dots.level-stats', JSON.stringify(all));
+        } catch (e) { /* 本地存储不可用时忽略 */ }
+      }
+
+      /* =========================================================
          双方伤亡：URL 参数 casualtiesBlue / casualtiesRed
          （1 点损失的血量 = 1 点伤亡，由模拟层 World.damageUnit 累计）。
          老链接 / 直接打开没有这两个参数时，整块不显示。

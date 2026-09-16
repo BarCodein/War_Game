@@ -9,6 +9,11 @@ export const values = {
     speeds: [0.5, 1, 2],      // 游戏速度档位
   },
 
+  // 开局准备阶段（gdd.md §11）：进关卡后先倒计时若干秒，期间**可以下达预先指令**
+  // （选择/轨迹/急行军都照常），但模拟不推进——部队不动、AI 不动、计时不动，
+  // 倒计时结束才真正开打。编辑器试玩跳过这个阶段（反复试地图不该每次都等 5 秒）。
+  prep: { seconds: 5 },
+
   units: {
     light: { hp: 60, damage: 0.8, attackInterval: 0.2, range: 40, speed: 40, radius: 14, vision: 140 },
     heavy: { hp: 80, damage: 1, attackInterval: 0.2, range: 40, speed: 40, radius: 14, vision: 160 },

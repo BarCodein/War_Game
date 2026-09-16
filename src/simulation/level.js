@@ -15,8 +15,9 @@ import { values } from '../config/index.js';
 //   ai          AiScript  敌方脚本（事件 → 动作）
 //   victory     object    预留：胜负条件。当前引擎不读取，判定仍见 gdd.md §10（失去全部城市即负）
 //
-// Force      { faction, at: PointRef, units: [{ type, count, offset?, spacing? }] }
+// Force      { faction, at: PointRef, group?: 编队标签, units: [{ type, count, offset?, spacing? }] }
 //            第 i 个单位的落点 = 锚点坐标 + offset + spacing × i（offset / spacing 省略即 0）
+//            group 会写到 unit.group；AI 动作可用 units: { group: 'x' } 只指挥该编队（见下）
 //
 // PointRef（坐标引用）——at / target / fallback / anchors 的值都用它，七选一：
 //   { x, y }               绝对坐标
@@ -27,15 +28,30 @@ import { values } from '../config/index.js';
 //   { capturePointId: 'p1' } 指定 id 的占领点（编辑器里放的「中立/蓝/红占领点」；位置固定，归属易主不影响坐标）
 //   { anchor: 'east' }     引用本关 anchors 表中的命名锚点
 //
-// AiScript   { faction, fallback?: PointRef, triggers: Trigger[] }
+// AiScript   { faction, fallback?: PointRef, triggers: Trigger[], rules?: Rule[] }
 // Trigger    { id?, at: Condition, repeatEvery?: number, actions: Action[] }
+// Rule       { id?, when: Condition, then: Action | Action[], otherwise?: Action | Action[],
+//              after?, until?, repeatEvery? }
+//             —— 条件驱动的**持续**指令（gdd.md §10）：条件成立走 then、不成立走 otherwise，
+//                只在"条件取值发生变化"的那一帧下发（首次求值也会下发一次），不会每帧刷命令。
+//                `after` / `until` 限定生效时间窗（秒，"到某个时刻再看局势"）；
+//                `repeatEvery` 让条件成立期间每 n 秒重发一次 then（持续施压用）。
+//                例：占领点 p1 还在自己手里就坚守，丢了就撤退。
 // Condition  { time: 秒 } | { enemyCrossX: x }
-// Action     { type: 'spawn', ... } | { type: 'attackNearest' } | { type: 'attackMove', target } | { type: 'hold' }
+//            | { capturePoint: 'p1' | ['p1','p3'], owner: 'self' | 'enemy' | 'neutral' | 'blue' | 'red' }
+//            | { city: 'c1' | [...], owner: ... }
+//            | { ownUnitsBelow: n } | { enemyUnitsBelow: n }
+//            （据点条件支持 id 数组：任意一个的归属符合 owner 即成立）
+// Action     { type: 'spawn', ..., group? } | { type: 'attackNearest', units? } | { type: 'attackMove', target, forced?, units? }
+//            | { type: 'hold', units? } | { type: 'retreat', to?, forced?, units? }
+//            `units: { group: 'x' }` = 只指挥该编队（省略 = 全军）；spawn 的 group 给新兵打标签
 // 触发语义   条件首次满足 → 立即执行一次 actions；若给了 repeatEvery → 此后每 repeatEvery 秒再执行一次
 
 export const LEVEL_VERSION = 1;
 export const LEVEL_TYPES = ['offensive', 'defensive', 'annihilative'];
-export const AI_ACTION_TYPES = ['spawn', 'attackNearest', 'attackMove', 'hold'];
+export const AI_ACTION_TYPES = ['spawn', 'attackNearest', 'attackMove', 'hold', 'retreat'];
+// 条件里的 owner 可写 'self' / 'enemy'（相对脚本阵营，推荐）或直接写 'blue' / 'red' / 'neutral'
+export const AI_CONDITION_OWNERS = ['self', 'enemy', 'blue', 'red', 'neutral'];
 // victory 判定方式：captureAll = 占领全部敌方城市（基础失城判负天然覆盖，不做额外判定）；
 // defend = 坚守时限与据点；attack = 时限内夺取据点；annihilative = 消灭全部**指定单位**。
 // 见 buildMission 与 systems/victory.js。
@@ -123,6 +139,10 @@ export function validateLevel(data) {
     data.forces.forEach((force, fi) => {
       if (!force || !FACTIONS.includes(force.faction)) errors.push(`forces[${fi}] invalid faction`);
       if (!refOk(force.at)) errors.push(refError(force.at, `forces[${fi}].at`));
+      // 编队标签（可选）：AI 可用 units: { group } 只指挥这一支
+      if (force?.group !== undefined && !isNonEmptyString(force.group)) {
+        errors.push(`forces[${fi}].group must be a non-empty string`);
+      }
       // 编队目标（可选）：标记为歼灭目标的编队，其单位会带上 unit.objective
       if (force?.objective !== undefined && !FORCE_OBJECTIVES.includes(force.objective)) {
         errors.push(`forces[${fi}] invalid objective: ${force.objective} (expected ${FORCE_OBJECTIVES.join(' | ')})`);
@@ -145,44 +165,127 @@ export function validateLevel(data) {
     const ai = data.ai;
     if (!ai || !FACTIONS.includes(ai.faction)) errors.push('ai invalid faction');
     if (ai?.fallback !== undefined && !refOk(ai.fallback)) errors.push(refError(ai.fallback, 'ai.fallback'));
-    if (!Array.isArray(ai?.triggers) || ai.triggers.length === 0) {
-      errors.push('ai.triggers must be a non-empty array');
-    } else {
-      ai.triggers.forEach((trigger, ti) => {
-        const at = trigger?.at;
-        const hasTime = isFiniteNumber(at?.time);
-        const hasCross = isFiniteNumber(at?.enemyCrossX);
-        if (!hasTime && !hasCross) errors.push(`ai.triggers[${ti}] invalid condition (need { time } or { enemyCrossX })`);
+    // 条件：触发器的 at 与规则的 when 共用
+    const isIdList = (value) => isNonEmptyString(value)
+      || (Array.isArray(value) && value.length > 0 && value.every(isNonEmptyString));
+    const conditionError = (at, where) => {
+      if (!at || typeof at !== 'object') return `${where} invalid condition`;
+      if (isFiniteNumber(at.time) || isFiniteNumber(at.enemyCrossX)) return null;
+      if (isFiniteNumber(at.ownUnitsBelow) || isFiniteNumber(at.enemyUnitsBelow)) return null;
+      const pointKey = isIdList(at.capturePoint) ? 'capturePoint'
+        : (isIdList(at.city) ? 'city' : null);
+      if (pointKey) {
+        if (!AI_CONDITION_OWNERS.includes(at.owner)) {
+          return `${where}.owner must be one of ${AI_CONDITION_OWNERS.join(' | ')}`;
+        }
+        return null;
+      }
+      return `${where} invalid condition (need { time } | { enemyCrossX } | { capturePoint, owner } | { city, owner } | { ownUnitsBelow } | { enemyUnitsBelow })`;
+    };
+    // 动作：触发器与规则共用同一套校验
+    const checkAction = (action, where) => {
+      if (!action || !AI_ACTION_TYPES.includes(action.type)) {
+        errors.push(`${where} unknown action: ${action?.type}`);
+        return;
+      }
+      if (action.forced !== undefined && typeof action.forced !== 'boolean') {
+        errors.push(`${where}.forced must be a boolean`);
+      }
+      // 单位选择器（可选）：目前只支持编队标签；省略 = 全军
+      if (action.units !== undefined
+        && (!action.units || typeof action.units !== 'object' || !isNonEmptyString(action.units.group))) {
+        errors.push(`${where}.units must be { group: '<编队标签>' }`);
+      }
+      if (action.type === 'spawn') {
+        if (!values.units[action.unitType]) errors.push(`${where} unknown unitType`);
+        if (!Number.isInteger(action.count) || action.count < 1) errors.push(`${where} count must be a positive integer`);
+        if (!refOk(action.at)) errors.push(refError(action.at, `${where}.at`));
+        if (action.group !== undefined && !isNonEmptyString(action.group)) {
+          errors.push(`${where}.group must be a non-empty string`);
+        }
+        if (action.spacing !== undefined && !isPoint(action.spacing)) errors.push(`${where} invalid spacing`);
+        if (action.order !== undefined && !['attackMove', 'hold'].includes(action.order?.type)) {
+          errors.push(`${where} order.type must be attackMove | hold`);
+        }
+        if (action.order?.type === 'attackMove' && !refOk(action.order.target)) {
+          errors.push(refError(action.order.target, `${where}.order.target`));
+        }
+      }
+      if (action.type === 'attackMove' && !refOk(action.target)) {
+        errors.push(refError(action.target, `${where}.target`));
+      }
+      // retreat 的 to 可省略：省略时撤向最近的己方城市（与溃逃一致）
+      if (action.type === 'retreat' && action.to !== undefined && !refOk(action.to)) {
+        errors.push(refError(action.to, `${where}.to`));
+      }
+    };
+    const checkActions = (actions, where) => {
+      if (Array.isArray(actions)) {
+        if (actions.length === 0) errors.push(`${where} must be a non-empty array`);
+        actions.forEach((action, index) => checkAction(action, `${where}[${index}]`));
+        return;
+      }
+      checkAction(actions, where); // 规则允许写单个动作对象
+    };
+
+    // triggers 与 rules 至少要有一套：只用条件规则（纯反应式 AI）也是合法脚本
+    const triggerList = Array.isArray(ai?.triggers) ? ai.triggers : null;
+    const ruleList = Array.isArray(ai?.rules) ? ai.rules : null;
+    if (!triggerList && !ruleList) {
+      errors.push('ai must have triggers[] and/or rules[]');
+    } else if (triggerList && triggerList.length === 0 && !(ruleList && ruleList.length > 0)) {
+      errors.push('ai.triggers must be a non-empty array (或改用非空的 ai.rules)');
+    }
+    if (triggerList) {
+      triggerList.forEach((trigger, ti) => {
+        const where = `ai.triggers[${ti}]`;
+        const problem = conditionError(trigger?.at, `${where}.at`);
+        if (problem) errors.push(problem);
         if (trigger?.repeatEvery !== undefined && !(isFiniteNumber(trigger.repeatEvery) && trigger.repeatEvery > 0)) {
-          errors.push(`ai.triggers[${ti}] repeatEvery must be > 0`);
+          errors.push(`${where} repeatEvery must be > 0`);
         }
         if (!Array.isArray(trigger?.actions) || trigger.actions.length === 0) {
-          errors.push(`ai.triggers[${ti}] actions must be a non-empty array`);
+          errors.push(`${where} actions must be a non-empty array`);
           return;
         }
-        trigger.actions.forEach((action, ai2) => {
-          const where = `ai.triggers[${ti}].actions[${ai2}]`;
-          if (!action || !AI_ACTION_TYPES.includes(action.type)) {
-            errors.push(`${where} unknown action: ${action?.type}`);
+        trigger.actions.forEach((action, ai2) => checkAction(action, `${where}.actions[${ai2}]`));
+      });
+    }
+
+    // 条件规则的 when 必须给全，then / otherwise 至少写一个
+    if (ai?.rules !== undefined) {
+      if (!Array.isArray(ai.rules)) {
+        errors.push('ai.rules must be an array');
+      } else {
+        ai.rules.forEach((rule, ri) => {
+          const where = `ai.rules[${ri}]`;
+          if (!rule || typeof rule !== 'object') {
+            errors.push(`${where} must be an object`);
             return;
           }
-          if (action.type === 'spawn') {
-            if (!values.units[action.unitType]) errors.push(`${where} unknown unitType`);
-            if (!Number.isInteger(action.count) || action.count < 1) errors.push(`${where} count must be a positive integer`);
-            if (!refOk(action.at)) errors.push(refError(action.at, `${where}.at`));
-            if (action.spacing !== undefined && !isPoint(action.spacing)) errors.push(`${where} invalid spacing`);
-            if (action.order !== undefined && !['attackMove', 'hold'].includes(action.order?.type)) {
-              errors.push(`${where} order.type must be attackMove | hold`);
-            }
-            if (action.order?.type === 'attackMove' && !refOk(action.order.target)) {
-              errors.push(refError(action.order.target, `${where}.order.target`));
-            }
+          const problem = conditionError(rule.when, `${where}.when`);
+          if (problem) errors.push(problem);
+          // 生效时间窗与周期重发（可选）
+          if (rule.after !== undefined && !(isFiniteNumber(rule.after) && rule.after >= 0)) {
+            errors.push(`${where}.after must be >= 0`);
           }
-          if (action.type === 'attackMove' && !refOk(action.target)) {
-            errors.push(refError(action.target, `${where}.target`));
+          if (rule.until !== undefined && !(isFiniteNumber(rule.until) && rule.until >= 0)) {
+            errors.push(`${where}.until must be >= 0`);
           }
+          if (isFiniteNumber(rule.after) && isFiniteNumber(rule.until) && rule.until < rule.after) {
+            errors.push(`${where}.until must be >= after`);
+          }
+          if (rule.repeatEvery !== undefined && !(isFiniteNumber(rule.repeatEvery) && rule.repeatEvery > 0)) {
+            errors.push(`${where}.repeatEvery must be > 0`);
+          }
+          // then / otherwise 至少要有一个；只写 otherwise 表示"条件不成立才下命令"
+          if (rule.then === undefined && rule.otherwise === undefined) {
+            errors.push(`${where} needs then and/or otherwise`);
+          }
+          if (rule.then !== undefined) checkActions(rule.then, `${where}.then`);
+          if (rule.otherwise !== undefined) checkActions(rule.otherwise, `${where}.otherwise`);
         });
-      });
+      }
     }
   }
 
@@ -330,15 +433,24 @@ export function validateLevelReferences(level, mapData) {
 
   for (const [name, ref] of Object.entries(anchors)) check(ref, `anchors["${name}"]`);
   (level.forces ?? []).forEach((force, i) => check(force.at, `forces[${i}].at`));
-  for (const [ti, trigger] of (level.ai?.triggers ?? []).entries()) {
-    for (const [ai, action] of (trigger.actions ?? []).entries()) {
-      const where = `ai.triggers[${ti}].actions[${ai}]`;
-      if (action?.type === 'spawn') {
-        check(action.at, `${where}.at`);
-        check(action.order?.target, `${where}.order.target`);
-      }
-      if (action?.type === 'attackMove') check(action.target, `${where}.target`);
+  const checkActionRefs = (action, where) => {
+    if (action?.type === 'spawn') {
+      check(action.at, `${where}.at`);
+      check(action.order?.target, `${where}.order.target`);
     }
+    if (action?.type === 'attackMove') check(action.target, `${where}.target`);
+    if (action?.type === 'retreat' && action.to !== undefined) check(action.to, `${where}.to`);
+  };
+  const checkActionList = (actions, where) => {
+    const list = Array.isArray(actions) ? actions : [actions];
+    list.forEach((action, index) => checkActionRefs(action, Array.isArray(actions) ? `${where}[${index}]` : where));
+  };
+  for (const [ti, trigger] of (level.ai?.triggers ?? []).entries()) {
+    checkActionList(trigger?.actions, `ai.triggers[${ti}].actions`);
+  }
+  for (const [ri, rule] of (level.ai?.rules ?? []).entries()) {
+    checkActionList(rule?.then, `ai.rules[${ri}].then`);
+    if (rule?.otherwise !== undefined) checkActionList(rule.otherwise, `ai.rules[${ri}].otherwise`);
   }
   check(level.ai?.fallback, 'ai.fallback');
   // victory.points 是据点 id 列表（占领点优先，其次城市）
@@ -351,7 +463,8 @@ export function validateLevelReferences(level, mapData) {
 // ---------- 兵力部署 ----------
 
 // 按关卡 forces 部署初始兵力；anchors 为本关命名锚点表。返回实际生成的单位数组（便于测试与调试）。
-// 编队上的 objective 会写到单位上（unit.objective），供胜负判定识别「指定单位」。
+// 编队上的 objective 会写到单位上（unit.objective），供胜负判定识别「指定单位」；
+// forces[].group 写到 unit.group，供 AI 用 units: { group } 只指挥该编队。
 export function deployForces(world, forces, anchors = {}) {
   const spawned = [];
   for (const force of forces) {
@@ -368,6 +481,7 @@ export function deployForces(world, forces, anchors = {}) {
           anchor.y + offset.y + spacing.y * i,
         );
         if (force.objective) unit.objective = force.objective;
+        if (force.group) unit.group = force.group; // 编队标签：AI 可只指挥这一支（units: { group }）
         spawned.push(unit);
       }
     }

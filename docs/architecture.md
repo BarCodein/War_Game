@@ -91,6 +91,7 @@ tests/
 - tick 内系统执行顺序固定，保证确定性：`movement → combat → morale → supply → capture → fog → controlLine → victory`。
   `controlLine` 是末尾的纯视觉统计（每 6 tick 重算影响力场，见 `gdd.md §9`），只读前面的结果，任何规则系统都不读它。
 - 暂停：不执行 tick；游戏速度：×0.5 / ×1 / ×2 通过每帧 tick 次数控制（暂定）。
+- **开局准备阶段**（`prep.seconds`，gdd.md §11）：倒计时期间**不调用 loop.advance**，只推进控制器的准备计时；输入层照常产出命令（`world.issueCommands` 不依赖 tick，路线在下令时就已规划）。倒计时结束后才进入正常 tick 循环，因此脚本敌军的 `{ time }` 触发器也从此刻开始计时。
 - 渲染层按世界状态绘制；HUD 更新节流（如 100 ms）避免每 tick 重建 DOM。
 
 ## 5. 统一命令接口
@@ -192,6 +193,14 @@ world.issueCommands(unitIds, command)           // 唯一入口，附带校验
         "repeatEvery": 5,
         "actions": [{ "type": "attackNearest" }]
       }
+    ],
+    "rules": [
+      {
+        "id": "holdOrRetreat",
+        "when": { "capturePoint": "p1", "owner": "self" },
+        "then": [{ "type": "hold" }],
+        "otherwise": [{ "type": "retreat", "to": { "anchor": "redBase" } }]
+      }
     ]
   },
   "victory": { "type": "captureAll" }
@@ -215,7 +224,10 @@ world.issueCommands(unitIds, command)           // 唯一入口，附带校验
   解析顺序为 绝对坐标 → 命名锚点 → `spawnId` → `spawn` → `cityId` → `capturePointId` → `city`；解析不到时返回 `null`，调用方跳过该点位而不是崩溃。`anchors` 用来给常用坐标起名（可复用同一坐标、改一处即全局生效），**不允许锚点引用锚点**（无链式引用）。
 - **兵力部署（编队式）**：`at` 为任意 PointRef；第 *i* 个单位的落点 = 锚点 + `offset` + `spacing × i`（两者缺省为 0）。可读性好且移动出生点后无需逐单位改坐标。
 - **编队目标 `objective`（可选）**：给整条编队打标记，部署时写到单位上（`unit.objective`）。当前只有 `"annihilate"`：该编队部署出的单位属于**歼灭胜负条件的「指定单位」**（见下表 `annihilative`）。写法：`{ "faction": "red", "objective": "annihilate", "at": { "spawnId": "s16" }, "units": [ … ] }`。AI 在 `ai.triggers` 里临时生成的增援不受此标记影响。
-- **AI 脚本（事件 → 动作）**：`at` 支持 `{ time }`（经过秒数）与 `{ enemyCrossX }`（任一敌军越过该 x）；条件**首次满足时立即执行一次** `actions`，若给了 `repeatEvery` 则此后每 *n* 秒再执行一次。动作类型：`spawn` / `attackNearest` / `attackMove` / `hold`；所有目标同样是 PointRef（如 `{ city: 'blue' }` 在**调用时**解析，跟随城市易主）。新增行为只需扩展动作类型与 `level.js` 的校验，引擎其余部分不变。
+- **AI 脚本（事件 → 动作）**：`at` 支持 `{ time }`（经过秒数）与 `{ enemyCrossX }`（任一敌军越过该 x）；条件**首次满足时立即执行一次** `actions`，若给了 `repeatEvery` 则此后每 *n* 秒再执行一次。动作类型：`spawn` / `attackNearest` / `attackMove`（可带 `forced: true` 走急行军）/ `hold` / `retreat`（`to` 省略时撤向最近的己方城市，无城可退则驻守）；所有目标同样是 PointRef（如 `{ city: 'blue' }` 在**调用时**解析，跟随城市易主）。新增行为只需扩展动作类型与 `level.js` 的校验，引擎其余部分不变。
+- **AI 条件规则 `ai.rules`（可选）**：`{ when, then, otherwise?, after?, until?, repeatEvery? }`，用来表达"看局势下命令"。`when` 除沿用 `{ time }` / `{ enemyCrossX }` 外，还支持 `{ capturePoint, owner }` / `{ city, owner }`（`owner` 写 `self` / `enemy` / `neutral` 或 `blue` / `red`；据点值可写成 **id 数组**，任意一个归属符合即成立）与 `{ ownUnitsBelow }` / `{ enemyUnitsBelow }` 兵力对比；`then` / `otherwise` 可以是单个动作对象或动作数组，至少写一个。**只有条件取值翻转（含首次求值）的那一帧才下发命令**，所以不会每帧重发把行军路线反复重置；`after` / `until` 限定生效时间窗（"到某个时刻再看局势"），`repeatEvery` 让条件成立期间周期重发 `then`（持续施压）。`trigger` 的 `at` 是"一次性/周期"语义，`rules` 的 `when` 是"持续状态"语义——两者共用同一套条件与动作。
+- **只指挥一部分部队**：给编队打标签 `forces[].group`（部署时写到 `unit.group`），动作里写 `"units": { "group": "north" }` 就只作用于该编队；省略 `units` 仍是全军（向后兼容）。`spawn` 也支持 `"group"` 给增援打标签（之后即可按标签指挥）。例：`{ "type": "retreat", "to": { "anchor": "redBase" }, "units": { "group": "north" } }` 只让北线撤退，其余部队保持原命令；选不到任何单位时该动作静默跳过。
+- **关卡实例（塔山）**：红军按三个进攻方向分成三支编队——`landing`（海路 → 打鱼山 p1）、`center`（中线 → 塔山 p3）、`east`（东线 → 白台山 p6），初始编队与各波增援都带 `group` 标签。规则按路写：`press{Landing,Center,East}`（120~150 s 每 10 s 让该路 attackMove 自己的目标点）+ `{landing,center,east}HoldOrWithdraw`（150 s 起：**这一路**手上有自己的点就坚守，没有就只让**这一路**撤回 `redBase`）。三路各判各的，互不牵连。
 - **`type`（关卡类型）**：`offensive`（进攻）/ `defensive`（防守）/ `annihilative`（歼灭）。合法值白名单是 `level.js` 的 `LEVEL_TYPES`，`validateLevel()` 会拒绝其它值。
   **当前仅作元数据**：`GameScene` / `hud` / `world` / `victory` 都不读取它，胜负判定仍只看城市（`gdd.md` §10）。要让类型真正驱动玩法，接入方式是把它随关卡一起交给世界（如 `new World(mapData, { type })` 或在 `GameScene.create()` 里写入 `world.mess`），再由 `simulation/systems/victory.js` 分派——该文件里已留有 `defendVictory` / `attackVictory` 两个待启用的判定函数。
 - **`victory`（胜负条件）**：可选。基础规则始终生效——**一方失去全部城市即告负**（`gdd.md` §10）。声明任务规则时会追加判定，由 `buildMission(level, world)` 解析成 `world.mess` 后交给 `simulation/systems/victory.js`：
