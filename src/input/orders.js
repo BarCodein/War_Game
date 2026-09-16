@@ -85,21 +85,29 @@ export function createOrders(scene, world, selection) {
       const commandFactory = pointer.event?.shiftKey || pointer.shiftKey
         ? appendRouteCommand
         : moveCommand;
+
+      // 预计算轨迹相对于起点的相对位移向量
+      const startPoint = currentRoute[0];
+      const relativeRoute = currentRoute.map(point => ({
+        x: point.x - startPoint.x,
+        y: point.y - startPoint.y,
+      }));
+
       [...selection.selected].forEach((id, index) => {
         const shift = index * offset;
         const unit = world.units.find(candidate => candidate.id === id);
         if (!unit || unit.state === 'dead' || unit.state === 'rout') return;
         const anchor = getRouteAnchor(unit);
-        const drawnRoute = currentRoute.map(point => ({
-          x: point.x + shift,
-          y: point.y + shift,
+        // 将相对位移叠加到单位自身的当前位置（或锚点，用于追加路径）
+        const basePos = commandFactory === appendRouteCommand ? anchor : { x: unit.x, y: unit.y };
+        const drawnRoute = relativeRoute.map(delta => ({
+          x: basePos.x + delta.x + shift,
+          y: basePos.y + delta.y + shift,
         }));
         const path = commandFactory === appendRouteCommand
-          ? [anchor, ...drawnRoute]
+          ? [anchor, ...drawnRoute.slice(1)] // 第一个点是 anchor 自身，去重
           : drawnRoute;
-        world.issueCommands([id], commandFactory(
-          path,
-        ));
+        world.issueCommands([id], commandFactory(path));
       });
       notify(commandFactory === appendRouteCommand ? 'queueAppend' : 'route');
     } else if (pressedUnit) {
