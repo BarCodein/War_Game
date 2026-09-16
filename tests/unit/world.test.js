@@ -66,5 +66,8 @@ describe('world integration', () => {
     expect(world.cities.every(city => city.productionTimer === 0)).toBe(true);
     // 迷雾网格按阵营维护
     expect(world.fog.blue.some(v => v === 2)).toBe(true);
+    // 伤亡统计（gdd.md §11）：1 点损失的血量 = 1 点伤亡；整局打下来双方都有损失
+    expect(world.casualties.blue).toBeGreaterThan(0);
+    expect(world.casualties.red).toBeGreaterThan(0);
   });
 });

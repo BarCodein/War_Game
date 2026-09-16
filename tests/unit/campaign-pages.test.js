@@ -35,6 +35,18 @@ describe('战役页面：关卡 id 的多重兜底契约', () => {
     expect(html).toContain("sessionStorage.setItem('war-of-dots.campaign'");
   });
 
+  it('result.html 读 casualtiesBlue / casualtiesRed 并展示双方伤亡', () => {
+    // 结算页是 classic script 页面，参数解析与 src/rendering/hud.js 的 resultQuery 是同一套约定，
+    // 但无法直接单测——这里守住契约：参数名一致、缺参数时整块隐藏。
+    const html = read('result.html');
+    expect(html).toContain("params.get('casualtiesBlue')");
+    expect(html).toContain("params.get('casualtiesRed')");
+    expect(html).toContain('id="casualtyPanel"');
+    expect(html).toContain('id="casualtyOwn"');
+    expect(html).toContain('id="casualtyEnemy"');
+    expect(html).toMatch(/id="casualtyPanel"\s+hidden/); // 默认隐藏，有参数才显示
+  });
+
   it('public/serve.json 关闭 cleanUrls、把 / 指回 index.html，并兜住无扩展名的干净 URL', () => {
     // cleanUrls: false 会连带关掉"目录请求自动使用 index.html"，
     // 只写 cleanUrls 的话访问 / 会变成目录列表（实测 serve 14："Files within dist"），

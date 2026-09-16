@@ -18,6 +18,7 @@ export function makeUnit({ id, faction, type, x, y }) {
     radius: stats.radius,
     state: 'hold',       // hold | moving | combat | rout | dead | unordered
     command: null,       // 最近一次指令（commands.js 格式）
+    forcedMarch: false,  // 急行军（命令带 forced: true）：提速 1.5×（水域除外），行军士气 -12/s、每秒掉 0.5 血
     route: [],           // 世界坐标路径点
     routeIndex: 0,       // 下一个目标路径点下标
     pathDirty: true,     // 路径变更标记（触发水域绕行检查）

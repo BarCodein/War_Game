@@ -7,10 +7,18 @@ import { makePlainMap, makeWorld, advance } from './helpers.js';
 // （GameScene 里先建 selection 再建 orders，这里保持同样顺序）。
 function makeInput(world) {
   const handlers = { pointerdown: [], pointermove: [], pointerup: [] };
+  const keys = new Map();
   const scene = {
     input: {
       on(event, fn) {
         handlers[event].push(fn);
+      },
+      // 急行军用：orders 会在创建时 addKey('E')，这里用一个可变对象模拟按键状态
+      keyboard: {
+        addKey(name) {
+          if (!keys.has(name)) keys.set(name, { isDown: false });
+          return keys.get(name);
+        },
       },
     },
   };
@@ -31,6 +39,7 @@ function makeInput(world) {
     down: (x, y, opts) => fire('pointerdown', pointer(x, y, opts)),
     move: (x, y, opts) => fire('pointermove', pointer(x, y, opts)),
     up: (x, y, opts) => fire('pointerup', pointer(x, y, opts)),
+    holdE: (down = true) => { keys.get('E').isDown = down; },
   };
 }
 
@@ -164,5 +173,94 @@ describe('输入交互：直接从单位画出移动路径', () => {
     input.down(enemy.x, enemy.y, { right: true });
     input.up(enemy.x, enemy.y, { right: true });
     expect(a.command?.type).toBe('lock');
+  });
+});
+
+describe('输入交互：急行军（按住 E）', () => {
+  it('E + 右键空地 → 急行军 attackMove', () => {
+    const { world, a } = makeWorldWithUnits();
+    const input = makeInput(world);
+    input.down(a.x, a.y);
+    input.up(a.x, a.y);
+
+    input.holdE(true);
+    input.down(700, 500, { right: true });
+    input.up(700, 500, { right: true });
+    expect(a.command?.type).toBe('attackMove');
+    expect(a.command?.forced).toBe(true);
+    expect(a.forcedMarch).toBe(true);
+  });
+
+  it('E + 右键点敌人 → 也是急行军 attackMove（不是普通攻击）', () => {
+    const { world, a, enemy } = makeWorldWithUnits();
+    const input = makeInput(world);
+    input.down(a.x, a.y);
+    input.up(a.x, a.y);
+
+    enemy.x = a.x + 40; // 移进视野
+    enemy.y = a.y;
+    advance(world, 1 / 60);
+    input.holdE(true);
+    input.down(enemy.x, enemy.y, { right: true });
+    input.up(enemy.x, enemy.y, { right: true });
+    expect(a.command?.type).toBe('attackMove');
+    expect(a.command?.forced).toBe(true);
+  });
+
+  it('E + 从单位拖出轨迹 → 急行军 move；松开 E 后恢复普通 move', () => {
+    const { world, a, b } = makeWorldWithUnits();
+    const input = makeInput(world);
+
+    input.holdE(true);
+    input.down(a.x, a.y);
+    input.move(a.x + 30, a.y + 10);
+    input.move(a.x + 60, a.y + 20);
+    input.up(a.x + 60, a.y + 20);
+    expect(a.command?.type).toBe('move');
+    expect(a.command?.forced).toBe(true);
+    expect(a.forcedMarch).toBe(true);
+
+    input.holdE(false);
+    input.down(b.x, b.y);
+    input.move(b.x + 30, b.y + 10);
+    input.move(b.x + 60, b.y + 20);
+    input.up(b.x + 60, b.y + 20);
+    expect(b.command?.type).toBe('move');
+    expect(b.command?.forced).toBe(false);
+    expect(b.forcedMarch).toBe(false);
+  });
+
+  it('E + Shift 追加路径段同样带 forced 标志', () => {
+    const { world, a } = makeWorldWithUnits();
+    const input = makeInput(world);
+    input.down(a.x, a.y);
+    input.up(a.x, a.y);          // 先选中 A（普通指令）
+
+    input.holdE(true);
+    input.down(a.x, a.y, { shift: true });
+    input.move(a.x + 40, a.y + 40);
+    input.up(a.x + 40, a.y + 40, { shift: true });
+    // 没有正在执行的路线时，追加段会被立刻激活（命令对象规范化为 move），但 forced 标志必须保留
+    expect(['appendRoute', 'move']).toContain(a.command?.type);
+    expect(a.command?.forced).toBe(true);
+    expect(a.forcedMarch).toBe(true);
+  });
+
+  it('isForcedRouting：拖动中按住 E 才为 true（渲染层据此换色）', () => {
+    const { world, a } = makeWorldWithUnits();
+    const input = makeInput(world);
+
+    input.holdE(true);
+    input.down(a.x, a.y);
+    input.move(a.x + 30, a.y + 10);
+    expect(input.orders.isForcedRouting()).toBe(true);
+    input.up(a.x + 30, a.y + 10);
+    expect(input.orders.isForcedRouting()).toBe(false); // 抬手后不再是"正在画轨迹"
+
+    input.holdE(false);
+    input.down(a.x, a.y);
+    input.move(a.x + 30, a.y + 10);
+    expect(input.orders.isForcedRouting()).toBe(false);
+    input.up(a.x + 30, a.y + 10);
   });
 });

@@ -42,9 +42,19 @@ function applyModifiers(world, unit, dt) {
   }
   rate += unit.supplied ? m.perSecond.supplied : m.perSecond.unsupplied;
   const mode = (unit.route.length === 0) ? 1 : m.perSecond.attack;  // 判别防守还是运动战
-  if (unit.underFire) rate += m.perSecond.inCombat * mode;
+  if (unit.underFire) {
+    rate += m.perSecond.inCombat * mode; // 正被敌方瞄准：全额交战消耗
+  } else if (unit.state === 'combat') {
+    // 参战但当前没被瞄准（例如两个单位打同一个敌人时，只有前排被还击）：
+    // 同样消耗士气，但比面对面的单位少（gdd.md §6）。
+    rate += m.perSecond.inCombatSupport * mode;
+  }
   if (unit.state === 'moving') {
-    rate += m.perSecond.moving * world.terrain.moraleMoveMultiplierAt(unit.x, unit.y);
+    // 行军消耗士气；急行军（E + 右键 / E + 拖轨迹）用更大的固定值替换普通行军值（gdd.md §4）
+    const movingPenalty = unit.forcedMarch
+      ? values.movement.forcedMarch.moralePerSecond
+      : m.perSecond.moving;
+    rate += movingPenalty * world.terrain.moraleMoveMultiplierAt(unit.x, unit.y);
   } // 行军消耗士气
   unit.morale = clamp(unit.morale + rate * dt);
   //if (unit.morale <= m.thresholds.routAt) enterRout(world, unit);

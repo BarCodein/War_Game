@@ -288,6 +288,14 @@ function unitStats(unit) {
   return values.units[unit.type];
 }
 
+// 急行军速度倍率（gdd.md §4）：除水域之外的地形都提速；
+// 水面上不给加成，仍按 terrain.moveMultiplier 的水域 0.4 走。
+function forcedMarchMultiplier(world, unit) {
+  if (!unit.forcedMarch) return 1;
+  if (world.terrain.terrainAt(unit.x, unit.y) === values.terrain.codes.water) return 1;
+  return values.movement.forcedMarch.speedMultiplier;
+}
+
 // 向路径点行进；ignoreMoraleEffects 用于溃逃（不受士气削弱）。
 function moveAlongRoute(world, unit, dt, ignoreMoraleEffects = false, speedMultiplier = 1) {
   skipImpassableWaypoints(world, unit);
@@ -298,7 +306,17 @@ function moveAlongRoute(world, unit, dt, ignoreMoraleEffects = false, speedMulti
   const stats = unitStats(unit);
   const terrainMult = world.terrain.moveMultiplierAt(unit.x, unit.y);
   const moraleMult = ignoreMoraleEffects ? 1 : effectsFor(unit.morale).speedMultiplier;
-  const travel = stats.speed * terrainMult * moraleMult * speedMultiplier * dt;
+  const forcedMult = forcedMarchMultiplier(world, unit);
+  const travel = stats.speed * terrainMult * moraleMult * speedMultiplier * forcedMult * dt;
+
+  // 急行军代价：缓慢掉血（走 damageUnit，计入结算伤亡）；掉光即力竭阵亡。
+  if (unit.forcedMarch && !ignoreMoraleEffects) {
+    world.damageUnit(unit, values.movement.forcedMarch.hpPerSecond * dt);
+    if (unit.hp <= 0) {
+      world.killUnit(unit, 'forcedMarch');
+      return;
+    }
+  }
 
   if (distance <= travel) {
     if (!world.terrain.passableAt(target.x, target.y) || segmentBlocked(world.terrain, unit.x, unit.y, target.x, target.y)) {

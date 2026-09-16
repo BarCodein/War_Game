@@ -20,6 +20,7 @@ export const values = {
     contactTolerance: 2,               // 交战接触判定额外容忍（px）：圆点距离 ≤ 半径和 + 此值即触发交战
     defend: 0.75, // 防守一方遭受伤害系数
     hp_dps_ratio: 0.8, // 血量阈值，往下攻击力与血量成正比
+    disorderedDamageTaken: 1.5, // 溃逃(rout) / 失序(unordered) 的部队承受伤害倍率（阵型散乱，易被歼灭）
   },
 
   terrain: {
@@ -29,6 +30,10 @@ export const values = {
     moveMultiplier: { plain: 1.0, forest: 0.6, water: 0.4, bridge: 1.0, mountain: 0.65, highMountain: 0, road: 1.25, town: 1.0 },
     defenseModifier: { plain: 1.0, forest: 0.85, bridge: 0.9, mountain: 0.75, road: 1.0, town: 0.6 }, // 防御者地形修正（town 0.6 = 防御大幅提升）
     moraleMoveMultiplier: { plain: 1.0, forest: 1.0, water: 1.0, bridge: 1.0, mountain: 1.0, highMountain: 1.0, road: 0.5, town: 1.0 },
+    // 攻方所在位置的地形对输出的影响（gdd.md §5）：水里站不稳，攻击力打对折。
+    // 注意是**攻方所在地形**，与 defenseModifier（守方所在地形）不是一回事。
+    attackMultiplier: { plain: 1.0, forest: 1.0, water: 0.5, bridge: 1.0, mountain: 1.0, highMountain: 0, road: 1.0, town: 1.0 },
+    waterHpPerSecond: 1, // 身处水域每秒损失的血量（走 World.damageUnit，计入伤亡；可溺水阵亡）
   },
 
   morale: {
@@ -39,6 +44,9 @@ export const values = {
       supplied: 1,
       unsupplied: -2,
       inCombat: -8, // 持续交战的士气损耗（过低会使围攻不可行，见 gdd.md §6）
+      // 参战但当前**没有**被敌方瞄准（state=combat 且 !underFire，例如两个单位打同一个敌人时
+      // 只有前排被还击）：同样消耗士气，但比面对面的单位少
+      inCombatSupport: -3,
       moving: -5,
       attack: 1.3, // 进攻 士气消耗放大因子
     },
@@ -79,6 +87,13 @@ export const values = {
   fog: {
     forestSpotDistance: 60, // 森林中的敌军仅在此距离内可见
     showLastKnownGhost: true,
+  },
+
+  // 战斗统计（结算界面用）：1 点损失的血量 = 1 点伤亡。
+  // 记账在 World.damageUnit()（战斗扣血与补给损耗的唯一入口），
+  // 结算时由 hud 随 URL 参数传给 result.html。
+  stats: {
+    hpPerCasualty: 1, // 多少点血量损失记作 1 点伤亡
   },
 
   // 实际控制线（gdd.md §9）：把地图切成 cellSize 的方网格，每格累加双方影响力
@@ -174,6 +189,13 @@ export const values = {
 
   movement: {
     routSpeedMultiplier: 0.6,
+    // 急行军（gdd.md §4）：E + 右键 / E + 左键拖轨迹下达，命令带 forced: true。
+    // 除了水域之外的地形都提速（水面上照常按 0.4 走，不给加成），代价是士气掉得更快 + 缓慢掉血。
+    forcedMarch: {
+      speedMultiplier: 1.5, // 与地形、士气速度倍率**叠乘**（例：路上 40 × 1.25 × 1.5 = 75 px/s）
+      moralePerSecond: -10, // 取代普通行军的 morale.perSecond.moving(-5)；仍乘地形士气系数与进攻因子
+      hpPerSecond: 1.5,     // 每秒损失的血量（走 World.damageUnit，计入结算伤亡；可以力竭阵亡）
+    },
     stuckThresholdSeconds: 0.35,
     minDisplacement: 0.25,
     unitSeparation: 2,

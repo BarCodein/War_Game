@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { advance, makePlainMap, makeWorld } from './helpers.js';
 import { values } from '../../src/config/index.js';
+import { updateMorale } from '../../src/simulation/systems/morale.js';
 
 function cityMap() {
   return makePlainMap({
@@ -41,6 +42,53 @@ describe('morale', () => {
     expect(blue.morale).toBeCloseTo(
       80 + values.morale.perSecond.inCombat + values.morale.perSecond.supplied,
     );
+  });
+
+  it('参战但没被瞄准的单位也掉士气，且比面对面的少（inCombatSupport）', () => {
+    const world = makeWorld(cityMap());
+    const front = world.spawnUnit('blue', 'light', 500, 300);
+    const support = world.spawnUnit('blue', 'light', 580, 300); // 相距 80 > 60 → 都没有友军加成
+    for (const unit of [front, support]) {
+      unit.state = 'combat'; // 都在交战状态
+      unit.underFire = false;
+    }
+    front.underFire = true;  // 只有前排被敌方瞄准
+
+    updateMorale(world, 1);
+    expect(front.morale).toBeCloseTo(
+      80 + values.morale.perSecond.supplied + values.morale.perSecond.inCombat, 5,
+    );
+    expect(support.morale).toBeCloseTo(
+      80 + values.morale.perSecond.supplied + values.morale.perSecond.inCombatSupport, 5,
+    );
+    // "较少"的语义：支援位的惩罚绝对值严格小于面对面的单位
+    expect(Math.abs(values.morale.perSecond.inCombatSupport))
+      .toBeLessThan(Math.abs(values.morale.perSecond.inCombat));
+  });
+
+  it('实战 2v1：两个参战单位都会掉士气，被瞄准的那个掉得更多（回归）', () => {
+    const world = makeWorld(cityMap());
+    world.spawnUnit('red', 'light', 600, 300);
+    const a = world.spawnUnit('blue', 'light', 600, 272); // 敌正上方 28（接触范围内）
+    const b = world.spawnUnit('blue', 'light', 600, 328); // 敌正下方 28，两者相隔 56 不会互相挤开
+
+    advance(world, 1);
+
+    expect(a.state).toBe('combat');
+    expect(b.state).toBe('combat');
+    const targeted = a.underFire ? a : b;
+    const other = a.underFire ? b : a;
+    expect(targeted.underFire).toBe(true);
+    expect(other.underFire).toBe(false);
+
+    // 友军 +2 与补给 +1 两者都有（敌方目标选择可能落在任一侧，所以动态判断）
+    expect(targeted.morale).toBeCloseTo(
+      80 + 2 + 1 + values.morale.perSecond.inCombat, 4,
+    );
+    expect(other.morale).toBeCloseTo(
+      80 + 2 + 1 + values.morale.perSecond.inCombatSupport, 4,
+    );
+    expect(other.morale).toBeLessThan(80 + 2 + 1); // 没被瞄准也照样掉了士气
   });
 
   it('未受攻击时士气耗尽进入失序并恢复', () => {
