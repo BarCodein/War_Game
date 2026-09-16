@@ -8,12 +8,14 @@ import { updateMorale } from './systems/morale.js';
 import { updateSupply } from './systems/supply.js';
 import { updateCapture } from './systems/capture.js';
 import { updateFog, createFogGrid } from './systems/fog.js';
+import { updateControlLine } from './systems/controlLine.js';
 import { updateVictory } from './systems/victory.js';
 import { values } from '../config/index.js';
 
 // tick 内系统执行顺序固定，保证确定性（architecture.md §4）：
-// movement → combat → morale → supply → capture → fog → victory
-const TICK_ORDER = [updateMovement, updateCombat, updateMorale, updateSupply, updateCapture, updateFog, updateVictory];
+// movement → combat → morale → supply → capture → fog → controlLine → victory
+// controlLine 只读前面的结果（位置 / 城市归属 / 占领进度）做纯视觉统计，不回头影响任何规则。
+const TICK_ORDER = [updateMovement, updateCombat, updateMorale, updateSupply, updateCapture, updateFog, updateControlLine, updateVictory];
 
 // 世界状态容器：纯数据 + tick 编排 + 统一命令入口。
 // 无 Phaser/DOM 依赖，可在 Node 环境 headless 运行完整对局。
@@ -30,6 +32,10 @@ export class World {
     this.capturePoints = map.capturePoints.map(point => makeCapturePoint(point));
     this.units = [];
     this.fog = { blue: createFogGrid(map.terrain), red: createFogGrid(map.terrain) };
+    // 实际控制线（纯视觉，gdd.md §9）：影响力网格在上面第一次 tick 时按地图尺寸建立。
+    this.controlLine = null;
+    this.controlLineSegments = [];
+    this.controlLineTick = 0;
     this.events = [];   // 本 tick 产生的事件（morale 消费 unitDied 后于 tick 末清空）
     this.history = [];  // 事件日志（HUD 战场通讯用）
     this.winner = null;

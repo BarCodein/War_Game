@@ -32,6 +32,7 @@ src/
     commands.js              # 统一命令接口 + 命令队列
     map.js                   # 地图 JSON 解析、结构校验、版本迁移
     spatial.js               # 均匀网格空间分区（邻居查询）
+    influence.js             # 影响力场 + 0 等值线（实际控制线，纯函数）
     ai.js                    # 脚本敌军指令生成器（走统一命令接口）
     systems/
       movement.js            # 移动、寻路、碰撞软排斥
@@ -40,6 +41,7 @@ src/
       supply.js              # 补给分配与损耗
       capture.js             # 城市占领进度
       fog.js                 # 战争迷雾三态与最后已知位置
+      controlLine.js         # 双方影响力统计（10 Hz）→ 实际控制线线段
       victory.js             # 胜负判定
   rendering/
     scenes/BootScene.js      # 资源加载、配置装配
@@ -86,7 +88,8 @@ tests/
 
 - **模拟步长 1/60 s**，与渲染帧率无关（`REQUIREMENTS.md` §5）。
 - 渲染用 `requestAnimationFrame`：每帧 `accumulator += dt`；`while (accumulator ≥ step)` 执行 tick；**每帧最多补 5 个 tick**（掉帧时降速而非螺旋追赶）。
-- tick 内系统执行顺序固定，保证确定性：`movement → combat → morale → supply → capture → fog → victory`。
+- tick 内系统执行顺序固定，保证确定性：`movement → combat → morale → supply → capture → fog → controlLine → victory`。
+  `controlLine` 是末尾的纯视觉统计（每 6 tick 重算影响力场，见 `gdd.md §9`），只读前面的结果，任何规则系统都不读它。
 - 暂停：不执行 tick；游戏速度：×0.5 / ×1 / ×2 通过每帧 tick 次数控制（暂定）。
 - 渲染层按世界状态绘制；HUD 更新节流（如 100 ms）避免每 tick 重建 DOM。
 

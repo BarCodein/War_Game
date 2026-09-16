@@ -35,6 +35,7 @@ war_game/
 │  │  ├─ loop.js               #    固定时间步长累积器
 │  │  ├─ commands.js           #    统一命令接口与校验
 │  │  ├─ spatial.js            #    均匀网格空间分区
+│  │  ├─ influence.js          #    影响力场 + 0 等值线（实际控制线，纯函数）
 │  │  ├─ ai.js                 #    脚本敌军（解释关卡的事件→动作脚本）
 │  │  ├─ level.js              #    关卡标准格式：校验 / 兵力部署 / 锚点与目标解析
 │  │  └─ systems/              #    tick 内的规则系统
@@ -44,6 +45,7 @@ war_game/
 │  │     ├─ supply.js          #      补给分配/恢复/生产/损耗
 │  │     ├─ capture.js         #      城市占领进度
 │  │     ├─ fog.js             #      战争迷雾三态/目视/最后已知位置
+│  │     ├─ controlLine.js     #      影响力场重算（10 Hz）+ 分界线线段
 │  │     └─ victory.js         #      胜负判定
 │  ├─ controllers/             # 交互状态控制器
 │  │  └─ gameController.js     #    暂停/游戏速度
@@ -72,7 +74,7 @@ war_game/
 │     ├─ editorStore.js        # 编辑器纯数据状态
 │     └─ mapResize.js          # 地图补齐到画布尺寸（纯数据）
 └─ tests/
-   ├─ unit/                    # 18 个 Vitest 测试文件（规则确定性）
+   ├─ unit/                    # 28 个 Vitest 测试文件（规则确定性）
    └─ e2e/                     # 7 个 Playwright 测试文件（浏览器流程）
 ```
 
@@ -171,6 +173,19 @@ war_game/
 均匀网格空间分区（`SpatialGrid`）：
 - 每 tick 重建（O(n)），邻居查询近似 O(1)/单位，**禁止全单位两两检测**（`REQUIREMENTS.md §5`）。
 - `rebuild(units)` / `cellKeyAt(x,y)` / `query(x,y,radius)`（按桶序，确定性）。
+
+### `src/simulation/influence.js`
+**影响力场与实际控制线的纯计算**（`gdd.md §9`）：不依赖 `World` / Phaser / DOM，输入是影响力源数组、输出是网格与线段，可 headless 单测。
+- `influenceAt(distance, radius, strength, curve)`：单个源的影响力（形状照搬原型 `srcipt.js`：内圈满强度 → 断崖到 20% → 中圈/外圈两段线性衰减 → 超出半径归零）；距离按 `radius / curve.maxDistance` 等比缩放，所以改 `influenceRadius` 就是整体缩放曲线。
+- `createField(width, height, cellSize)` → `{ cols, rows, values, raw, scratch, ready }`；`values` 是平滑后的影响力（对外），`raw` 是本次重算结果。
+- `rebuildField(field, sources, cfg)`：清零 → 按半径框（**只遍历源影响力覆盖到的格子**，不扫全图）累加带符号影响力（蓝 +、红 −）→ 按 `temporalSmoothing` 与上一次做指数平滑 → 可选 3×3 均值模糊。
+- `contour(field, epsilon, out)`：marching squares 取 **0 等值线**，即实际控制线线段（`{x1,y1,x2,y2}`）。只有 2×2 格块里**同时存在正格与负格**才输出线段——否则「只有蓝方影响力」的区域会沿着自己影响范围的外沿画出一条假分界线。鞍点（`code 5/10`）用格心值拆分。
+
+### `src/simulation/systems/controlLine.js`
+实际控制线系统（`gdd.md §9`，**纯视觉**）：
+- `updateControlLine(world)`：每 `refreshTicks`（默认 6 tick = 10 Hz）重算一次影响力场，写 `world.controlLine`（网格）与 `world.controlLineSegments`（分界线线段）；非重算 tick 直接返回，保持上一次结果。
+- `collectSources(world)`：影响力源 = 存活单位 + 城市 + 占领点；蓝 `sign=+1`、红 `−1`，中立（`'neutral'` / 未占领）不产生影响力；城市与占领点在争夺中（`captureProgress > 0`）按进度线性削弱现属方强度。
+- 放在 tick 顺序末尾（`victory` 之前）：它只读位置/归属/占领进度，任何规则系统都不读它。
 
 ### `src/simulation/level.js`
 关卡（Level）标准格式 v1——**"一局游戏"的完整规格**（`architecture.md` §7.1）：
@@ -315,9 +330,9 @@ DOM 编辑器工具栏：
 - 交战震动：沿「自身→敌人」连线方向的低频小幅度位移（仅渲染层，不影响模拟坐标）。
 
 ### `src/rendering/controlLineRenderer.js`
-实际控制线：
-- 按双方存活单位纵深位置插值出战线采样点，用二次贝塞尔采样平滑连线（Phaser Graphics 无贝塞尔 API）。
-- 来自原型遗留视觉表现（`gdd.md §9` 暂定保留）。
+实际控制线（`gdd.md §9`）：**只描线，不做判断**——影响力统计与归属判定在 `simulation/influence.js` + `systems/controlLine.js`。
+- 每帧读 `world.controlLineSegments`，用 `values.controlLine.style`（4 px / `0x101414` / 0.82）逐段 `moveTo`+`lineTo` 后一次性 `strokePath`（Phaser 的 `MOVE_TO` 会开新子路径，多段战线不会连错）。
+- 可能在多段（包围、多个战场）时把「实际控制线」标签贴在**最靠上**的那一段旁边。
 
 ### `src/rendering/scenes/BootScene.js`
 游戏页启动场景：把 URL 解析为**关卡**再启动游戏。

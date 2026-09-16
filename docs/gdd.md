@@ -143,7 +143,14 @@
 - **三态**：当前可见 / 已探索但不可见 / 从未探索。当前可见正常渲染；未探索与已探索但不可见**统一叠加浅色迷雾**（地形保持可见，仅以浅雾标识「当前不在视野」），不再有深色遮蔽。
 - 森林视野阻挡：森林中的敌军仅在 60 px 内可见（§5）。
 - **不可见敌军不显示任何实时状态**（位置、血量、士气、编队）；离开视野时在其最后已知位置显示灰色虚影标记，重新目视后更新。
-- 原型中的「实际控制线」为视觉表现，暂定保留（非需求项，基于双方单位位置插值，实现成本低）。
+- **实际控制线**（视觉表现，非需求项）：把地图切成 **20 px 方网格**，每格累加双方**影响力**——
+  影响力源 = 存活单位（半径 140 / 满强度 100）+ 城市（半径 180 / 强度 120）+ 占领点（半径 180 / 强度 100），
+  影响力随距离按原型 srcipt.js 的曲线衰减（内圈满强度 → 断崖到 20% → 两段线性衰减 → 半径外为 0）。
+  每格按**带符号代数和**判定归属：> 0 蓝方控制、< 0 红方控制、= 0 中立；
+  **相邻格归属不同处即为实际控制线**，取 0 等值线（marching squares）绘制。
+  每 6 tick 重算一次（10 Hz），带时间平滑与 3×3 模糊；城市/占领点在争夺中（captureProgress > 0）时，
+  现属方的影响力按占领进度线性削弱（表现「城快丢了，控制线往城里压」）。
+  **纯视觉**：不参与战斗、补给、士气、视野与胜负判定。数值见 §12。
 
 ## 10. 教学战役关卡：断裂峡谷（§8-6）
 
@@ -231,6 +238,11 @@
 | capturePoints.capture：radius / perUnitPerSecond / capPerSecond / decayPerSecond | 60 / 5% / 15% / 3% |
 | supply：capacityPerCity / attritionHpPerSecond / attritionMoralePerSecond | 5 / −1 /s / −2 /s |
 | fog：forestSpotDistance / showLastKnownGhost | 60 / true |
+| controlLine：cellSize / refreshTicks / temporalSmoothing / fieldBlurPasses / neutralEpsilon | 20 px / 6 tick（10 Hz）/ 0.35 / 1 / 0 |
+| controlLine.curve：maxDistance / coreDistance / coreExitRatio / midDistance / midEndRatio / edgeEndRatio | 40 / 10 / 0.2 / 25 / 0.0625 / 0.025（距离按 influenceRadius ÷ maxDistance 等比缩放） |
+| controlLine.unit：influenceRadius / strength | 140 / 100 |
+| controlLine.city：influenceRadius / strength | 180 / 120（争夺中按 captureProgress 线性削弱） |
+| controlLine.capturePoint：influenceRadius / strength | 180 / 100 |
 | terrain：gridCellSize / codes | 10 px / 0 平原 1 森林 2 水域 3 桥梁 4 山地 5 高山 6 道路 7 城镇 |
 | terrain.passable：平原 / 森林 / 水域 / 桥梁 / 山地 / 高山 / 道路 / 城镇 | 可 / 可 / 可 / 可 / 可 / 不可 / 可 / 可 |
 | terrain.moveMultiplier：平原 / 森林 / 水域 / 桥梁 / 山地 / 高山 / 道路 / 城镇 | 1.0 / 0.6 / 0.4 / 1.0 / 0.65 / 0 / 1.25 / 1.0 |

@@ -81,6 +81,38 @@ export const values = {
     showLastKnownGhost: true,
   },
 
+  // 实际控制线（gdd.md §9）：把地图切成 cellSize 的方网格，每格累加双方影响力
+  // （影响力源 = 存活单位 + 城市 + 占领点），按**带符号代数和**判定该格归属：
+  // sum > 0 → 蓝方控制，sum < 0 → 红方控制，sum === 0 → 中立。
+  // 相邻格归属不同处即为实际控制线，取 0 等值线（marching squares）绘制。
+  // 纯视觉：不参与战斗 / 补给 / 士气 / 胜负判定。
+  controlLine: {
+    cellSize: 20,            // 影响力网格边长（px）。地形格是 10 px，这里刻意粗一档以控开销
+    refreshTicks: 6,         // 每 N 个 tick 重算一次（60 Hz / 6 = 10 Hz）
+    temporalSmoothing: 0.35, // 与上一次影响力的指数平滑系数（0 = 冻结，1 = 完全用新值）
+    fieldBlurPasses: 1,      // 等值线提取前的 3×3 均值模糊次数（让分界线更平顺）
+    neutralEpsilon: 0,       // |代数和| ≤ 该值算中立（0 = 严格按符号；用于排除纯浮点噪声）
+
+    // 影响力衰减曲线：形状照搬原型 srcipt.js——
+    //   r < 10 → 100；r < 25 → 30−r；r < 40 → (50−r)×0.25；r ≥ 40 → 0
+    // 距离按 influenceRadius / maxDistance 等比缩放，强度按各影响力源的 strength 缩放。
+    // 注：原型在 r=25 处 5 → 6.25 有个 1.25 的小跳变（判断为笔误），这里按连续处理。
+    curve: {
+      maxDistance: 40,     // 原型曲线的距离上界（= 影响力半径缩放基准）
+      coreDistance: 10,    // 内圈：该距离内为满强度
+      coreExitRatio: 0.2,  // 出内圈立刻降到该比例（原型的 100 → 20 断崖）
+      midDistance: 25,     // 中圈末端
+      midEndRatio: 0.0625, // 中圈末端强度比例（原型 (50−25)×0.25 = 6.25）
+      edgeEndRatio: 0.025, // 外圈末端强度比例（原型 1/40×100 = 2.5），到 maxDistance 截断为 0
+    },
+
+    unit: { influenceRadius: 140, strength: 100 },          // 半径取轻型视野 140
+    city: { influenceRadius: 180, strength: 120 },          // 半径取城市视野 180
+    capturePoint: { influenceRadius: 180, strength: 100 },  // 占领点同半径，强度略低于城市
+
+    style: { lineWidth: 4, color: 0x101414, alpha: 0.82 },  // 分界线样式（深色粗线）
+  },
+
   spatial: { cellSize: 64 }, // 均匀网格（≥ 最大攻击距离）
 
   performance: {
@@ -125,7 +157,8 @@ export const values = {
     timerRefreshMs: 1000,
   },
 
-  // 教学关卡的规则性数值；地图几何体（地形格子/城市坐标/出生点）在关卡 JSON 中（architecture.md §7）
+  // 教学关卡的规则性数值；地图几何体（地形格子/城市坐标/出生点）
+  // 在关卡 JSON 中（architecture.md §7）
   tutorial: {
     map: { width: 1280, height: 800, midlineX: 640 },
     forces: { blue: { light: 6, heavy: 2 }, red: { light: 2, heavy: 2 } },
