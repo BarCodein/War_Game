@@ -169,6 +169,19 @@ img {
     background: var(--brass);
 }
 
+/* 返回主界面按钮（通往游戏 index.html） */
+.navbar-menu li a.nav-home {
+    border: 1px solid var(--brass);
+    color: var(--brass);
+    background-color: rgba(166, 124, 0, 0.14);
+    font-weight: 600;
+}
+.navbar-menu li a.nav-home:hover {
+    background-color: var(--brass);
+    color: var(--dark-red-deep);
+    border-color: var(--brass);
+}
+
 .navbar-toggle {
     display: none;
     background: none;

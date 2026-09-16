@@ -41,7 +41,6 @@
     /* 复古纹理图（项目内已有资源） */
     --texture-paper:       url('../../assets/texture/retro.png');
     --texture-map:         url('../../assets/texture/index.png');
-    --texture-btn:         url('../../assets/texture/but1.png');
 
     /* ★ 背景地图接口 — 中国军事地图（暂用旧纸地图占位，可替换） */
     --battle-map-bg:       url('../../assets/texture/index.png');
@@ -178,9 +177,6 @@ h1, h2, h3, h4 {
     letter-spacing: 3px;
     color: var(--cream);
     background: linear-gradient(180deg, var(--dark-red) 0%, var(--dark-red-deep) 100%);
-    background-image: var(--texture-btn), linear-gradient(180deg, var(--dark-red) 0%, var(--dark-red-deep) 100%);
-    background-blend-mode: multiply;
-    background-size: cover;
     border: 2px solid var(--brass);
     border-radius: 3px;
     text-decoration: none;
@@ -440,8 +436,6 @@ h1, h2, h3, h4 {
     transform: translateX(-50%);
     white-space: nowrap;
     background: var(--paper-warm);
-    background-image: var(--texture-btn);
-    background-blend-mode: multiply;
     border: 1px solid var(--wood-mid);
     box-shadow: var(--shadow);
     color: var(--dark-red-deep);
@@ -474,8 +468,6 @@ h1, h2, h3, h4 {
     height: 42px;
     border: 1px solid var(--wood-mid);
     background: var(--paper-warm);
-    background-image: var(--texture-btn);
-    background-blend-mode: multiply;
     color: var(--dark-red-deep);
     font-size: 1.4rem;
     font-weight: bold;

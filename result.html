@@ -4,202 +4,128 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>战斗结算 · 沙盘战争</title>
+  <link rel="stylesheet" href="./members/css/battlepages.css">
   <style>
-    /* =========================================================
-       战斗结算页（胜利 / 失败）— 电影化排版（参考 INSIDE 结尾致谢式构图）
-       全屏 background1.png 战场图：
-       · 靠上雾气区 → 高对比大字（亮米白 + 深影）
-       · 下半深色区 → 浅白半透明磨砂框，写明作战失败/胜利原因
-       单文件 + URL 参数 ?result=victory|defeat&level=<id>&reason=<可选>&t=<用时>
-       ========================================================= */
-    * { box-sizing: border-box; }
-    html, body { height: 100%; }
-    body {
-      margin: 0;
-      font-family: "Microsoft YaHei", "SimHei", sans-serif;
-      color: #ece5d4;
-      /* 全屏战场图 + 底部渐变压暗（给半透明框一个更深的衬托区） */
-      background:
-        linear-gradient(180deg, rgba(10, 14, 12, 0.10) 0%, rgba(10, 14, 12, 0) 30%, rgba(8, 11, 9, 0.38) 62%, rgba(6, 9, 7, 0.62) 100%),
-        url('../assets/texture/background1.png') center / cover no-repeat fixed #2a3230;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-    }
-
-    /* ---------- 靠上：高对比大字 ---------- */
-    .verdict-block {
-      margin-top: 8vh;
-      text-align: center;
-      padding: 0 24px;
-    }
-    .verdict {
-      margin: 0;
-      font-family: "SimHei", "Microsoft YaHei", sans-serif;
-      font-weight: bold;
-      font-size: clamp(84px, 15vw, 150px);
-      line-height: 1.12;
-      letter-spacing: 0.24em;
-      text-indent: 0.24em;
-      color: #f7f2e4;
-      /* 深色投影为主（对雾气背景拉对比）+ 一层微弱白光晕 */
+   
+    /* 胜负大字：胜利暗红 / 失败军绿，加大醒目 */
+    .battle-hero h1#resultVerdict {
+      font-size: 3.4rem;
+      letter-spacing: 10px;
+      color: var(--dark-red);
       text-shadow:
-        0 3px 10px rgba(10, 14, 10, 0.9),
-        0 6px 28px rgba(10, 14, 10, 0.65),
-        0 0 30px rgba(255, 255, 255, 0.30);
-      user-select: none;
+        0 1px 0 rgba(255, 255, 255, 0.65),
+        0 3px 16px rgba(40, 25, 12, 0.3);
     }
-    /* 胜负识别线：细色条（胜=暗红 / 败=灰绿），低调区分 */
-    .verdict-rule {
-      width: 148px;
-      height: 3px;
-      margin: 18px auto 0;
-      background: #a8402e;
-      box-shadow: 0 1px 6px rgba(0, 0, 0, 0.6);
+    .battle-hero h1#resultVerdict.lose {
+      color: var(--military-green);
     }
-    .verdict-rule.lose { background: #6f8f74; }
-    .kicker {
-      margin-top: 14px;
-      font-size: 0.78rem;
-      letter-spacing: 9px;
-      text-indent: 9px;
-      text-transform: uppercase;
-      color: rgba(247, 242, 228, 0.82);
-      text-shadow: 0 2px 8px rgba(10, 14, 10, 0.85);
+    .battle-hero .hero-eyebrow.lose { color: var(--military-green); }
+
+    /* 原因标题（h2）：失败态换军绿 */
+    .bbg-section h2.lose {
+      color: var(--military-green-deep);
+      border-left-color: var(--military-green);
     }
 
-    /* ---------- 弹性空隙：把原因框推到深色区 ---------- */
-    .spacer { flex: 1 1 auto; min-height: 6vh; }
-
-    /* ---------- 下半深色区：浅白半透明磨砂框 ---------- */
-    .reason-panel {
-      width: min(640px, 88vw);
-      padding: 26px 32px 22px;
-      background: rgba(255, 255, 255, 0.13);
-      border: 1px solid rgba(255, 255, 255, 0.28);
-      border-radius: 6px;
-      backdrop-filter: blur(7px);
-      -webkit-backdrop-filter: blur(7px);
-      box-shadow:
-        0 8px 28px rgba(0, 0, 0, 0.45),
-        inset 0 1px 0 rgba(255, 255, 255, 0.22);
-      text-shadow: 0 1px 6px rgba(10, 14, 10, 0.8);
-    }
-    .reason-panel .panel-label {
-      display: block;
-      font-family: "SimHei", sans-serif;
-      font-size: 0.9rem;
-      letter-spacing: 4px;
-      color: #f7f2e4;
-      margin-bottom: 12px;
-      padding-left: 12px;
-      border-left: 3px solid #a8402e;   /* 胜=暗红 */
-    }
-    .reason-panel .panel-label.lose { border-left-color: #6f8f74; } /* 败=灰绿 */
-    /* 原因文字滚动区：文字多时框不无限撑高，内部滚动（约 1/3 屏高封顶） */
-    .reason-scroll {
-      max-height: 32vh;
+    /* 原因框：文字多时内部滚动，不把整页撑爆 */
+    .result-reason {
+      max-height: 40vh;
       overflow-y: auto;
       overflow-x: hidden;
-      padding-right: 8px;
-      scrollbar-width: thin;
-      scrollbar-color: rgba(255, 255, 255, 0.35) rgba(255, 255, 255, 0.08);
+      white-space: pre-line;
+      overflow-wrap: anywhere;
     }
-    .reason-scroll::-webkit-scrollbar { width: 6px; }
-    .reason-scroll::-webkit-scrollbar-track {
-      background: rgba(255, 255, 255, 0.08);
+    .result-reason::-webkit-scrollbar { width: 6px; }
+    .result-reason::-webkit-scrollbar-track { background: transparent; }
+    .result-reason::-webkit-scrollbar-thumb {
+      background: var(--wood-mid);
       border-radius: 3px;
     }
-    .reason-scroll::-webkit-scrollbar-thumb {
-      background: rgba(255, 255, 255, 0.35);
-      border-radius: 3px;
-    }
-    .reason-panel .reason {
-      margin: 0;
-      font-size: 0.96rem;
-      line-height: 2;
-      letter-spacing: 1.5px;
-      color: #f1ebdb;
-      white-space: pre-line; /* 支持多行原因 */
-      overflow-wrap: anywhere; /* 超长单词/串也断行，不横向溢出 */
-    }
-    .reason-panel .meta {
-      margin: 14px 0 0;
-      padding-top: 12px;
-      border-top: 1px solid rgba(255, 255, 255, 0.22);
+
+    /* 用时 */
+    .result-meta {
+      margin-top: 14px;
+      text-align: right;
+      color: var(--text-muted);
       font-size: 0.8rem;
-      letter-spacing: 3px;
-      color: rgba(241, 235, 219, 0.72);
+      letter-spacing: 2px;
       min-height: 18px;
     }
 
-    /* ---------- 底部按钮：低饱和电影感 ---------- */
-    .result-actions {
-      margin: 26px 0 6vh;
+    /* 按钮组 */
+    .bbg-start {
       display: flex;
       gap: 20px;
       justify-content: center;
       flex-wrap: wrap;
-      padding: 0 24px;
     }
-    .result-btn {
-      display: inline-block;
-      min-width: 186px;
-      padding: 12px 34px;
-      font-family: "SimHei", sans-serif;
-      font-size: 0.98rem;
-      letter-spacing: 3px;
-      text-align: center;
-      text-decoration: none;
-      color: #f1ebdb;
-      background: rgba(14, 18, 15, 0.55);
-      border: 1px solid rgba(255, 255, 255, 0.42);
-      border-radius: 3px;
-      backdrop-filter: blur(4px);
-      -webkit-backdrop-filter: blur(4px);
-      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5);
-      transition: background .15s ease, border-color .15s ease, transform .15s ease;
+    /* 次级按钮（返回主界面）：军绿做旧，与主按钮暗红区分 */
+    .result-btn-secondary {
+      background: linear-gradient(180deg, var(--military-green) 0%, var(--military-green-deep) 100%);
     }
-    .result-btn:hover {
-      background: rgba(24, 30, 25, 0.72);
-      border-color: rgba(255, 255, 255, 0.7);
-    }
-    .result-btn:active { transform: translateY(1px); }
 
-    @media (max-width: 560px) {
-      .result-actions { flex-direction: column; width: 100%; align-items: center; }
-      .result-btn { width: min(320px, 86vw); }
-      .verdict-block { margin-top: 6vh; }
+    @media (max-width: 480px) {
+      .battle-hero h1#resultVerdict { font-size: 2.4rem; letter-spacing: 6px; }
     }
   </style>
 </head>
 <body>
 
-  <!-- ==================== 靠上：胜负大字 ==================== -->
-  <div class="verdict-block">
-    <div class="verdict" id="resultVerdict">胜利</div>
-    <div class="verdict-rule" id="verdictRule"></div>
-    <div class="kicker" id="resultKicker">VICTORY</div>
-  </div>
-
-  <div class="spacer"></div>
-
-  <!-- ==================== 下半深色区：浅白半透明框 ==================== -->
-  <div class="reason-panel">
-    <span class="panel-label" id="panelLabel">作战胜利原因</span>
-    <div class="reason-scroll">
-      <p class="reason" id="resultReason"></p>
+  <!-- ==================== 顶部导航条（同 battlebackground） ==================== -->
+  <nav class="battle-nav">
+    <div class="battle-nav-inner">
+      <a class="battle-nav-back" href="./battlechoose.html">&larr; 返回关卡</a>
+      <a class="battle-nav-brand" href="./index.html">
+        <span class="nav-mark">&#9876;</span> 沙盘战争
+      </a>
     </div>
-    <p class="meta" id="resultTime"></p>
-  </div>
+  </nav>
 
-  <!-- ==================== 按钮 ==================== -->
-  <div class="result-actions">
-    <a class="result-btn" id="resultPrimary" href="./battlechoose.html">重新开始</a>
-    <a class="result-btn" id="resultHome" href="./index.html">返回主界面</a>
+  <!-- ==================== 标题区：胜负大字（同 battle-hero 结构） ==================== -->
+  <section class="battle-hero">
+    <span class="hero-eyebrow" id="resultEyebrow">VICTORY</span>
+    <h1 id="resultVerdict">胜利</h1>
+    <p class="hero-subtitle" id="resultSubtitle"></p>
+  </section>
+
+  <!-- ==================== 内容区（同 bbg-shell） ==================== -->
+  <div class="bbg-shell">
+
+    <section class="bbg-section">
+      <h2 id="panelLabel">作战胜利原因</h2>
+      <div class="bbg-text result-reason" id="resultReason"></div>
+      <p class="result-meta" id="resultTime"></p>
+    </section>
+
+    <!-- ==================== 按钮（同 bbg-start） ==================== -->
+    <div class="bbg-start">
+      <a class="battle-btn" id="resultPrimary" href="./battlechoose.html">重新开始</a>
+      <a class="battle-btn result-btn-secondary" id="resultHome" href="./index.html">返回主界面</a>
+    </div>
+
   </div>
 
   <script>
+    /* =========================================================
+       结算数据字典：新增结算类型在这里加一条。
+       原因支持多行：字符串里用 \n 换行即可。
+       URL 参数：?result=victory|defeat&level=<id>&reason=<可选>&t=<用时>
+       ========================================================= */
+    var RESULT_DATA = {
+      victory: {
+        verdict: '胜利',
+        eyebrow: 'VICTORY',
+        label: '作战胜利原因',
+        reason: '敌军有生力量已被全歼。\n战役目标达成，前线转入新的攻势阶段。'
+      },
+      defeat: {
+        verdict: '失败',
+        eyebrow: 'DEFEAT',
+        label: '作战失败原因',
+        reason: '我方基地失守。\n部队已失去作战能力，本场战役未能达成目标。'
+      }
+    };
+
     (function () {
       var params = new URLSearchParams(window.location.search);
       var result = params.get('result') === 'victory' ? 'victory' : 'defeat';
@@ -207,31 +133,18 @@
       var reason = (params.get('reason') || '').trim();
       var timeText = (params.get('t') || '').trim();
 
-      /* 结算数据字典：新增结算类型（如「撤退休场」）在这里加一条。
-         原因支持多行：在字符串里用 \n 换行即可。 */
-      var RESULT_DATA = {
-        victory: {
-          verdict: '胜利',
-          kicker: 'VICTORY',
-          label: '作战胜利原因',
-          reason: '敌军有生力量已被全歼。\n战役目标达成，前线转入新的攻势阶段。'
-        },
-        defeat: {
-          verdict: '失败',
-          kicker: 'DEFEAT',
-          label: '作战失败原因',
-          reason: '我方基地失守。\n部队已失去作战能力，本场战役未能达成目标。'
-        }
-      };
       var data = RESULT_DATA[result];
       var isDefeat = result === 'defeat';
 
       /* 基础填充 */
       document.title = data.verdict + ' · 沙盘战争';
-      document.getElementById('resultVerdict').textContent = data.verdict;
-      document.getElementById('resultKicker').textContent = data.kicker;
-      document.getElementById('verdictRule').classList.toggle('lose', isDefeat);
+      var verdictEl = document.getElementById('resultVerdict');
+      var eyebrowEl = document.getElementById('resultEyebrow');
       var labelEl = document.getElementById('panelLabel');
+      verdictEl.textContent = data.verdict;
+      eyebrowEl.textContent = data.eyebrow;
+      verdictEl.classList.toggle('lose', isDefeat);
+      eyebrowEl.classList.toggle('lose', isDefeat);
       labelEl.textContent = data.label;
       labelEl.classList.toggle('lose', isDefeat);
 
@@ -239,16 +152,22 @@
       if (timeText) document.getElementById('resultTime').textContent = '用时 ' + timeText;
 
       var primary = document.getElementById('resultPrimary');
+      var subtitleEl = document.getElementById('resultSubtitle');
 
-      /* 关卡索引：取战役名 + 计算下一战场（与游戏内「下一关」逻辑同源） */
+      /* 关卡索引：取战役名（副标题）+ 计算下一战场（与游戏内「下一关」逻辑同源） */
       fetch('/assets/levels/index.json')
         .then(function (res) { return res.ok ? res.json() : null; })
         .then(function (index) {
           var levels = (index && index.levels) ? index.levels : [];
           var current = levels.findIndex(function (l) { return l.id === levelId; });
+
           if (current >= 0) {
             document.title = data.verdict + ' · ' + levels[current].name;
+            subtitleEl.textContent = levels[current].name + (timeText ? ' · 用时 ' + timeText : '');
+          } else if (timeText) {
+            subtitleEl.textContent = '用时 ' + timeText;
           }
+
           if (result === 'victory') {
             var next = current >= 0 ? levels[current + 1] : null;
             if (next) {
@@ -265,6 +184,7 @@
           }
         })
         .catch(function () {
+          if (timeText) subtitleEl.textContent = '用时 ' + timeText;
           if (result === 'victory') {
             primary.textContent = '返回战役选择';
             primary.setAttribute('href', './battlechoose.html');
@@ -272,17 +192,16 @@
             primary.setAttribute('href', './game.html?level=' + encodeURIComponent(levelId));
           }
         });
-
-      /* 音效：悬停轻盈 / 点击重（与首页菜单一致） */
-      document.querySelectorAll('.result-btn').forEach(function (btn) {
-        btn.addEventListener('mouseenter', function () {
-          window.playSfx && window.playSfx('slide', 0.45);
-        });
-        btn.addEventListener('click', function () {
-          window.playSfx && window.playSfx('button');
-        });
-      });
     })();
+  </script>
+
+  <script src="/audio.js"></script>
+  <script>
+    // UI 音效：导航返回 / 按钮
+    window.bindSfx({
+      '.battle-nav a': 'click',
+      '.bbg-start .battle-btn': 'button'
+    });
   </script>
 </body>
 </html>
