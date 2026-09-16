@@ -93,7 +93,7 @@
       tashan_battle: {
         title: '塔山阻击战',
         subtitle: '1948年10月10日 — 10月15日 · 东北地区',
-        video: './assets/video/tashan.mp4',
+        video: 'http://179.255.122.44/videos/tashan.mp4',
         mapImg: './assets/texture/tashan_map.png',
         mapAlt: '塔山战役态势图',
         forcesHtml:
@@ -106,7 +106,7 @@
       subei_battle: {
         title: '宿北战役',
         subtitle: '1946年12月 · 江苏宿迁北部',
-        video: './assets/video/subei.mp4',
+        video: 'http://179.255.122.44/videos/subei.mp4',
         mapImg: './assets/texture/subei_battle_map.jpg',
         mapAlt: '宿北战役态势图',
         forcesHtml:
@@ -119,7 +119,7 @@
       xian_battle: {
         title: '西安事变',
         subtitle: '1936年12月12日 · 西安华清池',
-        video: './assets/video/xian.mp4',
+        video: 'http://179.255.122.44/videos/xian.mp4',
         mapImg: './assets/picture/xian.png',
         mapAlt: '介于两石',
         forcesHtml:
@@ -240,7 +240,7 @@
         var p = video.play();
         if (p && typeof p.catch === 'function') {
           p.catch(function () {
-            video.muted = true;
+            video.muted = false;
             var p2 = video.play();
             if (p2 && typeof p2.catch === 'function') {
               p2.catch(endIntro);

@@ -1,5 +1,6 @@
 import { values } from '../../config/index.js';
 import { effectsFor } from './morale.js';
+import { isSpotted } from './fog.js';
 
 // 移动系统：沿命令路径点行进；直行遇不可通行地形时在逻辑网格上 A* 绕行（路径缓存共享）；
 // 软排斥防止单位重叠；交战中冻结；溃逃单位不受指挥，向最近己方城市全速撤退，
@@ -8,6 +9,8 @@ import { effectsFor } from './morale.js';
 // A* 路径缓存：同 tick 跨单位共享；容量上限内保留，超限清空（确定性）。
 const pathCache = new Map();
 const PATH_CACHE_MAX = 512;
+
+const LOCK_ROUTE_UPDATE_INTERVAL = 0.5; // seconds
 
 export function updateMovement(world, dt) {
   const previousPositions = new Map();
@@ -19,6 +22,12 @@ export function updateMovement(world, dt) {
     }
     if (unit.state === 'unordered') continue;
     if (unit.state === 'combat') continue; // 交战中冻结
+
+    // 更新锁定目标的路径
+    if (unit.lockedTargetId != null) {
+      updateLockRoute(world, unit);
+    }
+
     if (unit.route.length === 0 || unit.routeIndex >= unit.route.length) {
       activateNextQueuedRoute(world, unit);
       if (unit.route.length === 0 || unit.routeIndex >= unit.route.length) continue;
@@ -29,6 +38,47 @@ export function updateMovement(world, dt) {
   separateWaterOverlaps(world);
   separateOverlaps(world);
   updateBlockedUnits(world, previousPositions, dt);
+}
+
+function updateLockRoute(world, unit) {
+  const target = world.units.find(u => u.id === unit.lockedTargetId);
+  if (!target || target.state === 'dead') {
+    // 目标死亡或不存在，清除锁定
+    unit.lockedTargetId = null;
+    unit.command = null;
+    unit.targetId = null;
+    return;
+  }
+
+  // 检查目标是否在视野内，或有最后已知位置
+  const targetFaction = unit.faction;
+  const spotted = isSpotted(world, target, targetFaction);
+  let targetX = target.x;
+  let targetY = target.y;
+
+  if (!spotted && target.lastSeen?.[targetFaction]) {
+    // 使用最后已知位置
+    targetX = target.lastSeen[targetFaction].x;
+    targetY = target.lastSeen[targetFaction].y;
+  } else if (!spotted) {
+    // 目标不可见且无最后已知位置，停止追踪
+    return;
+  }
+
+  // 限制路径更新频率
+  unit._lockRouteTimer = (unit._lockRouteTimer ?? 0) + (world.time - (unit._lockLastTime ?? world.time));
+  unit._lockLastTime = world.time;
+  if (unit._lockRouteTimer < LOCK_ROUTE_UPDATE_INTERVAL) return;
+  unit._lockRouteTimer = 0;
+
+  // 重新规划路径到目标当前位置
+  const newRoute = planRoute(world.terrain, unit.x, unit.y, [{ x: targetX, y: targetY }]);
+  if (newRoute.length > 0) {
+    unit.route = newRoute;
+    unit.routeIndex = 0;
+    unit.pathDirty = true;
+    unit.targetId = unit.lockedTargetId;
+  }
 }
 
 function updateBlockedUnits(world, previousPositions, dt) {
@@ -322,6 +372,7 @@ function waterSafeStep(world, unit, target, travel) {
   let allowed = travel;
   for (const other of world.units) {
     if (other === unit || other.state === 'dead') continue;
+    if (other.faction !== unit.faction) continue; // Allow approaching enemy units in water
     const offsetX = other.x - unit.x;
     const offsetY = other.y - unit.y;
     const along = offsetX * directionX + offsetY * directionY;
@@ -343,6 +394,7 @@ function separateWaterOverlaps(world) {
     for (const unit of waterUnits) {
       for (const other of world.units) {
         if (other === unit || other.state === 'dead') continue;
+        if (other.faction !== unit.faction) continue; // Don't separate from enemy units in water
         if (other.id < unit.id && world.terrain.terrainAt(other.x, other.y) === values.terrain.codes.water) continue;
         const dx = unit.x - other.x;
         const dy = unit.y - other.y;
@@ -364,8 +416,8 @@ function separateWaterOverlaps(world) {
 }
 
 function waterClearance(unit, other) {
-  // Keep a visible two-pixel buffer even when older configs use zero separation.
-  return unit.radius + other.radius + Math.max(2, values.movement.unitSeparation) + 0.01;
+  // Match land separation so units can reach contact distance (radius + radius + unitSeparation)
+  return unit.radius + other.radius + Math.max(2, values.movement.unitSeparation);
 }
 
 function activateNextQueuedRoute(world, unit) {
@@ -428,7 +480,8 @@ function skipImpassableWaypoints(world, unit) {
 // 软排斥：重叠单位相互推开一半（单趟处理，确定性）
 function separateOverlaps(world) {
   const maxRadius = values.units.heavy.radius;
-  const activeUnits = world.units.filter(unit => unit.state !== 'dead');
+  const activeUnits = world.units.filter(unit => unit.state !== 'dead'
+    && world.terrain.terrainAt(unit.x, unit.y) !== values.terrain.codes.water);
   const unitIndexes = new Map(activeUnits.map((unit, index) => [unit, index]));
   for (let index = 0; index < activeUnits.length; index += 1) {
     const unit = activeUnits[index];
@@ -436,6 +489,7 @@ function separateOverlaps(world) {
     const neighbors = world.spatial.query(unit.x, unit.y, unit.radius + maxRadius);
     for (const other of neighbors) {
       if (other === unit || other.state === 'dead') continue;
+      if (world.terrain.terrainAt(other.x, other.y) === values.terrain.codes.water) continue;
       // Each pair is resolved once. Processing both directions cancels the push
       // and leaves units permanently overlapping.
       const otherIndex = unitIndexes.get(other);
