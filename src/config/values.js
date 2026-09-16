@@ -90,27 +90,57 @@ export const values = {
     cellSize: 20,            // 影响力网格边长（px）。地形格是 10 px，这里刻意粗一档以控开销
     refreshTicks: 6,         // 每 N 个 tick 重算一次（60 Hz / 6 = 10 Hz）
     temporalSmoothing: 0.35, // 与上一次影响力的指数平滑系数（0 = 冻结，1 = 完全用新值）
-    fieldBlurPasses: 1,      // 等值线提取前的 3×3 均值模糊次数（让分界线更平顺）
+    // 等值线提取前的 3×3 均值模糊次数。**必须保持 0**：实测（6 局 × 90 s，435,766 次采样）
+    // 模糊 1 次会让「单位所在格归自己阵营」的失败率从 0.000% 涨到 5.3%——
+    // 模糊会把邻近格的敌方影响力混进单位脚下，正好破坏核心圈要保证的那件事。
+    // 线形的平顺交给时间平滑（temporalSmoothing）就够了。
+    fieldBlurPasses: 0,
+    // 分界线的几何平滑（Chaikin 切角迭代次数，0 = 不平滑）：
+    // 只磨等值线的折角，不动影响力场——渲染用的折线由 chainSegments + smoothPath 生成。
+    pathSmoothing: 2,
     neutralEpsilon: 0,       // |代数和| ≤ 该值算中立（0 = 严格按符号；用于排除纯浮点噪声）
+    // 「铺满全图」：双方影响力都够不到的格子（旷野、迷雾、从未探索区）按**最近的阵营**归属
+    // （多源 BFS，见 influence.js 的 partitionField）。
+    // 关掉它这些格子就是中立、那里不画线（战线会在没有部队的旷野上断开，
+    // 看起来像"迷雾把控制线吃掉了"）；打开后控制线铺满整张地图、随战况处处更新。
+    partitionMap: true,
+    partitionFillValue: 0.01, // 填充用的弱影响力：远小于真实下限 2.5，只决定归属、不挪动真实战线
+    // 单位所在格的硬保证：把每个存活单位脚下那一格强制归它自己的阵营（最小幅度翻转，见
+    // influence.js 的 guaranteeUnitCells）。否则单靠核心圈挡不住这三种情况：
+    //   ① 城市/占领点核心圈 60px、强度 120 压过单位身体的 100（攻城时脚下被判给敌方）；
+    //   ② 格边长 20px 而单位核心圈只有碰撞半径 14px，格心可能落在圈外（只剩 20% 影响力）；
+    //   ③ 多个敌军贴身时影响力叠加超过你。
+    guaranteeUnitCell: true,
 
     // 影响力衰减曲线：形状照搬原型 srcipt.js——
     //   r < 10 → 100；r < 25 → 30−r；r < 40 → (50−r)×0.25；r ≥ 40 → 0
-    // 距离按 influenceRadius / maxDistance 等比缩放，强度按各影响力源的 strength 缩放。
+    // 中圈/外圈的距离按 influenceRadius / maxDistance 等比缩放，强度按各源的 strength 缩放。
     // 注：原型在 r=25 处 5 → 6.25 有个 1.25 的小跳变（判断为笔误），这里按连续处理。
+    //
+    // ⚠️ 核心圈（满强度的那一段）**改用绝对值，不随 influenceRadius 缩放**，
+    // 目的是让核心圈只覆盖影响力源「脚下的身体」，而不是在它周围造一圈很大的绝对领域：
+    //   单位 → 该单位的碰撞半径 units.*.radius（14）——即「单位始终在自己阵营的控制区内」的依据；
+    //   城市 → cities.capture.radius（60）；占领点 → capturePoints.capture.radius（60）。
+    // 城市不享受这个保证：被敌方占领时，它脚下可以是敌方控制区（gdd.md §9 的边界条件）。
     curve: {
-      maxDistance: 40,     // 原型曲线的距离上界（= 影响力半径缩放基准）
-      coreDistance: 10,    // 内圈：该距离内为满强度
-      coreExitRatio: 0.2,  // 出内圈立刻降到该比例（原型的 100 → 20 断崖）
-      midDistance: 25,     // 中圈末端
+      maxDistance: 40,     // 原型曲线的距离上界（= 中圈/外圈断点的缩放基准）
+      coreExitRatio: 0.2,  // 出核心圈立刻降到该比例（原型的 100 → 20 断崖，保持原型手感）
+      midDistance: 25,     // 中圈末端（× influenceRadius / maxDistance）
       midEndRatio: 0.0625, // 中圈末端强度比例（原型 (50−25)×0.25 = 6.25）
-      edgeEndRatio: 0.025, // 外圈末端强度比例（原型 1/40×100 = 2.5），到 maxDistance 截断为 0
+      edgeEndRatio: 0.025, // 外圈末端强度比例（原型 1/40×100 = 2.5），到 influenceRadius 截断为 0
     },
 
     unit: { influenceRadius: 140, strength: 100 },          // 半径取轻型视野 140
     city: { influenceRadius: 180, strength: 120 },          // 半径取城市视野 180
     capturePoint: { influenceRadius: 180, strength: 100 },  // 占领点同半径，强度略低于城市
 
-    style: { lineWidth: 4, color: 0x101414, alpha: 0.82 },  // 分界线样式（深色粗线）
+    // 分界线样式：深色主色 + 浅色底衬（halo）双色描边。
+    // 只画深色时，叠在战争迷雾 / 森林这类深色底上对比度会归零（看起来像"被迷雾盖住了"）；
+    // 加一圈更宽的浅色描边后，亮色纸地图上仍是深色战线，深色区域则靠浅边把线托出来。
+    style: {
+      lineWidth: 4, color: 0x101414, alpha: 0.82,          // 主色：深色粗线
+      haloWidth: 9, haloColor: 0xf7f0dd, haloAlpha: 0.5,   // 底衬：浅色更宽的描边
+    },
   },
 
   spatial: { cellSize: 64 }, // 均匀网格（≥ 最大攻击距离）

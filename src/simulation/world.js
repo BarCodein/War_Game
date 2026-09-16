@@ -34,7 +34,9 @@ export class World {
     this.fog = { blue: createFogGrid(map.terrain), red: createFogGrid(map.terrain) };
     // 实际控制线（纯视觉，gdd.md §9）：影响力网格在上面第一次 tick 时按地图尺寸建立。
     this.controlLine = null;
-    this.controlLineSegments = [];
+    this.controlLineSegments = []; // 原始等值线线段
+    this.controlLinePaths = [];    // 串联 + 平滑后的折线（渲染用）
+    this.unitMarks = [];           // 存活单位的位置/阵营（单位所在格硬保证用，复用数组）
     this.controlLineTick = 0;
     this.events = [];   // 本 tick 产生的事件（morale 消费 unitDied 后于 tick 末清空）
     this.history = [];  // 事件日志（HUD 战场通讯用）

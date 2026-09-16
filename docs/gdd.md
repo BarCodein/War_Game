@@ -145,11 +145,30 @@
 - **不可见敌军不显示任何实时状态**（位置、血量、士气、编队）；离开视野时在其最后已知位置显示灰色虚影标记，重新目视后更新。
 - **实际控制线**（视觉表现，非需求项）：把地图切成 **20 px 方网格**，每格累加双方**影响力**——
   影响力源 = 存活单位（半径 140 / 满强度 100）+ 城市（半径 180 / 强度 120）+ 占领点（半径 180 / 强度 100），
-  影响力随距离按原型 srcipt.js 的曲线衰减（内圈满强度 → 断崖到 20% → 两段线性衰减 → 半径外为 0）。
+  影响力随距离按原型 srcipt.js 的曲线衰减：**核心圈**内满强度，出核心圈直接掉到 20%，
+  之后中圈/外圈两段线性衰减，到影响力半径归零。**核心圈是绝对值，不随影响力半径缩放**：
+  单位的核心圈 = 它自己的**碰撞体积**（`units.*.radius`，14）——目的就是「核心圈只覆盖单位脚下这块地」，
+  让单位始终落在自己阵营的控制区内；城市/占领点的核心圈 = 各自的**占领半径**（60）。
   每格按**带符号代数和**判定归属：> 0 蓝方控制、< 0 红方控制、= 0 中立；
   **相邻格归属不同处即为实际控制线**，取 0 等值线（marching squares）绘制。
-  每 6 tick 重算一次（10 Hz），带时间平滑与 3×3 模糊；城市/占领点在争夺中（captureProgress > 0）时，
+  每 6 tick 重算一次（10 Hz），带时间平滑（不做空间模糊——实测空间模糊会让「单位所在格归自己阵营」的失败率从 0.000% 涨到 5.3%）；城市/占领点在争夺中（captureProgress > 0）时，
   现属方的影响力按占领进度线性削弱（表现「城快丢了，控制线往城里压」）。
+  **永远可见、不受视野限制**：影响力统计不读迷雾（双方全部存活单位都算），
+  渲染也画在迷雾罩层之上（控制线 depth 2 > 迷雾 depth 1），并且用**浅色底衬 + 深色主线**双色描边
+  （只画深色线时，叠在迷雾/森林这类深色底上对比度会归零，实机看起来像"被迷雾盖住"）——
+  即迷雾里看不见敌军，但看得见战线，且在任何底色上都读得出来。
+  **铺满全图**：双方影响力都够不到的格子（旷野、迷雾、从未探索区）按**最近的阵营**归属
+  （多源 BFS，`partitionMap`，默认开）——否则那些格子是中立、那里不画线，
+  看起来就像"迷雾把控制线吃掉了"；开启后控制线一直延伸到地图边界，并在全图范围内随战况更新。
+  **平滑**：等值线先按端点串成折线（一条战线 / 一个包围圈 = 一条），再做 Chaikin 切角（`pathSmoothing`，默认 2 轮）。
+  平滑只作用在**几何**上、不动影响力场——这正是它不会像空间模糊那样破坏「单位在自己控制区内」的原因。
+  **边界条件**：核心圈带来的「一定在自己控制区内」只对单位成立——城市被敌方占领时，
+  它脚下可以是敌方控制区，不做任何特例强制它归占领方。
+  **单位所在格的硬保证**（`guaranteeUnitCell`）：单靠核心圈挡不住三种情况——
+  城市/占领点核心圈 60px、强度 120 会压过单位身体的 100（攻城时脚下被判给敌方）；
+  格边长 20px 而核心圈只有碰撞半径 14px，格心可能落在圈外（只剩 20% 影响力）；多个敌军贴身叠加。
+  所以每个存活单位脚下那一格做**最小幅度翻转**（符号纠回自己、量级不变），
+  表现为"这个兵站住了自己那一格"，不会把整片战线拉过来。
   **纯视觉**：不参与战斗、补给、士气、视野与胜负判定。数值见 §12。
 
 ## 10. 教学战役关卡：断裂峡谷（§8-6）
@@ -238,8 +257,11 @@
 | capturePoints.capture：radius / perUnitPerSecond / capPerSecond / decayPerSecond | 60 / 5% / 15% / 3% |
 | supply：capacityPerCity / attritionHpPerSecond / attritionMoralePerSecond | 5 / −1 /s / −2 /s |
 | fog：forestSpotDistance / showLastKnownGhost | 60 / true |
-| controlLine：cellSize / refreshTicks / temporalSmoothing / fieldBlurPasses / neutralEpsilon | 20 px / 6 tick（10 Hz）/ 0.35 / 1 / 0 |
-| controlLine.curve：maxDistance / coreDistance / coreExitRatio / midDistance / midEndRatio / edgeEndRatio | 40 / 10 / 0.2 / 25 / 0.0625 / 0.025（距离按 influenceRadius ÷ maxDistance 等比缩放） |
+| controlLine：cellSize / refreshTicks / temporalSmoothing / fieldBlurPasses / pathSmoothing / neutralEpsilon | 20 px / 6 tick（10 Hz）/ 0.35 / 0（**必须为 0**，否则单位所在格会 5% 概率被判给敌方）/ 2（Chaikin 切角轮数）/ 0 |
+| controlLine：partitionMap / partitionFillValue | true（把无影响力格子按最近阵营归属，控制线铺满全图）/ 0.01（填充弱值，远小于真实下限 2.5） |
+| controlLine.guaranteeUnitCell | true（**单位所在格的硬保证**：每个存活单位脚下那一格强制归自己阵营，最小幅度翻转；否则攻城时城市核心圈 60px/强度 120 会压过单位身体的 100，多个敌人贴身也会叠过你） |
+| controlLine.curve：maxDistance / coreExitRatio / midDistance / midEndRatio / edgeEndRatio | 40 / 0.2 / 25 / 0.0625 / 0.025（中圈、外圈距离按 influenceRadius ÷ maxDistance 等比缩放） |
+| controlLine 核心圈（满强度段） | 单位 = 该单位碰撞体积 `units.*.radius`（14）；城市 = `cities.capture.radius`（60）；占领点 = `capturePoints.capture.radius`（60）。绝对值，不随 influenceRadius 缩放 |
 | controlLine.unit：influenceRadius / strength | 140 / 100 |
 | controlLine.city：influenceRadius / strength | 180 / 120（争夺中按 captureProgress 线性削弱） |
 | controlLine.capturePoint：influenceRadius / strength | 180 / 100 |
