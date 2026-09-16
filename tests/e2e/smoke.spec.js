@@ -4,7 +4,7 @@ import { waitForGame } from './helpers.js';
 // 冒烟测试：页面加载、画布渲染、Phaser 启动（GameScene.create 置 window.__gameReady）。
 test('页面加载并启动 Phaser 游戏', async ({ page }) => {
   await page.goto('/game.html');
-  await expect(page).toHaveTitle(/War of Dots/);
+  await expect(page).toHaveTitle(/沙盘战争/);
   await expect(page.locator('#battlefield canvas')).toBeVisible();
   await page.waitForFunction(() => window.__gameReady === true);
 });
