@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>沙盘战争 — 战斗结算</title>
+  <link rel="stylesheet" href="./members/css/battlepages.css">
+  <style>
+    /* =========================================================
+       结算前接入视频页（衔接用中间页）
+       - 入场：黑底 → 视频自动播放（带声音）
+       - 出场：视频结束 → 0.4s 黑色淡入 → 跳到 result.html
+       - 跳过：点击 / Esc / Enter / 空格 → 立即跳转
+       - 衔接：sessionStorage 标记，下游 result.html 据此淡入（不闪白）
+       ========================================================= */
+    :root { --ease: cubic-bezier(.4, 0, .2, 1); }
+    html, body { height: 100%; margin: 0; padding: 0; background: #000; }
+    body {
+      overflow: hidden;
+      color: var(--cream);
+      font-family: "SimHei", "Microsoft YaHei", sans-serif;
+    }
+    .video-stage {
+      position: fixed; inset: 0;
+      background: #000;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .video-stage video {
+      width: 100vw; height: 100vh;
+      object-fit: cover;
+      display: block;
+      opacity: 0;
+      transition: opacity .8s cubic-bezier(.4, 0, .2, 1);
+    }
+    .video-stage video.playing { opacity: 1; }
+    .video-stage.fading-out video { opacity: 0; }
+    .video-stage.fading-out {
+      background: #000;
+      transition: background .8s cubic-bezier(.4, 0, .2, 1);
+    }
+
+    /* 跳过提示：右下角小字 */
+    .skip-hint {
+      position: fixed;
+      right: 24px; bottom: 22px;
+      z-index: 5;
+      padding: 8px 18px;
+      background: rgba(0, 0, 0, 0.35);
+      border: 1px dashed rgba(245, 240, 232, 0.35);
+      color: rgba(245, 240, 232, 0.7);
+      font-size: 0.78rem;
+      letter-spacing: 2px;
+      pointer-events: none;
+      border-radius: 2px;
+      font-family: inherit;
+      opacity: 0;
+      animation: hint-in .8s var(--ease) 1.2s forwards;
+    }
+    @keyframes hint-in { to { opacity: 1; } }
+
+    /* 视频加载中（黑底 + 旋转小点） */
+    .video-loading {
+      position: fixed; inset: 0;
+      display: flex; align-items: center; justify-content: center;
+      gap: 14px;
+      color: var(--brass);
+      font-size: 0.85rem;
+      letter-spacing: 3px;
+      z-index: 2;
+      pointer-events: none;
+      transition: opacity .5s var(--ease);
+    }
+    .video-loading .dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--brass);
+      animation: dot-pulse 1.2s var(--ease) infinite;
+    }
+    .video-loading .dot:nth-child(2) { animation-delay: .15s; }
+    .video-loading .dot:nth-child(3) { animation-delay: .30s; }
+    .video-loading .label { margin-left: 8px; }
+    .video-stage.ready .video-loading { opacity: 0; }
+
+    @keyframes dot-pulse {
+      0%, 100% { transform: scale(.5); opacity: .4; }
+      50%      { transform: scale(1);   opacity: 1; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="video-stage" id="videoStage">
+    <video id="resultVideo" playsinline preload="auto"></video>
+    <div class="video-loading" id="videoLoading">
+      <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+      <span class="label">载入中</span>
+    </div>
+  </div>
+
+  <div class="skip-hint">点击任意位置 / Esc 跳过</div>
+
+  <script>
+    /* =========================================================
+       1) 解析 ?result=&level=&t=，决定放哪个视频
+       2) 视频 ended（或用户跳过）→ 跳到 result.html，原参数全透传
+       3) 标记 sessionStorage 通知下游 result.html 用「视频淡出后接续」的方式入场
+       ========================================================= */
+    (function () {
+      var params = new URLSearchParams(window.location.search);
+      var result = params.get('result') === 'victory' ? 'victory' : 'defeat';
+      var stage = document.getElementById('videoStage');
+      var video = document.getElementById('resultVideo');
+
+      /* 1) 选视频源：胜利=shengli.mp4，失败=shibai.mp4（fallback：旧 1.mp4） */
+      var src = result === 'victory'
+        ? './assets/video/shengli.mp4'
+        : './assets/video/shibai.mp4';
+      video.src = src;
+
+      /* 2) 出场目标：完整透传参数 + 去掉 from=video 自身标志 */
+      function buildTargetHref() {
+        var next = new URLSearchParams();
+        params.forEach(function (v, k) {
+          if (k === 'from') return; /* 透传时清掉 from 标记 */
+          next.set(k, v);
+        });
+        return './result.html?' + next.toString();
+      }
+
+      var jumped = false;
+      function goToResult() {
+        if (jumped) return;
+        jumped = true;
+        /* 标记：下游 result.html 以「视频淡出后接续」方式淡入（避免闪白） */
+        try { sessionStorage.setItem('war-of-dots.result.from-video', '1'); } catch (e) {}
+        /* 视频淡出到黑（CSS 0.8s）→ 0.75s 后跳页（保证视频完全黑再切，避免闪帧） */
+        stage.classList.add('fading-out');
+        setTimeout(function () { window.location.href = buildTargetHref(); }, 750);
+      }
+
+      /* 视频启动后再淡入（避免黑屏→第一帧的硬切） */
+      var playStarted = false;
+      function startPlayback() {
+        if (playStarted) return;
+        playStarted = true;
+        video.classList.add('playing');
+        stage.classList.add('ready');
+      }
+      video.addEventListener('play', function () {
+        startPlayback();
+        /* 接近视频末尾时主动淡出视频，衔接到 result.html：
+           提前 0.7s 开始淡视频（0.8s 完成时刚好接到 0.75s 后的跳页） */
+        video.addEventListener('timeupdate', function () {
+          if (!video.duration || isNaN(video.duration)) return;
+          if (video.duration - video.currentTime < 0.70 && !stage.classList.contains('fading-out')) {
+            stage.classList.add('fading-out');
+          }
+        });
+      });
+      video.addEventListener('ended', function () { goToResult(); });
+      video.addEventListener('error', function () {
+        /* 视频缺失/解码失败：降级为短暂黑屏 + 立即进入 result.html */
+        setTimeout(goToResult, 350);
+      });
+
+      /* 触发播放（带声音） */
+      var p = video.play();
+      if (p && typeof p.catch === 'function') {
+        p.catch(function () {
+          /* 浏览器拦截自动播放 → 降级为静音播放（仍能播完） */
+          video.muted = true;
+          var p2 = video.play();
+          if (p2 && typeof p2.catch === 'function') p2.catch(goToResult);
+        });
+      }
+
+      /* 用户跳过：点击 / Esc / Enter / Space */
+      function skip() { goToResult(); }
+      document.addEventListener('click', skip);
+      document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape' || e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          skip();
+        }
+      });
+    })();
+  </script>
+</body>
+</html>

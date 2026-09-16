@@ -115,57 +115,64 @@
        ========================================================= */
 
     (function () {
+      /* ★ 仅在从 index 首页进入时才播 CG；从结算页/其他来源进入时不播 */
+      var fromIndex = (new URLSearchParams(window.location.search).get('from') === 'index');
       var overlay = document.getElementById('cutsceneOverlay');
       var video = document.getElementById('cutsceneVid');
       var content = document.getElementById('cutsceneContent');
 
-      var finished = false;
-      var titleHidden = false;
-      function hideTitle() {
-        if (titleHidden || !content) return;
-        titleHidden = true;
-        content.classList.add('fade-out');
-      }
-      function endCutscene() {
-        if (finished || !overlay) return;
-        finished = true;
-        // 标题先隐藏（保险）
-        hideTitle();
-        overlay.classList.add('fade-out');
-        // 淡出动画结束后移除遮罩，释放交互
-        setTimeout(function () {
-          if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
-        }, 700);
-      }
-
-      // 点击 overlay 任意位置 → 跳过过场动画
-      if (overlay) overlay.addEventListener('click', endCutscene);
-
-      if (video) {
-        // 视频加载失败/不存在 → 直接结束过场，不卡死
-        video.addEventListener('error', endCutscene);
-        // 视频开始播放后 5 秒 → 渐隐开场文字（视频继续）
-        video.addEventListener('play', function () {
-          setTimeout(hideTitle, 5000);
-        });
-        // 触发播放（带声音）
-        var p = video.play();
-        if (p && typeof p.catch === 'function') {
-          p.catch(function () {
-            // 浏览器拦截带声音的自动播放 → 降级为静音播放保底
-            video.muted = true;
-            var p2 = video.play();
-            if (p2 && typeof p2.catch === 'function') {
-              p2.catch(endCutscene);
-            }
-          });
+      if (fromIndex) {
+        var finished = false;
+        var titleHidden = false;
+        function hideTitle() {
+          if (titleHidden || !content) return;
+          titleHidden = true;
+          content.classList.add('fade-out');
         }
-        // 视频完整播放结束后才淡出整个 overlay
-        video.addEventListener('ended', endCutscene);
+        function endCutscene() {
+          if (finished || !overlay) return;
+          finished = true;
+          // 标题先隐藏（保险）
+          hideTitle();
+          overlay.classList.add('fade-out');
+          // 淡出动画结束后移除遮罩，释放交互
+          setTimeout(function () {
+            if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+          }, 700);
+        }
+
+        // 点击 overlay 任意位置 → 跳过过场动画
+        if (overlay) overlay.addEventListener('click', endCutscene);
+
+        if (video) {
+          // 视频加载失败/不存在 → 直接结束过场，不卡死
+          video.addEventListener('error', endCutscene);
+          // 视频开始播放后 5 秒 → 渐隐开场文字（视频继续）
+          video.addEventListener('play', function () {
+            setTimeout(hideTitle, 5000);
+          });
+          // 触发播放（带声音）
+          var p = video.play();
+          if (p && typeof p.catch === 'function') {
+            p.catch(function () {
+              // 浏览器拦截带声音的自动播放 → 降级为静音播放保底
+              video.muted = true;
+              var p2 = video.play();
+              if (p2 && typeof p2.catch === 'function') {
+                p2.catch(endCutscene);
+              }
+            });
+          }
+          // 视频完整播放结束后才淡出整个 overlay
+          video.addEventListener('ended', endCutscene);
+        } else {
+          // 无视频元素时兜底：5s 隐藏标题、2.6s 后结束
+          setTimeout(hideTitle, 5000);
+          setTimeout(endCutscene, 2600);
+        }
       } else {
-        // 无视频元素时兜底：5s 隐藏标题、2.6s 后结束
-        setTimeout(hideTitle, 5000);
-        setTimeout(endCutscene, 2600);
+        /* 非 index 来源：直接摘掉过场遮罩，不播视频 */
+        if (overlay && overlay.parentNode) overlay.parentNode.removeChild(overlay);
       }
 
       /* ---------- 地图缩放 / 平移 ---------- */

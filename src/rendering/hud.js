@@ -276,7 +276,8 @@ export function createHud(scene, world, controller, selection, orders) {
         timeText: formatTime(world.endTime ?? world.time),
         casualties: world.casualties,
       });
-      window.location.href = `/result.html?${params}`;
+      /* 胜利/失败先放一段仪式感视频（result-video.html），再跳到 result.html */
+      window.location.href = `/result-video.html?${params}`;
       return;
     }
 
