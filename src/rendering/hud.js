@@ -261,7 +261,8 @@ export function createHud(scene, world, controller, selection, orders) {
       params.set('result', win ? 'victory' : 'defeat');
       if (scene.campaignId) params.set('level', scene.campaignId);
       params.set('t', formatTime(world.endTime ?? world.time));
-      window.location.href = `/result.html?${params.toString()}`;
+      /* 胜利/失败先放一段仪式感视频（result-video.html），再跳到 result.html */
+      window.location.href = `/result-video.html?${params.toString()}`;
       return;
     }
 

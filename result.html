@@ -6,6 +6,79 @@
   <title>战斗结算 · 沙盘战争</title>
   <link rel="stylesheet" href="./members/css/battlepages.css">
   <style>
+    /* ★ 从 result-video.html 跳转而来时：黑→暖米黄→透明 + 内容微弹入（更丝滑） */
+    /* 全屏蒙版伪元素：默认隐藏；接续模式下用两段关键帧播放：
+       0~0.25s  从黑渐变到暖米黄做旧底（消除视频黑→结算页底色的硬切）
+       0.25s~1.1s 暖米黄做旧底 渐变到透明（结算页元素"从底色里浮出来"）
+       蒙版的颜色和径向光晕与 battlepages.css body 背景完全一致，过渡完成后不会"切色" */
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      background-color: #000;
+      z-index: 200;
+      opacity: 0;
+      pointer-events: none;
+    }
+    body.video-continuation::before {
+      animation:
+        mask-warm-up .28s cubic-bezier(.4, 0, .2, 1) forwards,
+        mask-fade-out .82s cubic-bezier(.4, 0, .2, 1) .28s forwards;
+    }
+    @keyframes mask-warm-up {
+      from { background-color: #000; }
+      to   { background-color: var(--cream-deep, #D9CFBC); }
+    }
+    @keyframes mask-fade-out {
+      from {
+        opacity: 1;
+        background-color: var(--cream-deep, #D9CFBC);
+        background-image:
+          radial-gradient(circle at 30% 20%, rgba(255, 248, 230, 0.6) 0%, transparent 60%),
+          radial-gradient(circle at 80% 90%, rgba(180, 140, 90, 0.18) 0%, transparent 55%);
+      }
+      to {
+        opacity: 0;
+        background-color: var(--cream-deep, #D9CFBC);
+        background-image:
+          radial-gradient(circle at 30% 20%, rgba(255, 248, 230, 0.6) 0%, transparent 60%),
+          radial-gradient(circle at 80% 90%, rgba(180, 140, 90, 0.18) 0%, transparent 55%);
+      }
+    }
+
+    /* 接续模式：内容层（nav / hero / shell）初始 = 蒙版之上、轻微下移 + 透明 + 缩放 */
+    body.video-continuation .battle-nav,
+    body.video-continuation .battle-hero,
+    body.video-continuation .bbg-shell {
+      opacity: 0;
+      transform: translateY(22px) scale(.97);
+      filter: blur(4px);
+      transition:
+        opacity .9s cubic-bezier(.2, 1.05, .35, 1),
+        transform .9s cubic-bezier(.2, 1.05, .35, 1),
+        filter .9s cubic-bezier(.2, 1.05, .35, 1);
+    }
+    body.video-continuation.revealed .battle-nav,
+    body.video-continuation.revealed .battle-hero,
+    body.video-continuation.revealed .bbg-shell {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+      filter: blur(0);
+    }
+    /* 错开：nav 0.55s，hero 0.72s，shell 0.92s（带轻微回弹的弹入） */
+    body.video-continuation.revealed .battle-nav  { transition-delay: .55s; }
+    body.video-continuation.revealed .battle-hero { transition-delay: .72s; }
+    body.video-continuation.revealed .bbg-shell   { transition-delay: .92s; }
+
+    /* 接续模式：页面底色先用暖米黄做旧底（避免与 battlepages.css body 叠加导致"切色"） */
+    body.video-continuation {
+      background-color: var(--cream-deep, #D9CFBC) !important;
+      background-image:
+        radial-gradient(circle at 30% 20%, rgba(255, 248, 230, 0.6) 0%, transparent 60%),
+        radial-gradient(circle at 80% 90%, rgba(180, 140, 90, 0.18) 0%, transparent 55%) !important;
+    }
+  </style>
+  <style>
    
     /* 胜负大字：胜利暗红 / 失败军绿，加大醒目 */
     .battle-hero h1#resultVerdict {
@@ -100,7 +173,7 @@
     <!-- ==================== 按钮（同 bbg-start） ==================== -->
     <div class="bbg-start">
       <a class="battle-btn" id="resultPrimary" href="./battlechoose.html">重新开始</a>
-      <a class="battle-btn result-btn-secondary" id="resultHome" href="./index.html">返回主界面</a>
+      <a class="battle-btn result-btn-secondary" id="resultHome" href="./battlechoose.html">返回主界面</a>
     </div>
 
   </div>
@@ -172,7 +245,8 @@
             var next = current >= 0 ? levels[current + 1] : null;
             if (next) {
               primary.textContent = '下一战场';
-              primary.setAttribute('href', './game.html?level=' + encodeURIComponent(next.id));
+              /* 跳到下一战役的 battlebackground（看战役背景介绍 / 入场视频），不是直接进游戏 */
+              primary.setAttribute('href', './battlebackground.html?level=' + encodeURIComponent(next.id));
             } else {
               primary.textContent = '返回战役选择';
               primary.setAttribute('href', './battlechoose.html');
@@ -192,6 +266,30 @@
             primary.setAttribute('href', './game.html?level=' + encodeURIComponent(levelId));
           }
         });
+
+      /* ★ 衔接 result-video.html：黑蒙版淡出 + 内容微弹入，丝滑过场 */
+      (function () {
+        var fromVideo = false;
+        try { fromVideo = sessionStorage.getItem('war-of-dots.result.from-video') === '1'; } catch (e) {}
+        if (!fromVideo) return;
+        try { sessionStorage.removeItem('war-of-dots.result.from-video'); } catch (e) {}
+
+        document.body.classList.add('video-continuation');
+
+        /* 蒙版动画（黑→暖米黄→透明）已经在 .video-continuation 上自动启动；
+           这里只需触发内容层的弹入（revealed 仍然负责 nav/hero/shell 的过渡） */
+        requestAnimationFrame(function () {
+          requestAnimationFrame(function () {
+            document.body.classList.add('revealed');
+          });
+        });
+
+        /* 蒙版 0.28s 暖化 + 0.82s 淡出（0.28s 起）= 总 1.10s
+           + 内容层 0.92s 起 + 0.9s 缓动 = 总 1.82s
+           加 0.3s 余量 → 2.10s 后移除 video-continuation class，
+           让战斗场的暖米黄底色（已和蒙版一致）正式接管 */
+        setTimeout(function () { document.body.classList.remove('video-continuation'); }, 2100);
+      })();
     })();
   </script>
 
