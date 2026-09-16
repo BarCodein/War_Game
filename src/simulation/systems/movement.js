@@ -322,6 +322,7 @@ function waterSafeStep(world, unit, target, travel) {
   let allowed = travel;
   for (const other of world.units) {
     if (other === unit || other.state === 'dead') continue;
+    if (other.faction !== unit.faction) continue; // Allow approaching enemy units in water
     const offsetX = other.x - unit.x;
     const offsetY = other.y - unit.y;
     const along = offsetX * directionX + offsetY * directionY;
@@ -343,6 +344,7 @@ function separateWaterOverlaps(world) {
     for (const unit of waterUnits) {
       for (const other of world.units) {
         if (other === unit || other.state === 'dead') continue;
+        if (other.faction !== unit.faction) continue; // Don't separate from enemy units in water
         if (other.id < unit.id && world.terrain.terrainAt(other.x, other.y) === values.terrain.codes.water) continue;
         const dx = unit.x - other.x;
         const dy = unit.y - other.y;
@@ -364,8 +366,8 @@ function separateWaterOverlaps(world) {
 }
 
 function waterClearance(unit, other) {
-  // Keep a visible two-pixel buffer even when older configs use zero separation.
-  return unit.radius + other.radius + Math.max(2, values.movement.unitSeparation) + 0.01;
+  // Match land separation so units can reach contact distance (radius + radius + unitSeparation)
+  return unit.radius + other.radius + Math.max(2, values.movement.unitSeparation);
 }
 
 function activateNextQueuedRoute(world, unit) {
@@ -428,7 +430,8 @@ function skipImpassableWaypoints(world, unit) {
 // 软排斥：重叠单位相互推开一半（单趟处理，确定性）
 function separateOverlaps(world) {
   const maxRadius = values.units.heavy.radius;
-  const activeUnits = world.units.filter(unit => unit.state !== 'dead');
+  const activeUnits = world.units.filter(unit => unit.state !== 'dead'
+    && world.terrain.terrainAt(unit.x, unit.y) !== values.terrain.codes.water);
   const unitIndexes = new Map(activeUnits.map((unit, index) => [unit, index]));
   for (let index = 0; index < activeUnits.length; index += 1) {
     const unit = activeUnits[index];
@@ -436,6 +439,7 @@ function separateOverlaps(world) {
     const neighbors = world.spatial.query(unit.x, unit.y, unit.radius + maxRadius);
     for (const other of neighbors) {
       if (other === unit || other.state === 'dead') continue;
+      if (world.terrain.terrainAt(other.x, other.y) === values.terrain.codes.water) continue;
       // Each pair is resolved once. Processing both directions cancels the push
       // and leaves units permanently overlapping.
       const otherIndex = unitIndexes.get(other);
