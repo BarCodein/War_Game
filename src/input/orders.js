@@ -1,5 +1,5 @@
 import {
-  attackCommand, attackMoveCommand, moveCommand, appendRouteCommand, enqueueRouteCommand,
+  attackCommand, attackMoveCommand, moveCommand, appendRouteCommand, enqueueRouteCommand, lockCommand,
 } from '../simulation/commands.js';
 import { isSpotted } from '../simulation/systems/fog.js';
 import { values } from '../config/index.js';
@@ -137,7 +137,7 @@ export function createOrders(scene, world, selection) {
       && isSpotted(world, unit, 'blue')
       && Math.hypot(unit.x - p.x, unit.y - p.y) <= values.input.clickHitRadius + unit.radius);
     if (enemy) {
-      world.issueCommands(ids, attackCommand(enemy.id));
+      world.issueCommands(ids, lockCommand(enemy.id));
       notify('orderAttack');
     } else {
       world.issueCommands(ids, attackMoveCommand(p));

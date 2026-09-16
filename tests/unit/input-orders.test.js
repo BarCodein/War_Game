@@ -163,6 +163,6 @@ describe('输入交互：直接从单位画出移动路径', () => {
     advance(world, 1 / 60);
     input.down(enemy.x, enemy.y, { right: true });
     input.up(enemy.x, enemy.y, { right: true });
-    expect(a.command?.type).toBe('attack');
+    expect(a.command?.type).toBe('lock');
   });
 });

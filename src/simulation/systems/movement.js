@@ -1,5 +1,6 @@
 import { values } from '../../config/index.js';
 import { effectsFor } from './morale.js';
+import { isSpotted } from './fog.js';
 
 // 移动系统：沿命令路径点行进；直行遇不可通行地形时在逻辑网格上 A* 绕行（路径缓存共享）；
 // 软排斥防止单位重叠；交战中冻结；溃逃单位不受指挥，向最近己方城市全速撤退，
@@ -8,6 +9,8 @@ import { effectsFor } from './morale.js';
 // A* 路径缓存：同 tick 跨单位共享；容量上限内保留，超限清空（确定性）。
 const pathCache = new Map();
 const PATH_CACHE_MAX = 512;
+
+const LOCK_ROUTE_UPDATE_INTERVAL = 0.5; // seconds
 
 export function updateMovement(world, dt) {
   const previousPositions = new Map();
@@ -19,6 +22,12 @@ export function updateMovement(world, dt) {
     }
     if (unit.state === 'unordered') continue;
     if (unit.state === 'combat') continue; // 交战中冻结
+
+    // 更新锁定目标的路径
+    if (unit.lockedTargetId != null) {
+      updateLockRoute(world, unit);
+    }
+
     if (unit.route.length === 0 || unit.routeIndex >= unit.route.length) {
       activateNextQueuedRoute(world, unit);
       if (unit.route.length === 0 || unit.routeIndex >= unit.route.length) continue;
@@ -29,6 +38,47 @@ export function updateMovement(world, dt) {
   separateWaterOverlaps(world);
   separateOverlaps(world);
   updateBlockedUnits(world, previousPositions, dt);
+}
+
+function updateLockRoute(world, unit) {
+  const target = world.units.find(u => u.id === unit.lockedTargetId);
+  if (!target || target.state === 'dead') {
+    // 目标死亡或不存在，清除锁定
+    unit.lockedTargetId = null;
+    unit.command = null;
+    unit.targetId = null;
+    return;
+  }
+
+  // 检查目标是否在视野内，或有最后已知位置
+  const targetFaction = unit.faction;
+  const spotted = isSpotted(world, target, targetFaction);
+  let targetX = target.x;
+  let targetY = target.y;
+
+  if (!spotted && target.lastSeen?.[targetFaction]) {
+    // 使用最后已知位置
+    targetX = target.lastSeen[targetFaction].x;
+    targetY = target.lastSeen[targetFaction].y;
+  } else if (!spotted) {
+    // 目标不可见且无最后已知位置，停止追踪
+    return;
+  }
+
+  // 限制路径更新频率
+  unit._lockRouteTimer = (unit._lockRouteTimer ?? 0) + (world.time - (unit._lockLastTime ?? world.time));
+  unit._lockLastTime = world.time;
+  if (unit._lockRouteTimer < LOCK_ROUTE_UPDATE_INTERVAL) return;
+  unit._lockRouteTimer = 0;
+
+  // 重新规划路径到目标当前位置
+  const newRoute = planRoute(world.terrain, unit.x, unit.y, [{ x: targetX, y: targetY }]);
+  if (newRoute.length > 0) {
+    unit.route = newRoute;
+    unit.routeIndex = 0;
+    unit.pathDirty = true;
+    unit.targetId = unit.lockedTargetId;
+  }
 }
 
 function updateBlockedUnits(world, previousPositions, dt) {

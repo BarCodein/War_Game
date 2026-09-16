@@ -105,6 +105,7 @@ export class World {
 function applyCommand(world, unit, command) {
   unit.command = command;
   unit.targetId = null;
+  unit.lockedTargetId = null; // 任何新指令都清除锁定追击状态
   if (command.type === 'hold') {
     unit.route = [];
     unit.routeIndex = 0;
@@ -145,6 +146,20 @@ function applyCommand(world, unit, command) {
     unit.routeIndex = 0;
     unit.pathDirty = true;
     unit.targetId = command.targetId;
+    unit.state = route.length > 0 ? 'moving' : 'hold';
+    return;
+  }
+  if (command.type === 'lock') {
+    unit.pendingQueue = [];
+    const target = world.units.find(candidate => candidate.id === command.targetId);
+    const route = target && target.state !== 'dead'
+      ? planRoute(world.terrain, unit.x, unit.y, [{ x: target.x, y: target.y }])
+      : [];
+    unit.route = route;
+    unit.routeIndex = 0;
+    unit.pathDirty = true;
+    unit.targetId = command.targetId;
+    unit.lockedTargetId = command.targetId;
     unit.state = route.length > 0 ? 'moving' : 'hold';
     return;
   }

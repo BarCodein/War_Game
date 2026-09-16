@@ -74,6 +74,7 @@ function enterUnordered(unit) {
 
 function enterRout(world, unit) {
   unit.state = 'rout';
+  unit.lockedTargetId = null;
   outOfMoraleToMove(unit);
   if (!world.nearestOwnCity(unit)) world.killUnit(unit, 'surrender'); // 无城可退立即投降
 }

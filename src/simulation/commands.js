@@ -1,6 +1,6 @@
 // 统一命令接口：人类输入、脚本敌军（ai.js）与未来 AI 共用（REQUIREMENTS.md §4.5）。
 // 命令经 world.issueCommands 下发并附带校验；格式见 architecture.md §5。
-export const commandTypes = ['move', 'attackMove', 'attack', 'hold', 'appendRoute', 'enqueueRoute'];
+export const commandTypes = ['move', 'attackMove', 'attack', 'hold', 'appendRoute', 'enqueueRoute', 'lock'];
 
 export function moveCommand(path) {
   return { type: 'move', path };
@@ -12,6 +12,10 @@ export function attackMoveCommand(target) {
 
 export function attackCommand(targetId) {
   return { type: 'attack', targetId };
+}
+
+export function lockCommand(targetId) {
+  return { type: 'lock', targetId };
 }
 
 export function holdCommand() {
@@ -37,8 +41,8 @@ export function validateCommand(command) {
   if (command.type === 'attackMove' && !isPoint(command.target)) {
     throw new Error('[commands] attackMove requires a { x, y } target');
   }
-  if (command.type === 'attack' && !Number.isFinite(command.targetId)) {
-    throw new Error('[commands] attack requires a numeric targetId');
+  if ((command.type === 'attack' || command.type === 'lock') && !Number.isFinite(command.targetId)) {
+    throw new Error('[commands] attack/lock requires a numeric targetId');
   }
   if (command.type === 'appendRoute') {
     if (!Array.isArray(command.path) || command.path.length === 0 || command.path.some(p => !isPoint(p))) {
