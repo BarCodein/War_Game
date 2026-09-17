@@ -22,7 +22,7 @@ export default {
   'hud.battlefield.title': '前线态势',
   'hud.selection.none': '未选择单位',
   'hud.selection.count': '{n} 个单位已选择',
-  'hud.tip': '左键点击选择 · 直接从单位按住左键拖出路径即可移动 · Shift 追加选择 · 右键移动 / 攻击 · 按住 E + 右键 / E + 拖轨迹 = 急行军',
+  'hud.tip': '左键点击选择 · 直接从单位按住左键拖出路径即可移动 · Shift 追加选择 · 右键移动 / 攻击 · 按住 E + 右键 / E + 拖轨迹 = 急行军 · 滚轮缩放（以光标为焦点）',
   'prep.hint': '准备阶段：现在就能下达预先指令（移动轨迹 / 急行军 / 进攻），倒计时结束后部队开始行动',
   'hud.legend.friendly': '己方',
   'hud.legend.hostile': '敌方',
