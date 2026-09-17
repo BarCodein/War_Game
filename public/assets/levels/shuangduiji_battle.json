@@ -1,188 +1,42 @@
 {
   "version": 1,
-  "id": "tashan_battle",
-  "name": "塔山阻击战",
-  "subtitle": "TASHAN DEFEND BATTLE",
-  "type": "defensive",
+  "id": "shuangduiji_battle",
+  "name": "双堆集战役",
+  "subtitle": "SHUANGDUIJI BATTLE",
+  "type": "offensive",
   "difficulty": "教学",
-  "description": "坚守塔山阵地，击退敌军的海陆协同进攻",
-  "map": "/assets/maps/tashan.json",
+  "description": "阻止黄维兵团北进增援徐州战场，将其歼灭在双堆集",
+  "map": "/assets/maps/shuangduiji.json",
 
   "anchors": {
-    "northLine": { "spawnId": "s16" },
-    "blueBase": { "cityId": "c1" },
-    "roadblock": { "spawnId": "s16" },
-    "redBase": { "cityId": "c8" },
-    "eastHook": { "spawnId": "s2" },
-    "sea": { "spawnId": "s28" },
-    "dayushan": { "capturePointId": "p1" },
-    "tashan": {"capturePointId": "p3"},
-    "baitaishan": {"capturePointId": "p6"}
+    "northRiver": { "spawnId": "s3" },
+    "shuangduiji": { "cityId": "c7"},
+    "nanpingji": { "spawnId": "s2"},
+    "westNorth": { "spawnId": "s4"},
+    "eastSouth": { "spawnId": "s1"},
+    "redDeploy": { "spawnId": "s5"}
   },
 
   "forces": [
-    
     {
       "faction": "blue",
-      "at": { "spawnId": "s3" },
-      "units": [
-        { "type": "heavy", "count": 1   }
-      ]
-    },
-    {
-      "faction": "blue",
-      "at": { "spawnId": "s5" },
-      "units": [
-        { "type": "heavy", "count": 1   }
-      ]
-    },
-    {
-      "faction": "blue",
-      "at": { "spawnId": "s6" },
-      "units": [
-        { "type": "light", "count": 1 }
-      ]
-    },
-    {
-      "faction": "blue",
-      "at": { "spawnId": "s7" },
-      "units": [
-        { "type": "light", "count": 1 }
-      ]
-    },
-    {
-      "faction": "blue",
-      "at": { "spawnId": "s9" },
-      "units": [
-        { "type": "light", "count": 1 }
-      ]
-    },{
-      "faction": "blue",
-      "at": { "spawnId": "s9" },
-      "units": [
-        { "type": "light", "count": 2 }
-      ]
-    },
-    {
-      "faction": "blue",
-      "at": { "spawnId": "s10" },
-      "units": [
-        { "type": "light", "count": 1 }
-      ]
-    },
-    {
-      "faction": "blue",
-      "at": { "spawnId": "s11" },
-      "units": [
-        { "type": "light", "count": 1 }
-      ]
-    },
-    {
-      "faction": "blue",
-      "at": { "spawnId": "s12" },
-      "units": [
-        { "type": "light", "count": 1 }
-      ]
-    },
-    {
-      "faction": "blue",
-      "at": { "spawnId": "s13" },
-      "units": [
-        { "type": "light", "count": 1 }
-      ]
-    },
-    {
-      "faction": "blue",
-      "at": { "spawnId": "s14" },
-      "units": [
-        { "type": "heavy", "count": 1 }
-      ]
-    },
-    {
-      "faction": "blue",
-      "at": { "spawnId": "s19" },
-      "units": [
-        { "type": "light", "count": 2 }
-      ]
-    },
-    {
-      "faction": "blue",
-      "at": { "spawnId": "s20" },
-      "units": [
-        { "type": "light", "count": 1 }
-      ]
-    },
-    {
-      "faction": "blue",
-      "at": { "spawnId": "s21" },
-      "units": [
-        { "type": "heavy", "count": 1 }
-      ]
-    },
-    {
-      "faction": "blue",
-      "at": { "spawnId": "s22" },
-      "units": [
-        { "type": "light", "count": 2 }
-      ]
-    },
-    {
-      "faction": "blue",
-      "at": { "spawnId": "s23" },
-      "units": [
-        { "type": "light", "count": 1 }
-      ]
-    },
-    {
-      "faction": "blue",
-      "at": { "spawnId": "s24" },
-      "units": [
-        { "type": "light", "count": 1 }
-      ]
-    },
-    {
-      "faction": "blue",
-      "at": { "spawnId": "s25" },
+      "at": { "spawnId": "s2" },
       "units": [
         { "type": "light", "count": 1 }
       ]
     },
     {
       "faction": "red",
-      "at": { "spawnId": "s16" },
-      "group": "landing",
+      "objective": "annihilate",
+      "at": { "spawnId": "s5" },
       "units": [
         { "type": "heavy", "count": 2 }
       ]
     },
     {
       "faction": "red",
-      "at": { "spawnId": "s17" },
-      "group": "landing",
-      "units": [
-        { "type": "light", "count": 1 }
-      ]
-    },
-    {
-      "faction": "red",
-      "at": { "spawnId": "s18" },
-      "group": "center",
-      "units": [
-        { "type": "light", "count": 1 }
-      ]
-    },
-    {
-      "faction": "red",
-      "at": { "spawnId": "s15" },
-      "group": "center",
-      "units": [
-        { "type": "light", "count": 1 }
-      ]
-    },
-    {
-      "faction": "red",
-      "at": { "spawnId": "s2" },
-      "group": "east",
+      "objective": "annihilate",
+      "at": { "spawnId": "s5" },
       "units": [
         { "type": "light", "count": 1 }
       ]
@@ -195,12 +49,12 @@
     "fallback": { "anchor": "blueBase" },
     "triggers": [
       {
-        "id": "sea_landing",
+        "id": "attack_nanpingji",
         "at": { "time": 25 },
         "actions": [
           {
             "type": "spawn",
-            "unitType": "light",
+            "unitType": "heavy",
             "count": 2,
             "at": { "anchor": "sea" },
             "group": "landing",
@@ -290,7 +144,7 @@
         "until": 90,
         "repeatEvery": 10,
         "when": { "capturePoint": "p1", "owner": "enemy" },
-        "then": [{ "type": "engage", "target": { "anchor": "dayushan" }, "units": { "group": "landing" } }]
+        "then": [{ "type": "attackMove", "target": { "anchor": "dayushan" }, "units": { "group": "landing" } }]
       },
       {
         "id": "pressCenter1",
@@ -298,7 +152,7 @@
         "until": 90,
         "repeatEvery": 10,
         "when": { "capturePoint": "p3", "owner": "enemy" },
-        "then": [{ "type": "engage", "target": { "anchor": "tashan" }, "units": { "group": "center" } }]
+        "then": [{ "type": "attackMove", "target": { "anchor": "tashan" }, "units": { "group": "center" } }]
       },
       {
         "id": "pressEast1",
@@ -306,7 +160,7 @@
         "until": 90,
         "repeatEvery": 10,
         "when": { "capturePoint": "p6", "owner": "enemy" },
-        "then": [{ "type": "engage", "target": { "anchor": "baitaishan" }, "units": { "group": "east" } }]
+        "then": [{ "type": "attackMove", "target": { "anchor": "baitaishan" }, "units": { "group": "east" } }]
       },
       {
         "id": "pressLanding2",
@@ -314,7 +168,7 @@
         "until": 150,
         "repeatEvery": 10,
         "when": { "capturePoint": "p1", "owner": "enemy" },
-        "then": [{ "type": "engage", "target": { "anchor": "dayushan" }, "units": { "group": "landing" } }]
+        "then": [{ "type": "attackMove", "target": { "anchor": "dayushan" }, "units": { "group": "landing" } }]
       },
       {
         "id": "pressCenter2",
@@ -322,7 +176,7 @@
         "until": 150,
         "repeatEvery": 10,
         "when": { "capturePoint": "p3", "owner": "enemy" },
-        "then": [{ "type": "engage", "target": { "anchor": "tashan" }, "units": { "group": "center" } }]
+        "then": [{ "type": "attackMove", "target": { "anchor": "tashan" }, "units": { "group": "center" } }]
       },
       {
         "id": "pressEast2",
@@ -330,7 +184,7 @@
         "until": 150,
         "repeatEvery": 10,
         "when": { "capturePoint": "p6", "owner": "enemy" },
-        "then": [{ "type": "engage", "target": { "anchor": "baitaishan" }, "units": { "group": "east" } }]
+        "then": [{ "type": "attackMove", "target": { "anchor": "baitaishan" }, "units": { "group": "east" } }]
       },
       {
         "id": "landingHoldOrWithdraw1",
@@ -377,5 +231,8 @@
     ]
   },
 
-  "victory": { "mode": "defend", "faction": "blue", "time": 300 }
+  "victory": { "type": "annihilative",
+              "faction": "blue",
+              "time": 300
+               }
 }

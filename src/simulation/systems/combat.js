@@ -66,7 +66,8 @@ function resolveTarget(world, unit) {
 }
 
 // 兰切斯特定律，并考虑有预备队，所以创造阈值
-function calcDamageRatio(unit){
+// （导出供战术 AI 复用，避免战力估算与真实伤害公式各写一套）
+export function calcDamageRatio(unit){
   return Math.min(unit.hp/values.units[unit.type].hp / 
     values.combat.hp_dps_ratio,1);
 }

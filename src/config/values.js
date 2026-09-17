@@ -19,6 +19,34 @@ export const values = {
     zoomSmoothing: 1, // 每帧向目标缩放逼近的系数（0~1，越大越跟手；按 60fps 标定）
   },
 
+  // 战术 AI（docs/ai-design.md 阶段一）：脚本负责"打哪、何时打"，这一层负责"怎么打"。
+  // 只在脚本使用 `engage` 动作时生效——旧的 attackNearest / attackMove 行为与关卡平衡完全不变。
+  // 阶段一包含：效用选目标（含追击溃逃）＋ 编队协同（队形、不添油、窄口纵队、集中火力）。
+  ai: {
+    preset: 'standard',            // 难度/性格档（阶段二填充 cautious | standard | sly）
+    decisionIntervalSeconds: 0.5,  // 战术层决策节奏（模拟时间，秒）
+    hysteresis: 0.15,              // 换目标所需的分数优势（防止每半秒反复横跳）
+    engageRadius: 320,             // 考虑交战的半径（px）：超出这个距离只推进、不点杀
+    localForceRadius: 180,         // 统计局部兵力比的半径（px）
+    weights: {
+      threat: 0.3,             // 局部兵力比（我方战力占比）
+      kill: 0.15,              // 目标可击杀性（残血优先）
+      distance: 0.15,          // 距离越近越优先
+      value: 0.15,             // 目标价值（指定单位 / 重型 / 据点守军）
+      vulnerability: 0.1,      // 目标处于溃逃/失序（承受伤害 ×1.5）
+      chase: 0.15,             // 追击溃逃目标的额外权重
+      terrain: 0.15,           // 我方所在地形（水里输出减半）
+    },
+    squad: {
+      cohesionRadius: 170,       // 队形松散判定半径（px）
+      cohesionRatio: 0.7,        // 达标比例：低于它就不让跑在前面的单位继续推进
+      slotSpacing: 34,           // 队形槽位间距（px）
+      maxAttackersPerTarget: 2,  // 集中火力：同一个敌人最多几个人打
+      columnSampleStep: 20,      // 窄口（水域/桥梁/不可通行）判定沿直线的采样步长（px）
+      advanceStep: 60,           // 编队整体每轮向目标推进的距离（px）
+    },
+  },
+
   // 开局准备阶段（gdd.md §11）：进关卡后先倒计时若干秒，期间**可以下达预先指令**
   // （选择/轨迹/急行军都照常），但模拟不推进——部队不动、AI 不动、计时不动，
   // 倒计时结束才真正开打。编辑器试玩跳过这个阶段（反复试地图不该每次都等 5 秒）。

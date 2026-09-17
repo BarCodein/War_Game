@@ -1,6 +1,8 @@
 import { values } from '../config/index.js';
-import { attackMoveCommand, holdCommand, moveCommand } from './commands.js';
+import { attackCommand, attackMoveCommand, holdCommand, moveCommand } from './commands.js';
 import { resolvePoint } from './level.js';
+import { assignSlots, cohesionRatio, facingTo, formationSlots, isRushingAhead, needsColumn, squadAnchor, squadCentroid } from './ai/squad.js';
+import { chooseTarget, enemiesWithin, scoreAttack } from './ai/tactics.js';
 
 const isNonEmptyString = (v) => typeof v === 'string' && v.length > 0;
 const isFiniteNumber = (v) => typeof v === 'number' && Number.isFinite(v);
@@ -48,12 +50,25 @@ export class ScriptedAI {
       value: undefined,
       timer: 0,
     }));
+    // ---- 战术层（engage）运行时状态 ----
+    // intents：编队 → 当前战术意图（目标点）。脚本的 hold / retreat / attackMove 会清掉对应编队的意图，
+    // 所以"脚本意图优先"这条铁律由 clearIntents 保证。
+    this.intents = new Map();      // group 名 → { objective, anchor }
+    this.tacticsTimer = 0;
+    this.lastOrders = new Map();   // unit.id → 上一次下发的命令签名（避免重复下令重置路线）
+    this.currentTargets = new Map(); // unit.id → 当前选中的敌人 id（用于换目标迟滞）
   }
 
   update(dt) {
     this.elapsed += dt;
     for (const state of this.triggers) this.updateTrigger(state, dt);
     for (const state of this.rules) this.updateRule(state, dt);
+    // 战术层：按固定节奏（模拟时间）跑一次，与渲染帧率无关（docs/ai-design.md §4）
+    this.tacticsTimer += dt;
+    if (this.intents.size > 0 && this.tacticsTimer >= values.ai.decisionIntervalSeconds) {
+      this.tacticsTimer = 0;
+      this.runTactics();
+    }
   }
 
   /**
@@ -162,9 +177,24 @@ export class ScriptedAI {
         case 'attackMove': this.doAttackMove(action); break;
         case 'hold': this.doHold(action); break;
         case 'retreat': this.doRetreat(action); break;
+        case 'engage': this.doEngage(action); break;
         default: break;
       }
     }
+  }
+
+  // 编队名（没有打标签的单位归入默认小队，按阵营区分）
+  groupOf(unit) {
+    return unit.group ?? `#ungrouped-${this.faction}`;
+  }
+
+  // 清掉指定编队的战术意图（脚本下了 hold / retreat / attackMove 时，"意图优先"）
+  clearIntents(selector) {
+    if (!selector?.group) {
+      this.intents.clear();
+      return;
+    }
+    this.intents.delete(selector.group);
   }
 
   /**
@@ -220,16 +250,19 @@ export class ScriptedAI {
   doAttackMove(action) {
     const point = resolvePoint(action.target, this.world, this.anchors);
     if (!point) return;
+    this.clearIntents(action.units); // 明确的行军命令接管这些编队
     this.commandUnits(action.units, attackMoveCommand(point, { forced: action.forced === true }));
   }
 
   doHold(action = {}) {
+    this.clearIntents(action.units);
     this.commandUnits(action.units, holdCommand());
   }
 
   // 撤退：选中的单位撤向 `to`（PointRef）；省略时退向最近的己方城市，无城可退就原地驻守。
   // 用 move 而不是 attackMove——撤退是"往后退"，中途照旧会自动接敌（attack-forward，gdd.md §4）。
   doRetreat(action = {}) {
+    this.clearIntents(action.units);
     const units = this.ownUnits(action.units);
     if (units.length === 0) return;
     const fallbackCity = this.world.cities?.find(city => city.faction === this.faction);
@@ -242,6 +275,78 @@ export class ScriptedAI {
     for (const unit of units) {
       this.world.issueCommands([unit.id], moveCommand([target], { forced: action.forced === true }));
     }
+  }
+
+  // ---- 战术层（docs/ai-design.md 阶段一）----------------------------------------
+  //
+  // engage = "聪明地执行 attackMove"：脚本给出目标点与编队，战术层负责
+  //   ① 队形推进（line / 窄口自动纵队）② 不添油（脱离队形的先锋原地等）③ 集中火力（同目标 ≤ N 人）
+  //   ④ 优先追击溃逃/失序目标。决策节奏固定 0.5s，只在"决策变化"时下令，避免重置行军路线。
+  doEngage(action) {
+    const objective = resolvePoint(action.target, this.world, this.anchors);
+    if (!objective) return;
+    const groups = new Set(this.ownUnits(action.units).map(unit => this.groupOf(unit)));
+    for (const group of groups) this.intents.set(group, { objective });
+  }
+
+  runTactics() {
+    const cfg = values.ai;
+    for (const [group, intent] of this.intents) {
+      const units = this.ownUnits({ group });
+      if (units.length === 0) continue;
+      const { objective } = intent;
+      const anchor = squadAnchor(units, objective);
+      const template = needsColumn(this.world.terrain, anchor.centroid, objective) ? 'column' : 'line';
+      const slots = formationSlots(units.length, template, anchor.facing);
+      const cohesive = cohesionRatio(units, anchor.centroid) >= cfg.squad.cohesionRatio;
+      const targetCounts = new Map();
+
+      for (const { unit, point } of assignSlots(units, anchor, slots)) {
+        // ① 队形纪律：队形散了 + 这个单位跑在前面 → 原地等主力（不添油）
+        if (!cohesive && isRushingAhead(unit, anchor.centroid, objective)) {
+          this.issueOnce(unit, holdCommand(), 'hold');
+          continue;
+        }
+        // ② 选目标：集中火力上限内的最高分；已有目标且优势不足时保持（迟滞，防横跳）
+        const ctx = { targetCounts };
+        const chosen = this.chooseWithHysteresis(unit, ctx);
+        if (chosen) {
+          targetCounts.set(chosen.enemy.id, (targetCounts.get(chosen.enemy.id) ?? 0) + 1);
+          this.currentTargets.set(unit.id, chosen.enemy.id);
+          // 签名带上目标的粗粒度位置：目标跑远了才会重发攻击命令（追上去）
+          const sx = Math.round(chosen.enemy.x / 48);
+          const sy = Math.round(chosen.enemy.y / 48);
+          this.issueOnce(unit, attackCommand(chosen.enemy.id), `attack:${chosen.enemy.id}:${sx},${sy}`);
+          continue;
+        }
+        // ③ 没有值得打的目标：按队形槽位继续推进（attack-forward 会在接触时自动交战）
+        this.lastOrders.delete(unit.id);
+        this.currentTargets.delete(unit.id);
+        this.issueOnce(unit, attackMoveCommand(point), `advance:${Math.round(point.x)},${Math.round(point.y)}`);
+      }
+    }
+  }
+
+  // 迟滞：旧目标仍可用，且没有哪个候选比它高出 hysteresis 那么多 → 保持旧目标
+  chooseWithHysteresis(unit, ctx) {
+    const next = chooseTarget(this.world, unit, enemiesWithin(this.world, unit), ctx);
+    const previousId = this.currentTargets.get(unit.id);
+    if (previousId === undefined) return next;
+    const previous = this.world.units.find(candidate => candidate.id === previousId);
+    if (!previous || previous.state === 'dead') return next;
+    const current = scoreAttack(this.world, unit, previous, ctx);
+    if (!current) return next; // 旧目标已达集中火力上限等情况：直接换
+    if (!next || next.enemy.id === previousId) return current;
+    const better = next.score > current.score * (1 + values.ai.hysteresis);
+    return better ? next : current;
+  }
+
+  // 同一决策重复下发同样的命令会重置行军路线，所以只有签名变化时才真下单
+  issueOnce(unit, command, signature) {
+    if (this.lastOrders.get(unit.id) === signature) return false;
+    this.lastOrders.set(unit.id, signature);
+    this.world.issueCommands([unit.id], command);
+    return true;
   }
 
   // 空间分区扩张半径查询，避免全单位扫描（REQUIREMENTS.md §5）

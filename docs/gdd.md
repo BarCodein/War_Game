@@ -312,7 +312,10 @@
 | simulation.fixedStep / maxCatchUpTicks | 1/60 s / 5 |
 | simulation.speeds | 0.5 / 1 / 2 |
 | prep.seconds | 5（开局准备阶段倒计时；期间可下达预先指令，部队与 AI 都不行动。编辑器试玩跳过） |
-| camera：zoomMin / zoomMax / zoomStep / zoomSmoothing | 1 / 3 / 1.1（每格滑轮）/ 0.18（按 60fps 标定的逼近系数） |
+| camera：zoomMin / zoomMax / zoomStep / zoomSmoothing | 1 / 3 / 1.1（每格滑轮）/ 1（向目标缩放逼近系数，1 = 直接到位） |
+| ai：decisionIntervalSeconds / hysteresis / engageRadius / localForceRadius | 0.5 s / 0.15 / 320 px / 180 px |
+| ai.weights：threat / kill / distance / value / vulnerability / chase / terrain | 0.30 / 0.15 / 0.15 / 0.15 / 0.10 / 0.15 / 0.15 |
+| ai.squad：cohesionRadius / cohesionRatio / slotSpacing / maxAttackersPerTarget / columnSampleStep / advanceStep | 170 px / 0.7 / 34 px / 2 人 / 20 px / 60 px |
 
 ### 教学关卡数值
 
