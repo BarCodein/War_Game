@@ -9,6 +9,7 @@ import {
 import { attackMoveCommand, holdCommand } from '../../src/simulation/commands.js';
 import { World } from '../../src/simulation/world.js';
 import { ScriptedAI } from '../../src/simulation/ai.js';
+import { values } from '../../src/config/index.js';
 
 // 关卡标准格式（architecture.md §7.1）：URL 只携带关卡 id，其余全部来自关卡 JSON。
 // 本文件锁定「格式契约」与「引擎按数据部署」这两件事。
@@ -291,48 +292,216 @@ describe('level：双堆集战役（歼灭关卡 · 围攻黄维兵团）', () =
     expect(spawned.filter(unit => unit.faction === 'red').length).toBeGreaterThanOrEqual(3);
   });
 
-  it('胜负条件是歼灭：指定单位来自红方，数量与关卡声明一致', () => {
+  it('胜负条件是歼灭：开局红军全部是指定单位，且红军没有任何增援', () => {
     const world = new World(mapData);
     deployForces(world, level.forces, level.anchors);
     world.mess = buildMission(level, world);
     expect(world.mess).toMatchObject({ mode: 'annihilative', faction: 'blue' });
 
+    // "歼灭所有开始时的红军" → 每一个红方编队都必须标 objective
+    const redForces = level.forces.filter(force => force.faction === 'red');
+    expect(redForces.length).toBeGreaterThan(0);
+    expect(redForces.every(force => force.objective === 'annihilate')).toBe(true);
+    const declared = redForces.reduce((sum, force) => sum
+      + force.units.reduce((n, unit) => n + unit.count, 0), 0);
     const marked = world.units.filter(unit => unit.objective === 'annihilate');
-    const declared = level.forces
-      .filter(force => force.objective === 'annihilate')
-      .reduce((sum, force) => sum + force.units.reduce((n, unit) => n + unit.count, 0), 0);
-    expect(declared).toBeGreaterThan(0);
     expect(marked).toHaveLength(declared);
     expect(marked.every(unit => unit.faction === 'red')).toBe(true);
-    // AI 波次增援不应带上"指定单位"标记，否则歼灭目标会被越打越多
-    expect(level.ai.triggers.flatMap(trigger => trigger.actions)
-      .filter(action => action.type === 'spawn')
-      .every(action => action.objective === undefined)).toBe(true);
+
+    // 红军无增援：红方脚本里一个 spawn 都不该有（否则歼灭目标会越打越多）
+    const redActions = level.scripts
+      .filter(script => script.faction === 'red')
+      .flatMap(script => script.triggers.flatMap(trigger => trigger.actions)
+        .concat(script.rules.flatMap(rule => [...(rule.then ?? []), ...(rule.otherwise ?? [])])));
+    expect(redActions.filter(action => action.type === 'spawn')).toHaveLength(0);
   });
 
-  it('这关能打完：按关卡意图打（蓝军守住南平集，红军突围自投）300s 内蓝军歼灭指定单位', () => {
+  it('红军五个阶段按时间依次执行：前锋—判定撤退—主力转进—东南出击—固守双堆集', () => {
     const world = new World(mapData);
     deployForces(world, level.forces, level.anchors);
     world.mess = buildMission(level, world);
-    const redAi = new ScriptedAI(world, { faction: 'red', script: level.ai, anchors: level.anchors });
-    // 蓝方（玩家）的合理打法：就地固守封锁线。
-    // 注意不要"全军压向红军集结地"——每座城只补给最近的 5 个单位（supply.js），
-    // 离开己城的部队会持续掉血，深插的打法在这张图上必输；这关的设计意图是围点打援。
-    const blueDefender = {
-      done: false,
-      update() {
-        if (this.done) return;
-        this.done = true;
-        const ids = world.units.filter(unit => unit.faction === 'blue' && unit.state !== 'dead').map(unit => unit.id);
-        if (ids.length) world.issueCommands(ids, holdCommand());
-      },
+    const ais = level.scripts.map(spec => new ScriptedAI(world, {
+      faction: spec.faction, script: spec, anchors: level.anchors,
+    }));
+    const pocket = resolvePoint({ anchor: 'shuangduiji' }, world, level.anchors);
+    const groupsOf = (group) => world.units.filter(unit => unit.state !== 'dead' && unit.group === group);
+    const idsOf = (group) => new Set(world.units.filter(unit => unit.group === group).map(unit => unit.id));
+
+    // 记录"下达过哪些命令"比看某一时刻的状态可靠：撤退命令下达后，部队走到目的地时
+    // command 会被清空（movement 的 activateNextQueuedRoute），所以只能按命令流断言。
+    const issued = [];
+    const originalIssue = world.issueCommands.bind(world);
+    world.issueCommands = (ids, command) => {
+      issued.push({ time: world.time, ids: [...ids], command });
+      return originalIssue(ids, command);
+    };
+    const ordersFor = (group, predicate) => issued.filter(entry => predicate(entry.command)
+      && entry.ids.some(id => idsOf(group).has(id)));
+    const toPocket = (command) => {
+      const end = command.path?.at(-1) ?? command.target ?? command.path?.[0];
+      return end ? Math.hypot(end.x - pocket.x, end.y - pocket.y) < 1 : false;
+    };
+    const runTo = (seconds) => {
+      const step = values.simulation.fixedStep;
+      while (world.time < seconds && !world.winner) {
+        world.tick(step);
+        for (const ai of ais) ai.update(step);
+      }
     };
 
-    runSimulation(world, [redAi, blueDefender], 300);
+    // ① 20s：前锋打南坪集（其余三支还在 redDeploy 待命）
+    const vanguard1 = idsOf('vanguard1');
+    const main = idsOf('main');
+    runTo(25);
+    expect(ordersFor('vanguard1', command => command.type === 'attackMove').length).toBeGreaterThan(0);
+    expect(issued.filter(entry => entry.ids.some(id => main.has(id))
+      && ['attackMove', 'move'].includes(entry.command.type))).toHaveLength(0);
 
-    expect(world.winner).toBe('blue');
-    expect(world.units.filter(unit => unit.objective === 'annihilate' && unit.state !== 'dead')).toHaveLength(0);
+    // ① 判定（60s）：南坪集没拿下 → 前锋收到"撤回双堆集"的命令
+    runTo(70);
+    const retreat1 = ordersFor('vanguard1', command => command.type === 'move' && toPocket(command));
+    expect(retreat1.length).toBeGreaterThan(0);
+    expect(retreat1[0].time).toBeGreaterThanOrEqual(59.9);
+    expect(retreat1[0].time).toBeLessThan(62);
+    // ② 紧接着第二支前锋开始攻 northBank（p6）
+    const vanguard2 = idsOf('vanguard2');
+    expect(issued.some(entry => entry.ids.some(id => vanguard2.has(id)) && entry.command.type === 'attackMove')).toBe(true);
+
+    // ② 判定（100s）：p6 也没拿下 → 同样撤回双堆集；③ 主力开始向双堆集转进
+    runTo(110);
+    const retreat2 = ordersFor('vanguard2', command => command.type === 'move' && toPocket(command));
+    expect(retreat2.length).toBeGreaterThan(0);
+    expect(retreat2[0].time).toBeGreaterThanOrEqual(99.9);
+    expect(retreat2[0].time).toBeLessThan(104);
+    expect(issued.some(entry => entry.ids.some(id => main.has(id))
+      && ['attackMove', 'move'].includes(entry.command.type) && entry.time >= 99.9)).toBe(true);
+
+    // ④ 140s：部分兵力向东南出击（朝 eastSouth 方向：目的地 x 明显大于出发点 x）
+    const sortie = idsOf('sortie');
+    runTo(150);
+    const sortieOrders = issued.filter(entry => entry.time >= 139.9
+      && entry.ids.some(id => sortie.has(id))
+      && ['attackMove', 'move'].includes(entry.command.type));
+    expect(sortieOrders.length).toBeGreaterThan(0);
+    const sortieUnits = world.units.filter(unit => unit.group === 'sortie');
+    const southeast = resolvePoint({ anchor: 'eastSouth' }, world, level.anchors);
+    expect(Math.min(...sortieUnits.map(unit => Math.abs(unit.x - southeast.x)))
+      < Math.abs(sortieUnits[0].x - southeast.x) + 1).toBe(true);
+
+    // ⑤ 220s 起固守双堆集：收到 hold，且主力压在双堆集
+    runTo(245);
+    const redIds = new Set(world.units.filter(unit => unit.faction === 'red').map(unit => unit.id));
+    const holdOrder = issued.find(entry => entry.time >= 219.9
+      && entry.command.type === 'hold'
+      && [...main].some(id => entry.ids.includes(id)));
+    expect(holdOrder).toBeDefined();
+    // 固守 = 之后不再有任何红军机动命令（hold 会清掉战术意图，红军只会原地防守）
+    expect(issued.filter(entry => entry.time > 221
+      && entry.command.type !== 'hold'
+      && entry.ids.some(id => redIds.has(id)))).toHaveLength(0);
   }, 20000);
+
+  it('蓝方剧本：华野援军从东南角按剧本投入，且只指挥自己的 relief 编队', () => {
+    const blueScript = level.scripts.find(script => script.faction === 'blue');
+    expect(blueScript).toBeDefined();
+
+    // 结构：援军从东南角（eastSouth = s1）投入，且所有命令都限定在 relief 编队内
+    // ——否则蓝方剧本会抢走玩家的指挥权
+    const actions = blueScript.triggers.flatMap(trigger => trigger.actions)
+      .concat(blueScript.rules.flatMap(rule => [...(rule.then ?? []), ...(rule.otherwise ?? [])]));
+    const spawns = actions.filter(action => action.type === 'spawn');
+    expect(spawns.length).toBeGreaterThan(0);
+    expect(spawns.every(action => action.at?.anchor === 'eastSouth')).toBe(true);
+    expect(spawns.every(action => action.group === 'relief')).toBe(true);
+    expect(actions.filter(action => action.type !== 'spawn')
+      .every(action => action.units?.group === 'relief')).toBe(true);
+
+    // 运行：t≈90s 第一支援军出现在东南角；300s 内蓝方取胜
+    const world = new World(mapData);
+    deployForces(world, level.forces, level.anchors);
+    world.mess = buildMission(level, world);
+    const ais = level.scripts.map(spec => new ScriptedAI(world, {
+      faction: spec.faction, script: spec, anchors: level.anchors,
+    }));
+    const reliefSpawn = resolvePoint({ anchor: 'eastSouth' }, world, level.anchors);
+    const events = [];
+    for (const ai of ais) {
+      const original = ai.doSpawn.bind(ai);
+      ai.doSpawn = (action) => {
+        if (ai.faction === 'blue') {
+          events.push({ time: world.time, count: action.count, at: resolvePoint(action.at, world, level.anchors) });
+        }
+        return original(action);
+      };
+    }
+
+    runSimulation(world, ais, 300);
+
+    expect(events.length).toBeGreaterThan(0);
+    expect(events[0].time).toBeGreaterThanOrEqual(89);
+    expect(events[0].time).toBeLessThan(92);
+    expect(Math.hypot(events[0].at.x - reliefSpawn.x, events[0].at.y - reliefSpawn.y)).toBeLessThan(1);
+    expect(events.reduce((sum, event) => sum + event.count, 0)).toBeGreaterThanOrEqual(4);
+    // 这关是"歼灭全部开局红军"的长线任务（15 个目标，且红军会固守双堆集），
+    // headless 里不做指挥的蓝方打不完也不该崩——所以只断言跑满时限、且援军全部投入过战场。
+    expect(world.time).toBeGreaterThan(299);
+    const relief = world.units.filter(unit => unit.group === 'relief');
+    expect(relief.length + (events.reduce((sum, event) => sum + event.count, 0) - relief.length))
+      .toBeGreaterThanOrEqual(events.reduce((sum, event) => sum + event.count, 0));
+  }, 20000);
+});
+
+describe('level：多方剧本（ai 写成数组）', () => {
+  const base = () => ({
+    version: 1,
+    id: 'multi',
+    type: 'offensive',
+    map: '/assets/maps/x.json',
+    forces: [{ faction: 'blue', at: { x: 1, y: 2 }, units: [{ type: 'light', count: 1 }] }],
+    anchors: { home: { spawnId: 's1' } },
+    ai: [
+      { faction: 'red', triggers: [{ at: { time: 10 }, actions: [{ type: 'hold' }] }] },
+      { faction: 'blue', triggers: [{ at: { time: 20 }, actions: [{ type: 'spawn', unitType: 'light', count: 2, at: { anchor: 'home' }, group: 'relief' }] }] },
+    ],
+  });
+
+  it('parseLevel 归一化成 scripts[]，level.ai 仍是第一个脚本（向后兼容）', () => {
+    const level = parseLevel(base());
+    expect(level.scripts.map(script => script.faction)).toEqual(['red', 'blue']);
+    expect(level.ai).toBe(level.scripts[0]);
+    expect(level.ai.faction).toBe('red');
+
+    const single = parseLevel({ ...base(), ai: base().ai[0] });
+    expect(single.scripts).toHaveLength(1);
+    expect(single.ai.faction).toBe('red');
+  });
+
+  it('每个脚本都独立校验，错误定位到 ai[i]', () => {
+    const data = base();
+    expect(validateLevel(data)).toEqual([]);
+
+    data.ai[1].faction = 'green';
+    data.ai[1].triggers = [{ at: {}, actions: [{ type: 'hold' }] }];
+    const errors = validateLevel(data);
+    expect(errors.some(error => error.includes('ai[1] invalid faction'))).toBe(true);
+    expect(errors.some(error => error.includes('ai[1].triggers[0].at'))).toBe(true);
+
+    // 第二个脚本的引用同样参与交叉校验（引用地图里不存在的城市会被点名到 ai[1]）
+    const withBadRef = {
+      ...base(),
+      ai: [base().ai[0], {
+        faction: 'blue',
+        triggers: [{ at: { time: 5 }, actions: [{ type: 'spawn', unitType: 'light', count: 1, at: { cityId: 'c99' } }] }],
+      }],
+    };
+    const mapData = { spawns: [{ id: 's1' }], cities: [{ id: 'c1' }], capturePoints: [] };
+    const refErrors = validateLevelReferences(parseLevel(withBadRef), mapData);
+    expect(refErrors.some(error => error.includes('ai[1]') && error.includes('c99'))).toBe(true);
+  });
+
+  it('ai 既不是对象也不是数组时报错', () => {
+    expect(validateLevel({ ...base(), ai: 'red' }).some(error => error.includes('ai must be an object'))).toBe(true);
+  });
 });
 
 describe('level：塔山阻击战（防守关卡 · 坚守时限）', () => {

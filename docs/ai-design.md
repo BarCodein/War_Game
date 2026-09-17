@@ -128,6 +128,57 @@ recover --(血量 ≥ recoverHpRatio 且士气 ≥ recoverMorale)--> engage（�
 范围说明：公平化只作用于**战术层与敌情条件**；脚本里的 `fallback`、`attackMove` 目标等"作者意图"仍然是
 点位的绝对引用（不涉及敌情）✓。玩家侧的实际控制线**不动**（本轮确认：它仍按全图统计，见 gdd §9）。
 
+### 3.5 多方剧本：蓝方（我军）也能按剧本增援
+
+`ai` 允许写成**数组**（`architecture.md §7.1`）：`parseLevel` 归一化成 `level.scripts`，GameScene 为每个脚本
+建一个 `ScriptedAI` 一起挂到固定步长循环上，于是**双方都能有自己的增援波次**。
+
+双堆集战役的用法（`public/assets/levels/shuangduiji_battle.json` 的 `ai[1]`）：
+
+```json
+{ "faction": "blue", "preset": "standard",
+  "triggers": [
+    { "id": "huayeRelief1", "at": { "time": 90 },
+      "actions": [{ "type": "spawn", "unitType": "light", "count": 4,
+                    "at": { "anchor": "eastSouth" }, "group": "relief",
+                    "order": { "type": "attackMove", "target": { "anchor": "shuangduiji" } } }] }
+  ],
+  "rules": [
+    { "id": "reliefPress", "after": 90, "repeatEvery": 20,
+      "when": { "city": "c7", "owner": "enemy" },
+      "then": [{ "type": "engage", "target": { "anchor": "shuangduiji" }, "units": { "group": "relief" } }] }
+  ] }
+```
+
+- **东南角** = 地图出生点 `s1`（1161, 771），关卡锚点表里叫 `eastSouth`；两批援军分别在 90 s / 150 s 投入（共 7 人）。
+- **铁律：蓝方剧本必须用 `units: { "group": "relief" }` 限定自己的增援编队**——否则它会替玩家指挥初始部队。
+  `tests/unit/level.test.js` 有守卫用例（检查蓝方脚本每个动作都限定在 `relief`）＋ 运行验证（t≈90 s 在东南角刷出援军、300 s 内蓝方取胜）。
+- 援军也算进补给：每座城只补给最近的 5 个单位（`supply.js`），援军规模要与城市容量匹配（双堆集：蓝方 4 城 = 20 容量）。
+
+### 3.6 双堆集关卡：红军五阶段脚本（实例）
+
+按关卡需求把红军写成**一支按时间先后依次行动**的部队（不是同时分兵），开局 15 人全部在 `redDeploy`，
+无一增援，全部标 `objective: "annihilate"` ⇒ 胜利条件 = **歼灭开局时的全部红军**：
+
+| 阶段 | 时刻 | 编队 | 命令 | 失败判定 |
+|---|---|---|---|---|
+| ① 前锋打南坪集 | 20 s | `vanguard1`(3 轻) | `engage` → `nanpingji`（占领点 p7 就在南坪集） | 60 s 时 p7 不在红军手里 → `retreat` 到双堆集 |
+| ② 第二支前锋打北岸 | 60 s | `vanguard2`(3 轻) | `engage` → 占领点 p6 | 100 s 时 p6 不在红军手里 → `retreat` 到双堆集 |
+| ③ 主力转进双堆集 | 100 s | `main`(2 重 + 4 轻) | `engage` → `shuangduiji`(c7)；`main_press` 每 20 s 重发直到 180 s | — |
+| ④ 部分兵力向东南攻击 | 140 s | `sortie`(3 轻) | `engage` → `eastSouth`(s1)；`sortie_press` 每 20 s 重发直到 180 s | — |
+| ⑤ 固守双堆集 | 180 s 收拢 / 220 s 起 | 全体 | 180 s 全体 `engage` 双堆集收拢；220 s 起 `hold_shuangduiji`（c7 在手 → 全体 `hold`；丢了 → 全体夺回） | — |
+
+- 蓝方（玩家）侧：三处初始部署（南平集 s2 7 人 / 北岸 s3 3 人 / 西北 s4 3 人）＋ §3.5 的华野援军剧本（90/150 s 从东南角投入 7 人）。
+- `tests/unit/level.test.js` 用**命令流**断言这五个阶段（记录每次 `issueCommands` 的时间与目标）：
+  撤退命令下达后部队走到目的地时 `command` 会被清空，所以看"某一时刻的状态"不可靠，必须看"下达过什么命令"。
+- 教训（上一版遗留，对新设计同样成立）：**给"歼灭战的目标编队"写撤退规则前，先确认玩家还碰得到它。**
+  上一版红方照抄塔山的"占不到点就退回集结地"，把 3 个歼灭目标带回红军集结地，玩家够不着，关卡永不结束。
+
+**已知的收尾问题（设计取舍，供后续决定）**：全歼 15 个红军是很长的任务——headless 里"不做指挥的蓝方"
+跑满 300 s 还剩 2 个红军（他们固守双堆集），因为攻方受"每城只补给最近 5 个单位"的限制（`supply.js`），
+深插久攻会持续掉血。可选的处理：缩减红军规模 / 给蓝方更多城市以延长补给 / 胜利条件放宽为"歼灭主力 N 个" /
+加时限并按剩余数量判定。本轮按需求"不考虑平衡性"未做。
+
 ## 4. 确定性、性能与验收
 
 - **确定性**：AI 每个固定 tick 收到 `1/60` 的 `dt`（与 headless `runSimulation` 同一节奏）；决策节奏由累加器控制（0.5 s），与渲染帧率无关 —— `tests/unit/ai-engage.test.js` 里"60fps 与 240fps 决策次数相同"与"createLoop 与逐 tick 驱动结果逐位一致"两条用例守护这一点。

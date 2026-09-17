@@ -30,6 +30,11 @@ import { validateAiTuning } from './ai/presets.js';
 //   { anchor: 'east' }     引用本关 anchors 表中的命名锚点
 //
 // AiScript   { faction, fallback?: PointRef, triggers: Trigger[], rules?: Rule[] }
+//            可选字段：preset（难度档）/ tuning（档位参数覆盖）/ fog（迷雾公平模式）/ group 标签
+//            **`ai` 可以写一个对象，也可以写数组**：数组 = 多方剧本，例如
+//            [ { faction: 'red', … }, { faction: 'blue', … } ] 让蓝方（我军）也按剧本投入援军。
+//            每个脚本只指挥自己阵营；一个阵营可以写多个脚本（各自管各自的编队）。
+//            parseLevel 会把它归一化成 level.scripts（数组），level.ai 仍是第一个脚本。
 // Trigger    { id?, at: Condition, repeatEvery?: number, actions: Action[] }
 // Rule       { id?, when: Condition, then: Action | Action[], otherwise?: Action | Action[],
 //              after?, until?, repeatEvery? }
@@ -162,13 +167,20 @@ export function validateLevel(data) {
     });
   }
 
-  // AI 脚本（可选）
-  if (data.ai !== undefined) {
-    const ai = data.ai;
-    if (!ai || !FACTIONS.includes(ai.faction)) errors.push('ai invalid faction');
-    if (ai?.fallback !== undefined && !refOk(ai.fallback)) errors.push(refError(ai.fallback, 'ai.fallback'));
+  // AI 脚本（可选）：**可以写一个对象，也可以写数组**——数组即"多方剧本"，
+  // 例如 `[ { faction: 'red', … }, { faction: 'blue', … } ]` 让蓝方（我军）也按剧本投入援军。
+  // 每个脚本各自解释，互不干扰；同一阵营写多个脚本也允许（各自管各自的编队）。
+  const aiScripts = data.ai === undefined ? [] : (Array.isArray(data.ai) ? data.ai : [data.ai]);
+  aiScripts.forEach((ai, si) => {
+    const scriptPath = aiScripts.length > 1 ? `ai[${si}]` : 'ai';
+    if (!ai || typeof ai !== 'object' || Array.isArray(ai)) {
+      errors.push(`${scriptPath} must be an object`);
+      return;
+    }
+    if (!FACTIONS.includes(ai.faction)) errors.push(`${scriptPath} invalid faction`);
+    if (ai.fallback !== undefined && !refOk(ai.fallback)) errors.push(refError(ai.fallback, `${scriptPath}.fallback`));
     // 难度/性格档位与关卡级参数覆盖（docs/ai-design.md 阶段二）
-    errors.push(...validateAiTuning(ai));
+    errors.push(...validateAiTuning(ai, scriptPath));
     // 条件：触发器的 at 与规则的 when 共用
     const isIdList = (value) => isNonEmptyString(value)
       || (Array.isArray(value) && value.length > 0 && value.every(isNonEmptyString));
@@ -237,13 +249,13 @@ export function validateLevel(data) {
     const triggerList = Array.isArray(ai?.triggers) ? ai.triggers : null;
     const ruleList = Array.isArray(ai?.rules) ? ai.rules : null;
     if (!triggerList && !ruleList) {
-      errors.push('ai must have triggers[] and/or rules[]');
+      errors.push(`${scriptPath} must have triggers[] and/or rules[]`);
     } else if (triggerList && triggerList.length === 0 && !(ruleList && ruleList.length > 0)) {
-      errors.push('ai.triggers must be a non-empty array (或改用非空的 ai.rules)');
+      errors.push(`${scriptPath}.triggers must be a non-empty array (或改用非空的 rules)`);
     }
     if (triggerList) {
       triggerList.forEach((trigger, ti) => {
-        const where = `ai.triggers[${ti}]`;
+        const where = `${scriptPath}.triggers[${ti}]`;
         const problem = conditionError(trigger?.at, `${where}.at`);
         if (problem) errors.push(problem);
         if (trigger?.repeatEvery !== undefined && !(isFiniteNumber(trigger.repeatEvery) && trigger.repeatEvery > 0)) {
@@ -260,10 +272,10 @@ export function validateLevel(data) {
     // 条件规则的 when 必须给全，then / otherwise 至少写一个
     if (ai?.rules !== undefined) {
       if (!Array.isArray(ai.rules)) {
-        errors.push('ai.rules must be an array');
+        errors.push(`${scriptPath}.rules must be an array`);
       } else {
         ai.rules.forEach((rule, ri) => {
-          const where = `ai.rules[${ri}]`;
+          const where = `${scriptPath}.rules[${ri}]`;
           if (!rule || typeof rule !== 'object') {
             errors.push(`${where} must be an object`);
             return;
@@ -292,7 +304,7 @@ export function validateLevel(data) {
         });
       }
     }
-  }
+  });
 
   // 胜负条件（可选）：声明了就必须合法，避免写错后静默不生效
   if (data.victory !== undefined && data.victory !== null) {
@@ -333,6 +345,8 @@ export function validateLevel(data) {
 export function parseLevel(data) {
   const errors = validateLevel(data);
   if (errors.length > 0) throw new Error(`[level] invalid level:\n- ${errors.join('\n- ')}`);
+  // ai 允许写对象或数组：归一化成 scripts（全部脚本），ai 仍指向第一个（向后兼容）
+  const scripts = data.ai === undefined ? [] : (Array.isArray(data.ai) ? data.ai : [data.ai]);
   return {
     version: data.version,
     id: data.id,
@@ -345,7 +359,9 @@ export function parseLevel(data) {
     map: data.map,
     anchors: parseAnchors(data).anchors,
     forces: data.forces,
-    ai: data.ai ?? null,
+    // ai = 主脚本（向后兼容：引擎/测试里都读 level.ai）；scripts = 全部脚本（多方剧本）
+    ai: scripts[0] ?? null,
+    scripts,
     victory: data.victory ?? null, // { mode|type, faction?, time?, points? } → buildMission 消费
   };
 }
@@ -450,14 +466,19 @@ export function validateLevelReferences(level, mapData) {
     const list = Array.isArray(actions) ? actions : [actions];
     list.forEach((action, index) => checkActionRefs(action, Array.isArray(actions) ? `${where}[${index}]` : where));
   };
-  for (const [ti, trigger] of (level.ai?.triggers ?? []).entries()) {
-    checkActionList(trigger?.actions, `ai.triggers[${ti}].actions`);
-  }
-  for (const [ri, rule] of (level.ai?.rules ?? []).entries()) {
-    checkActionList(rule?.then, `ai.rules[${ri}].then`);
-    if (rule?.otherwise !== undefined) checkActionList(rule.otherwise, `ai.rules[${ri}].otherwise`);
-  }
-  check(level.ai?.fallback, 'ai.fallback');
+  // AI 脚本：单脚本直接用 `ai.*`，多脚本用 `ai[i].*`（便于定位是哪个阵营写错了）
+  const scripts = level.scripts ?? (level.ai ? [level.ai] : []);
+  scripts.forEach((script, si) => {
+    const base = scripts.length > 1 ? `ai[${si}]` : 'ai';
+    for (const [ti, trigger] of (script?.triggers ?? []).entries()) {
+      checkActionList(trigger?.actions, `${base}.triggers[${ti}].actions`);
+    }
+    for (const [ri, rule] of (script?.rules ?? []).entries()) {
+      checkActionList(rule?.then, `${base}.rules[${ri}].then`);
+      if (rule?.otherwise !== undefined) checkActionList(rule.otherwise, `${base}.rules[${ri}].otherwise`);
+    }
+    check(script?.fallback, `${base}.fallback`);
+  });
   // victory.points 是据点 id 列表（占领点优先，其次城市）
   (level.victory?.points ?? []).forEach((id, i) => {
     if (!pointIds.has(id) && !cityIds.has(id)) errors.push(`victory.points[${i}]: 地图中不存在据点 "${id}"`);

@@ -211,7 +211,8 @@ war_game/
 
 ### `src/simulation/level.js`
 关卡（Level）标准格式 v1——**"一局游戏"的完整规格**（`architecture.md` §7.1）：
-- 字段：`id` / `name` / `subtitle` / `type`（`offensive` 进攻 | `defensive` 防守 | `annihilative` 歼灭，白名单见 `LEVEL_TYPES`）/ `difficulty` / `map`（引用地图路径）/ `anchors`（命名锚点表）/ `forces`（编队式兵力）/ `ai`（事件→动作脚本）/ `victory`（胜负条件，见 `buildMission`）。
+- 字段：`id` / `name` / `subtitle` / `type`（`offensive` 进攻 | `defensive` 防守 | `annihilative` 歼灭，白名单见 `LEVEL_TYPES`）/ `difficulty` / `map`（引用地图路径）/ `anchors`（命名锚点表）/ `forces`（编队式兵力）/ `ai`（事件→动作脚本，**可写单个对象或数组＝多方剧本**）/ `victory`（胜负条件，见 `buildMission`）。
+- **多方剧本**：`ai` 写数组时 `parseLevel` 归一化成 `level.scripts`（全部脚本），`level.ai` 仍是第一个脚本（向后兼容）；每个脚本只指挥自己阵营，蓝方剧本（我军增援）必须用 `units: { group }` 限定自家编队。校验与引用交叉校验逐脚本进行，错误定位到 `ai[i].…`。
 - `validateLevel()` 结构 + 语义校验（阵营、单位类型、坐标引用与锚点定义、触发条件与动作类型、`repeatEvery > 0`）；`parseLevel()` 失败即抛错并聚合原因。
 - **坐标引用 PointRef**：`{ x, y }` / `{ spawn }` / `{ spawnId }` / `{ city }` / `{ cityId }` / `{ capturePointId }` / `{ anchor }`，统一由 `resolvePoint(ref, world, anchors)` 解析（顺序：绝对坐标 → 命名锚点 → spawnId → spawn → cityId → capturePointId → city；解析不到返回 `null`）。`resolveAnchor` / `resolveTarget` 为同一函数的历史别名。
 - `parseAnchors()` 校验命名锚点表（禁止锚点引用锚点）；`validateLevelReferences(level, mapData)` 在地图载入后交叉校验 `spawnId` / `cityId` / `capturePointId` / `anchor` 是否真实存在（`BootScene` 调用，仅告警）。
@@ -394,7 +395,7 @@ DOM 编辑器工具栏：
 
 ### `src/rendering/scenes/GameScene.js`
 游戏主场景：
-- `create()`：构造 `World`、`ScriptedAI`（关卡模式下）、控制器、循环、输入层（selection/orders/keyboard）、渲染层、HUD。
+- `create()`：构造 `World`、`ScriptedAI`（关卡模式下，`level.scripts` 有几个脚本就建几个 → `this.ais`，`this.ai` 指向第一个）、控制器、循环（`createLoop(world, this.ais)`）、输入层（selection/orders/keyboard）、渲染层、HUD。
 - **关卡模式**：`deployForces(world, level.forces, level.anchors)` 部署兵力，`new ScriptedAI(world, { faction, script, anchors })`；引擎不把关卡写进代码。
 - **沙盒模式**（编辑器试玩 / 关卡不可用）：仅按地图出生点部署、无脚本敌军、显示"返回编辑器"。
 - `update()`：固定步长推进（暂停/胜负时跳过），每帧重绘单位/迷雾/控制线/覆盖层 + 更新 HUD。
