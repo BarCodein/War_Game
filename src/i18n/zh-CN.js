@@ -73,7 +73,7 @@ export default {
   // 胜利结算
   'victory.title.win': '胜利',
   'victory.title.lose': '失败',
-  'victory.detail.win': '北方信标已占领，断裂峡谷作战结束。',
+  'victory.detail.win': '北方信标已占领，作战结束。',
   'victory.detail.lose': '前线基地失守。',
   'victory.time': '用时 {t}',
   'victory.next': '下一关',
@@ -123,7 +123,7 @@ export default {
   'home.eyebrow': 'TACTICAL STRATEGY',
   'home.tagline': '指挥军队，攻占领地，赢得战争。',
   'home.play': '开始游戏',
-  'home.play.desc': '前往「断裂峡谷」教学战役',
+  'home.play.desc': '前往战役选择页',
   'home.battle': '战役',
   'home.battle.desc': '选择战役，开始战斗',
   'home.editor': '地图编辑器',

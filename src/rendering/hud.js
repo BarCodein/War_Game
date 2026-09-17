@@ -41,7 +41,17 @@ export function createHud(scene, world, controller, selection, orders) {
     overlayTitle: document.querySelector('#victoryTitle'),
     overlayDetail: document.querySelector('#victoryDetail'),
     restartButton: document.querySelector('#restartButton'),
+    missionEyebrow: document.querySelector('#missionEyebrow'),
+    missionLevelName: document.querySelector('#missionLevelName'),
+    tacticalEyebrow: document.querySelector('#tacticalEyebrow'),
   };
+
+  // 动态设置关卡名称（从 level JSON 读取，替代 HTML 硬编码）
+  const levelName = scene.level?.name ?? '';
+  if (levelName) {
+    if (els.missionLevelName) els.missionLevelName.textContent = levelName;
+    if (els.tacticalEyebrow) els.tacticalEyebrow.textContent = `TACTICAL VIEW / ${levelName}`;
+  }
 
   const status = {
     obj2Done: false,

@@ -3,14 +3,14 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>War of Dots</title>
+  <title>沙盘战争</title>
   <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
   <main class="app-shell">
     <header class="topbar">
-      <div class="brand"><span class="brand-mark">+</span><div><strong>WAR OF DOTS</strong><small>FRONTLINE COMMAND</small></div></div>
-      <div class="mission-name"><span class="eyebrow">OPERATION 07</span><span>断裂峡谷 · Dawn Sector</span></div>
+      <div class="brand"><span class="brand-mark">+</span><div><strong>沙盘战争</strong><small>FRONTLINE COMMAND</small></div></div>
+      <div class="mission-name"><span class="eyebrow" id="missionEyebrow">OPERATION 07</span><span id="missionLevelName">—</span></div>
       <div class="top-actions">
         <button class="icon-button" id="exitPlaytest" title="返回编辑器" hidden>返回编辑器</button>
         <a class="icon-button editor-link" href="/index.html" title="主菜单">主菜单</a>
@@ -35,7 +35,7 @@
       </aside>
       <section class="battlefield-wrap">
         <div class="battlefield-head">
-          <div><span class="eyebrow">TACTICAL VIEW / 断裂峡谷</span><h1>前线态势</h1></div>
+          <div><span class="eyebrow" id="tacticalEyebrow">TACTICAL VIEW / —</span><h1>前线态势</h1></div>
           <div class="battlefield-tools"><span class="selection-readout" id="selectionReadout">未选择单位</span><span class="timer-readout" id="timer">00:00</span></div>
         </div>
         <div class="canvas-frame">

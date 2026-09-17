@@ -105,7 +105,7 @@ export class BenchScene extends Phaser.Scene {
   renderOverlay() {
     const { avg = 0, p95 = 0, samples = 0 } = this.result ?? {};
     this.overlay.textContent = [
-      `WAR OF DOTS 性能基准（500 单位）`,
+      `沙盘战争 性能基准（500 单位）`,
       `模拟 tick：平均 ${avg.toFixed(2)} ms · p95 ${p95.toFixed(2)} ms（预算 8 ms，样本 ${samples}）`,
       `渲染帧率：${this.currentFps} FPS（软件渲染偏低；60 FPS 需真实 GPU 验证）`,
     ].join('\n');
