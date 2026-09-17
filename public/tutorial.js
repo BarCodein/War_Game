@@ -43,6 +43,21 @@ const TUTORIAL_STORY = {
   onComplete: null
 };
 
+/* ---------- 教学结束剧情配置 ---------- */
+const TUTORIAL_END_STORY = {
+  enabled: true,
+  assetPath: "/assets/tutorial/",
+  scenes: [
+    { talker: "通讯员", text: "报告司令员！训练场考核全部通过！部队已熟练掌握基础指挥要领！", bg: "images/bg-command.jpg", audio: "drum", alert: false, portrait: "images/port-hq.png" },
+    { talker: "纵队司令员", text: "好！但这只是开始！训练场的胜利不算胜利，战场上的胜利才是真胜利！", bg: "images/bg-command.jpg", audio: "drum", alert: false, portrait: "images/port-hq.png" },
+    { talker: "纵队司令员", text: "敌人还在步步紧逼！整编第七十四师的先头部队已经抵达我阵地前沿，真正的考验才刚刚开始！", bg: "images/bg-command.jpg", audio: "drum", alert: false, portrait: "images/port-hq.png" },
+    { talker: "纵队司令员", text: "记住——骄兵必败！越是胜利，越要谨慎！各级指挥员务必戒骄戒躁，随时准备投入战斗！", bg: "images/bg-command.jpg", audio: "", alert: false, portrait: "images/port-hq.png" },
+    { talker: "前线指挥员", text: "明白！我们绝不辜负党和人民的期望！随时待命，准备战斗！", bg: "images/bg-command.jpg", audio: "", alert: false, portrait: "images/port-commander.png" },
+    { talker: "纵队司令员", text: "好！返回作战地图，准备迎接真正的战斗！", bg: "images/bg-command.jpg", audio: "", alert: false, portrait: "images/port-hq.png" }
+  ],
+  buttonText: "返回作战地图"
+};
+
 /* ---------- 教学步骤定义 ---------- */
 const steps = [
   {
@@ -170,12 +185,13 @@ function flashHint(text) {
 }
 
 /* ---------- 剧情过场构建（对话式 + 打字机效果） ---------- */
-function buildStoryOverlay() {
-  if (!TUTORIAL_STORY.enabled) { startTutorial(); return; }
-  if (typeof TUTORIAL_STORY.onStart === "function") TUTORIAL_STORY.onStart();
+function buildStoryOverlay(opts) {
+  const cfg = Object.assign({}, TUTORIAL_STORY, opts || {});
+  if (!cfg.enabled) { if (cfg.onComplete) cfg.onComplete(); else startTutorial(); return; }
+  if (typeof cfg.onStart === "function") cfg.onStart();
 
-  const AP = TUTORIAL_STORY.assetPath;
-  const scenes = TUTORIAL_STORY.scenes;
+  const AP = cfg.assetPath;
+  const scenes = cfg.scenes;
   let curIdx = 0;
   let audioUnlocked = false;
   let typingTimer = null;
@@ -269,7 +285,7 @@ function buildStoryOverlay() {
     <div class="story-panel" id="storyPanel">
       <div class="story-text" id="storyText"></div>
       <div class="story-tip" id="storyTip">点击任意位置 或 按空格键 继续...</div>
-      <button class="story-start-btn" id="storyStartBtn">${TUTORIAL_STORY.buttonText}</button>
+      <button class="story-start-btn" id="storyStartBtn">${cfg.buttonText}</button>
     </div>
     <audio id="storySfxWarning"><source src="${AP}audio/sfx-warning.mp3" type="audio/mpeg"></audio>
     <audio id="storySfxDrum"><source src="${AP}audio/sfx-drum.mp3" type="audio/mpeg"></audio>
@@ -382,8 +398,8 @@ function buildStoryOverlay() {
     setTimeout(() => {
       overlay.remove();
       style.remove();
-      if (typeof TUTORIAL_STORY.onComplete === "function") TUTORIAL_STORY.onComplete();
-      startTutorial();
+      if (typeof cfg.onComplete === "function") cfg.onComplete();
+      else startTutorial();
     }, 500);
   }
 
@@ -611,10 +627,17 @@ function finishTutorial() {
     prog["fracture-canyon-tutorial"] = Object.assign({}, prog["fracture-canyon-tutorial"] || {}, { completed: true, wins: 1 });
     localStorage.setItem("war-of-dots.campaign-progress", JSON.stringify(prog));
   } catch (_) {}
-  // 2.8秒后自动返回关卡选择界面
+  // 隐藏教学面板，播放结束剧情
+  const panel = document.getElementById("tutorialChecklist");
+  if (panel) panel.style.display = "none";
+  const toast = document.getElementById("toast");
+  if (toast) toast.style.display = "none";
+  // 延迟一小段时间让玩家看到全部打勾，再进入结束剧情
   setTimeout(() => {
-    window.location.href = "/battlechoose.html";
-  }, 2800);
+    buildStoryOverlay(Object.assign({}, TUTORIAL_END_STORY, {
+      onComplete: () => { window.location.href = "/battlechoose.html"; }
+    }));
+  }, 1200);
 }
 
 // 显示迷雾消散的浮动提示
