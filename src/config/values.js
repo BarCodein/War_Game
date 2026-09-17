@@ -19,11 +19,18 @@ export const values = {
     zoomSmoothing: 1, // 每帧向目标缩放逼近的系数（0~1，越大越跟手；按 60fps 标定）
   },
 
-  // 战术 AI（docs/ai-design.md 阶段一）：脚本负责"打哪、何时打"，这一层负责"怎么打"。
+  // 战术 AI（docs/ai-design.md）：脚本负责"打哪、何时打"，这一层负责"怎么打"。
   // 只在脚本使用 `engage` 动作时生效——旧的 attackNearest / attackMove 行为与关卡平衡完全不变。
-  // 阶段一包含：效用选目标（含追击溃逃）＋ 编队协同（队形、不添油、窄口纵队、集中火力）。
+  // 阶段一：效用选目标（含追击溃逃）＋ 编队协同（队形、不添油、窄口纵队、集中火力）。
+  // 阶段二：薄弱点进攻（复用战线找最弱接近轴）＋ 难度/性格三档（presets + 关卡 tuning）＋ 回城休整。
   ai: {
-    preset: 'standard',            // 难度/性格档（阶段二填充 cautious | standard | sly）
+    preset: 'standard',            // 全局默认档位；关卡可写 ai.preset 覆盖
+    // 三档性格：只有这几项随档位变化（决策节奏与休整阈值是全局的）
+    presets: {
+      cautious: { reserveRatio: 0.3, pursuitRadius: 180, useForcedMarch: false, terrainBias: 'defensive', feint: false },
+      standard: { reserveRatio: 0.15, pursuitRadius: 320, useForcedMarch: true, terrainBias: 'balanced', feint: false },
+      sly: { reserveRatio: 0, pursuitRadius: 520, useForcedMarch: true, terrainBias: 'mobility', feint: true },
+    },
     decisionIntervalSeconds: 0.5,  // 战术层决策节奏（模拟时间，秒）
     hysteresis: 0.15,              // 换目标所需的分数优势（防止每半秒反复横跳）
     engageRadius: 320,             // 考虑交战的半径（px）：超出这个距离只推进、不点杀
@@ -36,6 +43,7 @@ export const values = {
       vulnerability: 0.1,      // 目标处于溃逃/失序（承受伤害 ×1.5）
       chase: 0.15,             // 追击溃逃目标的额外权重
       terrain: 0.15,           // 我方所在地形（水里输出减半）
+      approach: 0.4,           // 接近轴的地形偏好权重（配合 presets[].terrainBias）
     },
     squad: {
       cohesionRadius: 170,       // 队形松散判定半径（px）
@@ -45,6 +53,36 @@ export const values = {
       columnSampleStep: 20,      // 窄口（水域/桥梁/不可通行）判定沿直线的采样步长（px）
       advanceStep: 60,           // 编队整体每轮向目标推进的距离（px）
     },
+    // 薄弱点进攻：复用控制线的 0 等值线段定位战线，再沿战线采样局部兵力比
+    weakSpot: {
+      frontSearchRadius: 460,  // 在目标周围多大范围内找战线采样点（px）
+      sampleRadius: 170,       // 每个采样点的兵力统计半径（px）
+      pointLimit: 24,          // 最多采样多少个战线点（性能上限）
+      axisCount: 3,            // 围绕目标生成几条接近轴（正面 + 左右侧翼）
+      axisSpread: 0.6,         // 侧翼张角（弧度）
+      standoff: 220,           // 接近轴端点相对目标的停战线距离（px）
+    },
+    // 地形偏好：cautious 偏防守地形、sly 偏机动（道路），用于接近轴打分
+    terrainBias: {
+      defensive: { defense: 0.7, mobility: 0.1 },
+      balanced: { defense: 0.4, mobility: 0.4 },
+      mobility: { defense: 0.15, mobility: 0.7 },
+    },
+    // 预备队：按档位比例留人，什么时候投入
+    reserve: {
+      commitMainRatio: 0.6,     // 主力战力掉到开战时的这个比例以下 → 投入预备队
+      commitWeaknessRatio: 0.7, // 目标方向我方相对优势达到这个值 → 投入预备队扩大战果
+      rallyBehind: 170,         // 预备队待命位置 = 主力形心后方多远处（px）
+    },
+    // 回城休整（全局阈值，不随档位变化）
+    regroup: {
+      hpRatio: 0.45,            // 小队平均血量低于此值 → 撤退休整
+      morale: 40,               // 或平均士气低于此值
+      recoverHpRatio: 0.75,     // 恢复到该血量比例 → 回归脚本目标
+      recoverMorale: 60,        // 且士气达到该值
+      cooldownSeconds: 12,      // 休整完的冷却，避免来回抖动
+    },
+    march: { minDistance: 650 }, // 距目标超过这个距离且档位允许时才走急行军（代价：士气 -10/s、掉血 1.5/s）
   },
 
   // 开局准备阶段（gdd.md §11）：进关卡后先倒计时若干秒，期间**可以下达预先指令**

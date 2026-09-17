@@ -192,6 +192,7 @@
 
   "ai": {
     "faction": "red",
+    "preset": "standard",
     "fallback": { "anchor": "blueBase" },
     "triggers": [
       {

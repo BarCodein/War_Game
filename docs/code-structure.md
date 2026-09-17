@@ -233,6 +233,8 @@ war_game/
 ### `src/simulation/ai/`（战术层纯函数，docs/ai-design.md）
 - `tactics.js`：`combatPower`（复用 `combat.calcDamageRatio` + 士气倍率 + 地形防御）/ `localBalance`（半径内双方战力占比）/ `targetValue` / `scoreAttack`（含集火上限，达上限返回 null）/ `chooseTarget`（溃逃优先，再比分数）/ `enemiesWithin`（走空间网格）。
 - `squad.js`：`formationSlots`（line / column / wedge，按朝向旋转）/ `squadAnchor`（形心向目标推进 `advanceStep`，不越过目标）/ `needsColumn`（沿直线采样水域/不可通行）/ `cohesionRatio`·`isCohesive`·`isRushingAhead`（不添油）/ `assignSlots`（按距锚点距离 + id 的确定性分配）。
+- `front.js`（阶段二 B）：复用 `world.controlLineSegments`（控制线 0 等值线 = 实际战线）定位战线 → `pointStrength` 采样兵力比（空点记 1）→ `chooseWeakSpot` 选最弱段 / `approachAxes` 生成接近轴 → `chooseApproach` 按"敌弱 + 近 + 地形合口味"挑轴 → `approachWaypoint` 两段式推进；`terrainPreference` / `feintAxis` 供档位使用。**脚本目标点不变，只选接近方向。**
+- `presets.js`（阶段二 F）：`AI_PRESET_NAMES`（cautious / standard / sly）、`AI_TUNING_KEYS`（reserveRatio / pursuitRadius / useForcedMarch / terrainBias / feint）、`resolveAiConfig(preset, tuning)`（档位覆盖 values.ai，tuning 再覆盖，且 `pursuitRadius` 同步为 `engageRadius`）、`validateAiTuning`（关卡结构校验用）。
 
 ### `src/simulation/systems/movement.js`
 移动系统：

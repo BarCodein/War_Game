@@ -2,7 +2,9 @@ import { values } from '../config/index.js';
 import { attackCommand, attackMoveCommand, holdCommand, moveCommand } from './commands.js';
 import { resolvePoint } from './level.js';
 import { assignSlots, cohesionRatio, facingTo, formationSlots, isRushingAhead, needsColumn, squadAnchor, squadCentroid } from './ai/squad.js';
-import { chooseTarget, enemiesWithin, scoreAttack } from './ai/tactics.js';
+import { chooseTarget, combatPower, enemiesWithin, scoreAttack } from './ai/tactics.js';
+import { approachWaypoint, chooseApproach, chooseWeakSpot, feintAxis } from './ai/front.js';
+import { resolveAiConfig } from './ai/presets.js';
 
 const isNonEmptyString = (v) => typeof v === 'string' && v.length > 0;
 const isFiniteNumber = (v) => typeof v === 'number' && Number.isFinite(v);
@@ -57,6 +59,9 @@ export class ScriptedAI {
     this.tacticsTimer = 0;
     this.lastOrders = new Map();   // unit.id → 上一次下发的命令签名（避免重复下令重置路线）
     this.currentTargets = new Map(); // unit.id → 当前选中的敌人 id（用于换目标迟滞）
+    this.squadStates = new Map();  // group 名 → 战术状态（休整状态机 / 接近轴 / 预备队）
+    // 本局 AI 配置：presets[preset] 覆盖 values.ai，关卡的 ai.tuning 再覆盖一层（docs/ai-design.md §2）
+    this.cfg = resolveAiConfig(script.preset, script.tuning);
   }
 
   update(dt) {
@@ -290,25 +295,57 @@ export class ScriptedAI {
   }
 
   runTactics() {
-    const cfg = values.ai;
+    const cfg = this.cfg;
     for (const [group, intent] of this.intents) {
       const units = this.ownUnits({ group });
       if (units.length === 0) continue;
       const { objective } = intent;
-      const anchor = squadAnchor(units, objective);
-      const template = needsColumn(this.world.terrain, anchor.centroid, objective) ? 'column' : 'line';
+      const state = this.squadState(group);
+      state.cooldown = Math.max(0, state.cooldown - cfg.decisionIntervalSeconds);
+      const centroid = squadCentroid(units);
+      const avgHp = units.reduce((sum, unit) => sum
+        + unit.hp / values.units[unit.type].hp, 0) / units.length;
+      const avgMorale = units.reduce((sum, unit) => sum + unit.morale, 0) / units.length;
+
+      // ① 休整状态机（阶段二）：打残/打散 → 撤回最近己城恢复半径，恢复够了再回归
+      if (this.updateRegroupState(state, group, units, centroid, avgHp, avgMorale, cfg)) continue;
+
+      // ② 主攻方向（阶段二 B）：复用战线的薄弱点 → 接近轴端点；没有战线时就是脚本目标
+      const waypoint = this.resolveWaypoint(state, group, units, centroid, objective, cfg);
+      const anchor = squadAnchor(units, waypoint);
+      const template = needsColumn(this.world.terrain, anchor.centroid, waypoint) ? 'column' : 'line';
       const slots = formationSlots(units.length, template, anchor.facing);
       const cohesive = cohesionRatio(units, anchor.centroid) >= cfg.squad.cohesionRatio;
       const targetCounts = new Map();
 
+      // ③ 分兵（阶段二 F）：预备队留在后方；sly 档再派一个单位去侧翼佯动
+      const feintId = cfg.feint ? this.pickFeintUnit(state, group, units, waypoint, cfg) : null;
+      const reserve = this.pickReserve(state, group, units, waypoint, cfg, feintId);
+      const forced = this.shouldForceMarch(units, waypoint, cfg);
+
       for (const { unit, point } of assignSlots(units, anchor, slots)) {
-        // ① 队形纪律：队形散了 + 这个单位跑在前面 → 原地等主力（不添油）
-        if (!cohesive && isRushingAhead(unit, anchor.centroid, objective)) {
+        if (feintId !== null && unit.id === feintId) {
+          this.issueOnce(unit, attackMoveCommand(state.feintPoint, { forced }), `feint:${Math.round(state.feintPoint.x)},${Math.round(state.feintPoint.y)}`);
+          continue;
+        }
+        if (reserve.has(unit.id)) {
+          // 预备队：在主力后方待命（投入条件见 shouldCommitReserve）
+          const rally = {
+            x: centroid.x - anchor.facing.x * cfg.reserve.rallyBehind,
+            y: centroid.y - anchor.facing.y * cfg.reserve.rallyBehind,
+          };
+          const holdAt = Math.hypot(unit.x - rally.x, unit.y - rally.y) > cfg.squad.cohesionRadius ? rally : null;
+          if (holdAt) this.issueOnce(unit, attackMoveCommand(holdAt, { forced }), `reserve:${Math.round(holdAt.x)},${Math.round(holdAt.y)}`);
+          else this.issueOnce(unit, holdCommand(), 'reserve-hold');
+          continue;
+        }
+        // ④ 队形纪律：队形散了 + 这个单位跑在前面 → 原地等主力（不添油）
+        if (!cohesive && isRushingAhead(unit, anchor.centroid, waypoint)) {
           this.issueOnce(unit, holdCommand(), 'hold');
           continue;
         }
-        // ② 选目标：集中火力上限内的最高分；已有目标且优势不足时保持（迟滞，防横跳）
-        const ctx = { targetCounts };
+        // ⑤ 选目标：集中火力上限内的最高分；已有目标且优势不足时保持（迟滞，防横跳）
+        const ctx = { targetCounts, cfg };
         const chosen = this.chooseWithHysteresis(unit, ctx);
         if (chosen) {
           targetCounts.set(chosen.enemy.id, (targetCounts.get(chosen.enemy.id) ?? 0) + 1);
@@ -319,12 +356,152 @@ export class ScriptedAI {
           this.issueOnce(unit, attackCommand(chosen.enemy.id), `attack:${chosen.enemy.id}:${sx},${sy}`);
           continue;
         }
-        // ③ 没有值得打的目标：按队形槽位继续推进（attack-forward 会在接触时自动交战）
+        // ⑥ 没有值得打的目标：按队形槽位继续推进（attack-forward 会在接触时自动交战）
         this.lastOrders.delete(unit.id);
         this.currentTargets.delete(unit.id);
-        this.issueOnce(unit, attackMoveCommand(point), `advance:${Math.round(point.x)},${Math.round(point.y)}`);
+        this.issueOnce(unit, attackMoveCommand(point, { forced }), `advance:${Math.round(point.x)},${Math.round(point.y)}`);
       }
     }
+  }
+
+  // 每个编队一份战术状态（模式 / 休整冷却 / 接近轴 / 主力战力基线 / 佯动点）
+  squadState(group) {
+    let state = this.squadStates.get(group);
+    if (!state) {
+      state = { mode: 'engage', cooldown: 0, objective: null, axis: null, weakness: null, mainPower: null, feintPoint: null };
+      this.squadStates.set(group, state);
+    }
+    return state;
+  }
+
+  /**
+   * 回城休整状态机（阶段二）：
+   *   engage --(平均血量/士气低于阈值)--> regroup --(进入己城恢复半径)--> recover
+   *   recover --(恢复到阈值)--> engage（带冷却，防止来回抖动）
+   * 返回 true 表示本轮已经处理（调用方跳过队形/选目标逻辑）。
+   */
+  updateRegroupState(state, group, units, centroid, avgHp, avgMorale, cfg) {
+    const city = this.nearestOwnCity(centroid);
+    const inRecovery = city && Math.hypot(centroid.x - city.x, centroid.y - city.y) <= values.cities.recovery.radius;
+    if (state.mode === 'engage') {
+      const tired = avgHp < cfg.regroup.hpRatio || avgMorale < cfg.regroup.morale;
+      if (!tired || state.cooldown > 0 || !city) return false;
+      state.mode = 'regroup';
+    }
+    if (state.mode === 'regroup') {
+      if (!city) {
+        state.mode = 'engage'; // 无城可退：继续打
+        return false;
+      }
+      if (inRecovery) {
+        state.mode = 'recover';
+      } else {
+        this.clearIntentsForTargets(units); // 逐单位撤向己城
+        for (const unit of units) {
+          this.issueOnce(unit, moveCommand([{ x: city.x, y: city.y }]), `regroup:${city.id}`);
+        }
+        return true;
+      }
+    }
+    // recover：在恢复半径内原地待命（+3hp/s、+5 士气/s 由补给系统结算）
+    if (avgHp >= cfg.regroup.recoverHpRatio && avgMorale >= cfg.regroup.recoverMorale) {
+      state.mode = 'engage';
+      state.cooldown = cfg.regroup.cooldownSeconds;
+      state.mainPower = null; // 重新集结后重新记基线
+      this.lastOrders.clear();
+      return false;
+    }
+    for (const unit of units) this.issueOnce(unit, holdCommand(), 'recover-hold');
+    return true;
+  }
+
+  // 主攻方向：优先"战线上的薄弱点"（阶段二 B），否则退回脚本目标；sly 档额外算侧翼佯动点
+  resolveWaypoint(state, group, units, centroid, objective, cfg) {
+    const objectiveChanged = state.objective?.x !== objective.x || state.objective?.y !== objective.y;
+    if (objectiveChanged || state.axis === undefined) {
+      state.objective = { x: objective.x, y: objective.y };
+      // 权限边界：只选"从哪个方向接近"，脚本给的目标点不变
+      state.axis = chooseApproach(this.world, { unit: units[0], objective, faction: this.faction, cfg }) ?? null;
+      state.weakness = chooseWeakSpot(this.world, { objective, faction: this.faction, cfg });
+      state.feintPoint = cfg.feint
+        ? feintAxis(this.world, { mainAxis: state.axis, objective, faction: this.faction, cfg })
+        : null;
+      state.mainPower = null;
+    }
+    const useWeak = state.weakness && (!state.axis || state.weakness.score >= state.axis.score);
+    const pick = useWeak
+      ? { x: state.weakness.x, y: state.weakness.y }
+      : (state.axis ? { x: state.axis.x, y: state.axis.y } : null);
+    if (!pick) return objective;
+    return approachWaypoint(pick, objective, centroid);
+  }
+
+  // 预备队名单：离推进点最远的那一部分单位（确定性：距离相同按 id）
+  pickReserve(state, group, units, waypoint, cfg, feintId) {
+    const ratio = cfg.reserveRatio ?? 0;
+    if (!(ratio > 0)) return new Set();
+    if (this.shouldCommitReserve(state, units, waypoint, cfg)) {
+      state.committed = true;
+      return new Set();
+    }
+    const candidates = units.filter(unit => unit.id !== feintId);
+    const count = Math.floor(candidates.length * ratio);
+    if (count <= 0) return new Set();
+    const sorted = [...candidates].sort((a, b) => {
+      const da = Math.hypot(a.x - waypoint.x, a.y - waypoint.y);
+      const db = Math.hypot(b.x - waypoint.x, b.y - waypoint.y);
+      if (da !== db) return db - da; // 越远越靠后
+      return a.id - b.id;
+    });
+    return new Set(sorted.slice(0, count).map(unit => unit.id));
+  }
+
+  // 预备队投入条件：主力战力掉到基线比例以下，或目标方向我方优势已经很大（扩大战果）
+  shouldCommitReserve(state, units, waypoint, cfg) {
+    if (state.committed) return true;
+    const power = units.reduce((sum, unit) => sum + combatPower(unit, this.world), 0);
+    if (state.mainPower === null) state.mainPower = power;
+    const weakened = state.mainPower > 0 && power < state.mainPower * cfg.reserve.commitMainRatio;
+    const weakness = state.weakness?.ratio ?? state.axis?.ratio ?? 0;
+    return weakened || weakness >= cfg.reserve.commitWeaknessRatio;
+  }
+
+  // sly 档的佯动分队：挑离侧翼轴最近的那个单位（确定性：距离相同按 id）
+  pickFeintUnit(state, group, units, waypoint, cfg) {
+    if (!state.feintPoint || units.length < 3) return null;
+    const candidates = [...units].sort((a, b) => {
+      const da = Math.hypot(a.x - state.feintPoint.x, a.y - state.feintPoint.y);
+      const db = Math.hypot(b.x - state.feintPoint.x, b.y - state.feintPoint.y);
+      if (da !== db) return da - db;
+      return a.id - b.id;
+    });
+    return candidates[0].id;
+  }
+
+  // 急行军：档位允许 + 距推进点足够远（代价是士气与掉血，见 gdd §4）
+  shouldForceMarch(units, waypoint, cfg) {
+    if (!cfg.useForcedMarch) return false;
+    const centroid = squadCentroid(units);
+    return Math.hypot(waypoint.x - centroid.x, waypoint.y - centroid.y) >= cfg.march.minDistance;
+  }
+
+  nearestOwnCity(point) {
+    let best = null;
+    let bestDistance = Infinity;
+    for (const city of this.world.cities ?? []) {
+      if (city.faction !== this.faction) continue;
+      const distance = Math.hypot(city.x - point.x, city.y - point.y);
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        best = city;
+      }
+    }
+    return best;
+  }
+
+  // 撤退/休整时不需要清意图表（意图是"打哪"，退是为了接着打），但要清掉旧命令签名
+  clearIntentsForTargets(units) {
+    for (const unit of units) this.currentTargets.delete(unit.id);
   }
 
   // 迟滞：旧目标仍可用，且没有哪个候选比它高出 hysteresis 那么多 → 保持旧目标

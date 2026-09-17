@@ -1,4 +1,5 @@
 import { values } from '../config/index.js';
+import { validateAiTuning } from './ai/presets.js';
 
 // 关卡（Level）标准格式 v1（architecture.md §7.1）：
 // 把「地图 + 兵力部署 + 增援 + 关卡类型 + AI 脚本」全部数据化，
@@ -166,6 +167,8 @@ export function validateLevel(data) {
     const ai = data.ai;
     if (!ai || !FACTIONS.includes(ai.faction)) errors.push('ai invalid faction');
     if (ai?.fallback !== undefined && !refOk(ai.fallback)) errors.push(refError(ai.fallback, 'ai.fallback'));
+    // 难度/性格档位与关卡级参数覆盖（docs/ai-design.md 阶段二）
+    errors.push(...validateAiTuning(ai));
     // 条件：触发器的 at 与规则的 when 共用
     const isIdList = (value) => isNonEmptyString(value)
       || (Array.isArray(value) && value.length > 0 && value.every(isNonEmptyString));
