@@ -48,7 +48,7 @@ war_game/
 │  │     ├─ controlLine.js     #      影响力场重算（10 Hz）+ 分界线线段
 │  │     └─ victory.js         #      胜负判定
 │  ├─ controllers/             # 交互状态控制器
-│  │  └─ gameController.js     #    暂停/游戏速度
+│  │  └─ gameController.js     #    暂停/游戏速度/开局准备阶段
 │  ├─ i18n/
 │  │  ├─ index.js              #    t(key) 查表 + 插值
 │  │  ├─ zh-CN.js              #    中文文案（默认）
@@ -65,6 +65,7 @@ war_game/
 │  │  ├─ fogRenderer.js        #    迷雾罩层
 │  │  ├─ unitRenderer.js       #    单位/城市/血条/裂纹/虚影
 │  │  ├─ controlLineRenderer.js#    实际控制线
+│  │  ├─ cameraView.js         #    地图缩放（滚轮以光标为焦点，纯函数 + Phaser 接线）
 │  │  └─ scenes/               #    Phaser 场景
 │  │     ├─ BootScene.js       #      游戏页启动/路由
 │  │     ├─ GameScene.js       #      游戏主场景（组装各层）
@@ -127,6 +128,7 @@ war_game/
 - `spatial`：格子边长 `64`。
 - `performance`：目标帧率/单位、tick/渲染预算、HUD 节流。
 - `input`：点击半径、框选阈值、轨迹采样/偏移。
+- `prep`：开局准备阶段倒计时秒数（`gdd.md §11`）。
 - `ui`、`tutorial`：UI 节流、教学关兵力/增援等规则数值。
 
 ### `src/config/index.js`
@@ -175,6 +177,16 @@ war_game/
 - 每 tick 重建（O(n)），邻居查询近似 O(1)/单位，**禁止全单位两两检测**（`REQUIREMENTS.md §5`）。
 - `rebuild(units)` / `cellKeyAt(x,y)` / `query(x,y,radius)`（按桶序，确定性）。
 
+### `src/achievements.js`
+**成就系统（数据 + 判定，纯函数）**（`gdd.md §11`）：不依赖 DOM，页面只负责渲染，因此可单测。
+- `ACHIEVEMENTS`：成就定义（`id / name / stars(1~3) / desc / hint / condition(ctx)`）；点名的三条：宿北战役、塔山战役、睡衣登山大赛冠军。星级是成就本身的稀有度，解锁后计入总星数。
+- `evaluateAchievements({ progress, stats, levels, climbCleared, customMapSaved })` → 每条成就 + `unlocked`；`summarizeAchievements(list)` → `{ unlocked, count, earnedStars, totalStars }`。
+- 数据源（全部本地存储）：`war-of-dots.campaign-progress`（通关）、`war-of-dots.level-stats`（每关最快用时/最低伤亡，`result.html` 写入）、`war-of-dots.climb-cleared`（`public/climb/climb.js` 登顶写入）、`war-of-dots.custom-map`（编辑器保存写入）。键名常量在本模块导出，另有测试守住各写入方的字面量不漂移。
+
+### `src/entries/achievements.js`
+成就页（`achievements.html`）入口：读本地战绩 → `evaluateAchievements` → 渲染卡片与总进度条。已解锁优先、同状态按星级降序排列。
+
+
 ### `src/simulation/influence.js`
 **影响力场与实际控制线的纯计算**（`gdd.md §9`）：不依赖 `World` / Phaser / DOM，输入是影响力源数组、输出是网格与线段，可 headless 单测。
 - `influenceAt(distance, source, curve)`：单个源的影响力。**核心圈 `source.coreRadius` 是绝对值**（单位 = 碰撞体积、城市/占领点 = 占领半径），圈内满强度；出圈按原型手感掉到 20%（`coreExitRatio`），之后中圈/外圈两段线性衰减（断点按 `influenceRadius / curve.maxDistance` 等比缩放），到影响力半径归零。
@@ -211,7 +223,10 @@ war_game/
 脚本敌军（`ScriptedAI`）：**解释关卡 JSON 里的「事件 → 动作」脚本**，引擎不含关卡特例：
 - 只读世界状态，通过 `world.issueCommands` 下发（与人类共用统一命令接口）。
 - 触发条件：`{ time }`（经过秒数）、`{ enemyCrossX }`（任一敌军越过该 x）；首次满足**立即执行一次**动作，`repeatEvery` 存在时此后周期重复。
-- 动作：`spawn`（可按 `order` 逐单位下令）、`attackNearest`（各打最近敌军，无敌人时转向 `fallback`）、`attackMove`、`hold`；所有点位经 `resolvePoint(ref, world, this.anchors)` 解析，构造时传入关卡 `anchors`。
+- **条件规则 `rules`（`{ when, then, otherwise?, after?, until?, repeatEvery? }`）**：持续状态语义，用来看局势下命令（例：占领点在手 → 坚守，丢了 → 撤退）。`when` 额外支持 `{ capturePoint, owner }` / `{ city, owner }`（`owner` = `self` / `enemy` / `neutral` / `blue` / `red`；据点值可为 id 数组 = 任意一个符合）与 `{ ownUnitsBelow }` / `{ enemyUnitsBelow }`。
+- **只在条件翻转的那一帧下发命令**（`updateRule` 比对上一次的布尔值，`undefined` 视为尚未求值 → 首次也下发一次），避免每帧重发把行军路线反复重置；`after` / `until` 是生效时间窗，`repeatEvery` 让条件成立期间周期重发 `then`（一次 update 最多补发一次，不追帧）。
+- 动作：`spawn`（可按 `order` 逐单位下令，可用 `group` 给增援打标签）、`attackNearest`（各打最近敌军，无敌人时转向 `fallback`）、`attackMove`（可带 `forced: true` → 急行军）、`hold`、`retreat`（`to` 省略时撤向最近的己方城市，无城可退则驻守）；所有点位经 `resolvePoint(ref, world, this.anchors)` 解析，构造时传入关卡 `anchors`。
+- **只指挥一部分部队**：每个动作可选 `units: { group: 'x' }`，由 `ownUnits(selector)` / `commandUnits()` 过滤 `unit.group`（标签来自 `forces[].group` / `spawn.group`）；省略 = 全军，选不到单位时静默跳过。
 - `nearestEnemy` 用空间区扩张半径查询，避免全图扫描。
 
 ### `src/simulation/systems/movement.js`
@@ -265,6 +280,9 @@ war_game/
 ## 五、控制器（`src/controllers/`）
 
 ### `src/controllers/gameController.js`
+游戏控制器：暂停、游戏速度与**开局准备阶段**（`gdd.md §11`）：
+- `paused` / `speed` / `prepRemaining` / `isPrepping()` / `tickPrep(dt)` / `skipPrep()`；`onChange` 供 HUD 订阅。
+- 准备阶段按**真实时间**倒计时（不受游戏速度影响）；`GameScene.update` 在准备阶段只调 `tickPrep`、不调 `loop.advance`，所以部队与脚本敌军都不行动，但输入层照常下单。编辑器试玩会 `skipPrep()`。
 游戏控制器（`createGameController`）：
 - 状态：`paused`、`speed`；`togglePause`/`setSpeed`（限 `values.simulation.speeds` 档位）。
 - `onChange(listener)` 订阅，供 GameScene/HUD 刷新。被 GameScene 读取（暂停时跳过模拟 tick）。
@@ -350,6 +368,12 @@ DOM 编辑器工具栏：
 - 每帧读 `world.controlLinePaths`（已串联 + Chaikin 平滑的折线），用 `values.controlLine.style`（4 px / `0x101414` / 0.82）每条折线一次 `moveTo` 起头再 `lineTo`，最后一次性 `strokePath`（Phaser 的 `MOVE_TO` 会开新子路径，多条战线不会连错）。
 - **永远可见**：底衬 / 主线两个图形 depth = 2、标签 depth = 3，都高于迷雾罩层的 depth = 1（`fogRenderer`）；且用 `style.haloWidth/haloColor/haloAlpha`（9 px 浅色）垫在 `style.lineWidth`（4 px 深色）之下做**双色描边**——深色线单独叠在迷雾/森林上对比度会归零，看起来像被迷雾盖住。
 - 可能在多段（包围、多个战场）时把「实际控制线」标签贴在**最靠上**的那条战线旁边。
+
+### `src/rendering/cameraView.js`
+游戏页的地图相机（`gdd.md §11`）：**滚轮以光标为焦点缩放**，视口夹在地图内。
+- 纯函数（可单测）：`clampZoom`、`worldAt` / `scrollForPoint`（互为逆运算，用来把"光标下的世界点"钉在原处）、`clampScroll`（把可见范围夹进地图，地图比视口小时居中）。
+- `createMapCamera(scene, world, cfg)`：接线 Phaser（`input.on('wheel')` + `cameras.main.setZoom/setScroll`）；`update(dt)` 每帧推进平滑缩放（系数按 60fps 标定、与帧率无关），`reset()` 以当前视野中心为焦点回到 1×，另暴露 `zoom` / `zoomPercent` / `isZoomed` 供 HUD 读数。
+- 只影响渲染相机，不参与模拟：`orders.js` / `selection.js` 用的 `pointer.worldX/worldY` 由 Phaser 换算，缩放后下令与框选仍然精确。
 
 ### `src/rendering/scenes/BootScene.js`
 游戏页启动场景：把 URL 解析为**关卡**再启动游戏。

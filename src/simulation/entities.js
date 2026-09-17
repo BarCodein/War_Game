@@ -10,6 +10,7 @@ export function makeUnit({ id, faction, type, x, y }) {
     id,
     faction,
     type,
+    group: null,         // 编队标签（关卡 forces[].group / AI spawn.group 写入）：脚本只指挥同组单位
     x,
     y,
     hp: stats.hp,

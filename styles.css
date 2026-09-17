@@ -28,6 +28,11 @@ body { margin: 0; background: #e7efeb; color: var(--ink); font-family: 'Barlow C
 .mission-name .eyebrow { color: var(--lime); }
 .top-actions { display: flex; gap: 9px; align-items: center; }
 .speed-controls { display: flex; gap: 4px; margin-right: 6px; }
+/* 地图缩放：百分比读数 + 复位按钮（1× 时按钮变暗，避免误以为还有可复位的状态） */
+.zoom-controls { display: flex; gap: 6px; align-items: center; margin-right: 6px; }
+.zoom-readout { color: #9fb8b3; font-family: 'IBM Plex Mono', monospace; font-size: 12px; min-width: 44px; text-align: right; }
+.zoom-controls .icon-button:disabled { opacity: .45; cursor: default; }
+.zoom-controls .icon-button:disabled:hover { background: transparent; }
 .icon-button { border: 1px solid #46625f; background: transparent; color: #d6e7df; height: 31px; min-width: 32px; cursor: pointer; font: inherit; font-family: 'IBM Plex Mono', monospace; font-size: 12px; }
 .icon-button:hover { background: #294746; }
 .icon-button.active { background: #294746; border-color: var(--lime); color: var(--lime); }

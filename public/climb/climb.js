@@ -1428,6 +1428,8 @@ function animate() {
     if (player.x >= WIN_X && state === 'play') {
       state = 'win'
       sfx('win')
+      // 登顶标记（成就页「睡衣登山大赛冠军」读取）；存储不可用时忽略
+      try { localStorage.setItem('war-of-dots.climb-cleared', '1') } catch (e) { /* 忽略 */ }
     }
   }
 

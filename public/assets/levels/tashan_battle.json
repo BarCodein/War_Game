@@ -150,6 +150,7 @@
     {
       "faction": "red",
       "at": { "spawnId": "s16" },
+      "group": "landing",
       "units": [
         { "type": "heavy", "count": 2 }
       ]
@@ -157,6 +158,7 @@
     {
       "faction": "red",
       "at": { "spawnId": "s17" },
+      "group": "landing",
       "units": [
         { "type": "light", "count": 1 }
       ]
@@ -164,6 +166,7 @@
     {
       "faction": "red",
       "at": { "spawnId": "s18" },
+      "group": "center",
       "units": [
         { "type": "light", "count": 1 }
       ]
@@ -171,6 +174,7 @@
     {
       "faction": "red",
       "at": { "spawnId": "s15" },
+      "group": "center",
       "units": [
         { "type": "light", "count": 1 }
       ]
@@ -178,6 +182,7 @@
     {
       "faction": "red",
       "at": { "spawnId": "s2" },
+      "group": "east",
       "units": [
         { "type": "light", "count": 1 }
       ]
@@ -198,6 +203,7 @@
             "unitType": "light",
             "count": 2,
             "at": { "anchor": "sea" },
+            "group": "landing",
             "spacing": { "x": 0, "y": 24 },
             "order": { "type": "attackMove", "target": { "anchor": "dayushan" } }
           }
@@ -212,6 +218,7 @@
             "unitType": "light",
             "count": 4,
             "at": { "anchor": "redBase" },
+            "group": "center",
             "spacing": { "x": 0, "y": 24 },
             "order": { "type": "attackMove", "target": { "anchor": "tashan" } }
           },
@@ -220,16 +227,10 @@
             "unitType": "light",
             "count": 4,
             "at": { "anchor": "eastHook" },
+            "group": "east",
             "spacing": { "x": 0, "y": 24 },
             "order": { "type": "attackMove", "target": { "anchor": "baitaishan" } }
           }
-        ]
-      },
-      {
-        "id": "retreat",
-        "at": { "time": 60 },
-        "actions": [
-          { "type": "attackMove" ,"target": { "anchor": "redBase" }}
         ]
       },
       {
@@ -241,6 +242,7 @@
             "unitType": "light",
             "count": 3,
             "at": { "anchor": "eastHook" },
+            "group": "east",
             "spacing": { "x": 40, "y": 0 },
             "order": { "type": "attackMove", "target": { "anchor": "baitaishan" } }
           },
@@ -249,6 +251,7 @@
             "unitType": "heavy",
             "count": 1,
             "at": { "anchor": "roadblock" },
+            "group": "center",
             "spacing": { "x": 0, "y": 24 },
             "order": { "type": "attackMove", "target": { "anchor": "tashan" } }
           }
@@ -263,6 +266,7 @@
             "unitType": "heavy",
             "count": 4,
             "at": { "anchor": "redBase" },
+            "group": "center",
             "spacing": { "x": 40, "y": 0 },
             "order": { "type": "attackMove", "target": { "anchor": "tashan" } }
           },
@@ -271,18 +275,104 @@
             "unitType": "light",
             "count": 2,
             "at": { "anchor": "eastHook" },
+            "group": "east",
             "spacing": { "x": 0, "y": 24 },
             "order": { "type": "attackMove", "target": { "anchor": "baitaishan" } }
           }
         ]
+      }
+    ],
+
+    "rules": [
+      {
+        "id": "pressLanding1",
+        "after": 76,
+        "until": 90,
+        "repeatEvery": 10,
+        "when": { "capturePoint": "p1", "owner": "enemy" },
+        "then": [{ "type": "attackMove", "target": { "anchor": "dayushan" }, "units": { "group": "landing" } }]
       },
       {
-        "id": "assault",
-        "at": { "time": 120 },
+        "id": "pressCenter1",
+        "after": 76,
+        "until": 90,
         "repeatEvery": 10,
-        "actions": [
-          { "type": "attackNearest" }
-        ]
+        "when": { "capturePoint": "p3", "owner": "enemy" },
+        "then": [{ "type": "attackMove", "target": { "anchor": "tashan" }, "units": { "group": "center" } }]
+      },
+      {
+        "id": "pressEast1",
+        "after": 76,
+        "until": 90,
+        "repeatEvery": 10,
+        "when": { "capturePoint": "p6", "owner": "enemy" },
+        "then": [{ "type": "attackMove", "target": { "anchor": "baitaishan" }, "units": { "group": "east" } }]
+      },
+      {
+        "id": "pressLanding2",
+        "after": 120,
+        "until": 150,
+        "repeatEvery": 10,
+        "when": { "capturePoint": "p1", "owner": "enemy" },
+        "then": [{ "type": "attackMove", "target": { "anchor": "dayushan" }, "units": { "group": "landing" } }]
+      },
+      {
+        "id": "pressCenter2",
+        "after": 120,
+        "until": 150,
+        "repeatEvery": 10,
+        "when": { "capturePoint": "p3", "owner": "enemy" },
+        "then": [{ "type": "attackMove", "target": { "anchor": "tashan" }, "units": { "group": "center" } }]
+      },
+      {
+        "id": "pressEast2",
+        "after": 120,
+        "until": 150,
+        "repeatEvery": 10,
+        "when": { "capturePoint": "p6", "owner": "enemy" },
+        "then": [{ "type": "attackMove", "target": { "anchor": "baitaishan" }, "units": { "group": "east" } }]
+      },
+      {
+        "id": "landingHoldOrWithdraw1",
+        "after": 60,
+        "when": { "capturePoint": "p1", "owner": "self" },
+        "then": [{ "type": "hold", "units": { "group": "landing" } }],
+        "otherwise": [{ "type": "retreat", "to": { "anchor": "redBase" }, "units": { "group": "landing" } }]
+      },
+      {
+        "id": "centerHoldOrWithdraw1",
+        "after": 60,
+        "when": { "capturePoint": "p3", "owner": "self" },
+        "then": [{ "type": "hold", "units": { "group": "center" } }],
+        "otherwise": [{ "type": "retreat", "to": { "anchor": "redBase" }, "units": { "group": "center" } }]
+      },
+      {
+        "id": "eastHoldOrWithdraw1",
+        "after": 60,
+        "when": { "capturePoint": "p6", "owner": "self" },
+        "then": [{ "type": "hold", "units": { "group": "east" } }],
+        "otherwise": [{ "type": "retreat", "to": { "anchor": "redBase" }, "units": { "group": "east" } }]
+      },
+      {
+        "id": "landingHoldOrWithdraw2",
+        "after": 100,
+        "when": { "capturePoint": "p1", "owner": "self" },
+        "then": [{ "type": "hold", "units": { "group": "landing" } }],
+        "otherwise": [{ "type": "retreat", "to": { "anchor": "redBase" }, "units": { "group": "landing" } }]
+      },
+      {
+        "id": "centerHoldOrWithdraw2",
+        "after": 100,
+        "when": { "capturePoint": "p3", "owner": "self" },
+        "then": [{ "type": "hold", "units": { "group": "center" } }],
+        "otherwise": [{ "type": "retreat", "to": { "anchor": "redBase" }, "units": { "group": "center" } }]
+      },
+      {
+        "id": "eastHoldOrWithdraw2",
+        "after": 100,
+        "when": { "capturePoint": "p6", "owner": "self" },
+        "then": [{ "type": "hold", "units": { "group": "east" } }],
+        "otherwise": [{ "type": "retreat", "to": { "anchor": "redBase" }, "units": { "group": "east" } }]
       }
     ]
   },

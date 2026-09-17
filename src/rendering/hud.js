@@ -22,6 +22,8 @@ export function createHud(scene, world, controller, selection, orders) {
   const els = {
     pauseButton: document.querySelector('#pauseButton'),
     speedButtons: document.querySelectorAll('[data-speed]'),
+    zoomLabel: document.querySelector('#zoomLabel'),
+    zoomReset: document.querySelector('#zoomReset'),
     exitPlaytest: document.querySelector('#exitPlaytest'),
     unitList: document.querySelector('#unitList'),
     unitCount: document.querySelector('#unitCount'),
@@ -39,7 +41,17 @@ export function createHud(scene, world, controller, selection, orders) {
     overlayTitle: document.querySelector('#victoryTitle'),
     overlayDetail: document.querySelector('#victoryDetail'),
     restartButton: document.querySelector('#restartButton'),
+    missionEyebrow: document.querySelector('#missionEyebrow'),
+    missionLevelName: document.querySelector('#missionLevelName'),
+    tacticalEyebrow: document.querySelector('#tacticalEyebrow'),
   };
+
+  // 动态设置关卡名称（从 level JSON 读取，替代 HTML 硬编码）
+  const levelName = scene.level?.name ?? '';
+  if (levelName) {
+    if (els.missionLevelName) els.missionLevelName.textContent = levelName;
+    if (els.tacticalEyebrow) els.tacticalEyebrow.textContent = `TACTICAL VIEW / ${levelName}`;
+  }
 
   const status = {
     obj2Done: false,
@@ -60,6 +72,8 @@ export function createHud(scene, world, controller, selection, orders) {
   for (const button of els.speedButtons) {
     button.addEventListener('click', () => controller.setSpeed(Number(button.dataset.speed)));
   }
+  // 缩放复位（滚轮缩放本身由 src/rendering/cameraView.js 处理）
+  els.zoomReset?.addEventListener('click', () => scene.mapCamera?.reset());
   // 返回目标：编辑器试玩结束后安全返回编辑器（REQUIREMENTS.md §4.6），否则重开教学关
   function returnFromGame() {
     if (scene.fromEditor) {
@@ -112,6 +126,7 @@ export function createHud(scene, world, controller, selection, orders) {
     status.accumulator += delta;
     if (status.accumulator < values.performance.hudRefreshMs) return;
     status.accumulator = 0;
+    renderTopBarUI(); // 暂停/速度按钮与缩放读数（滚轮缩放是连续的，必须随节流刷新）
     renderUnitList();
     renderCityCard();
     renderMission();
@@ -248,6 +263,11 @@ export function createHud(scene, world, controller, selection, orders) {
     els.pauseButton.textContent = controller.paused ? '▶' : 'Ⅱ';
     for (const button of els.speedButtons) {
       button.classList.toggle('active', Number(button.dataset.speed) === controller.speed);
+    }
+    // 缩放读数：1× 时把复位按钮置灰（地图页才有 mapCamera，编辑器试玩路径同样有）
+    if (els.zoomLabel && scene.mapCamera) {
+      els.zoomLabel.textContent = `${Math.round(scene.mapCamera.zoomPercent)}%`;
+      if (els.zoomReset) els.zoomReset.disabled = !scene.mapCamera.isZoomed;
     }
   }
 

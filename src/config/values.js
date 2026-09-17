@@ -9,6 +9,21 @@ export const values = {
     speeds: [0.5, 1, 2],      // 游戏速度档位
   },
 
+  // 地图缩放（游戏页，gdd.md §11）：滚动鼠标滚轮，以**光标位置为焦点**缩放
+  // （光标下的那一点在缩放过程中保持不动）。只放大不缩小：1× = 整图适配，所以不会出现留白；
+  // 不做平移——想看别处就把光标移过去再滚。视口始终被夹在地图范围内（clamp）。
+  camera: {
+    zoomMin: 1,
+    zoomMax: 3,
+    zoomStep: 1.1,       // 每格滚轮的倍率（向上滚 = 放大）
+    zoomSmoothing: 1, // 每帧向目标缩放逼近的系数（0~1，越大越跟手；按 60fps 标定）
+  },
+
+  // 开局准备阶段（gdd.md §11）：进关卡后先倒计时若干秒，期间**可以下达预先指令**
+  // （选择/轨迹/急行军都照常），但模拟不推进——部队不动、AI 不动、计时不动，
+  // 倒计时结束才真正开打。编辑器试玩跳过这个阶段（反复试地图不该每次都等 5 秒）。
+  prep: { seconds: 5 },
+
   units: {
     light: { hp: 60, damage: 0.8, attackInterval: 0.2, range: 40, speed: 40, radius: 14, vision: 140 },
     heavy: { hp: 80, damage: 1, attackInterval: 0.2, range: 40, speed: 40, radius: 14, vision: 160 },

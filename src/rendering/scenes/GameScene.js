@@ -7,6 +7,7 @@ import { createTerrainRenderer } from '../terrainRenderer.js';
 import { createFogRenderer } from '../fogRenderer.js';
 import { createUnitRenderer } from '../unitRenderer.js';
 import { createControlLineRenderer } from '../controlLineRenderer.js';
+import { createMapCamera } from '../cameraView.js';
 import { createHud } from '../hud.js';
 import { createSelection } from '../../input/selection.js';
 import { createOrders } from '../../input/orders.js';
@@ -105,6 +106,8 @@ export class GameScene extends Phaser.Scene {
 
     this.controller = createGameController();
     this.loop = createLoop(world);
+    // 编辑器试玩跳过开局准备阶段（反复试地图不该每次都等倒计时）
+    if (this.fromEditor) this.controller.skipPrep();
 
     // 输入层（只产命令/选择状态）
     this.selection = createSelection(this, world);
@@ -117,6 +120,9 @@ export class GameScene extends Phaser.Scene {
     this.unitRenderer = createUnitRenderer(this, world, this.selection);
     this.controlLineRenderer = createControlLineRenderer(this, world);
     this.overlayGraphics = this.add.graphics().setDepth(30);
+    this.createPrepCountdown();
+    // 地图相机：滚轮以光标为焦点缩放（渲染层只读世界状态，相机不参与模拟）
+    this.mapCamera = createMapCamera(this, world);
 
     // HUD（DOM）
     this.hud = createHud(this, world, this.controller, this.selection, this.orders);
@@ -156,16 +162,49 @@ export class GameScene extends Phaser.Scene {
 
   update(time, delta) {
     const dt = delta / 1000;
+    this.mapCamera.update(dt); // 平滑缩放（渲染侧，与模拟无关；暂停时也让它收尾到位）
     if (!this.controller.paused && !this.world.winner) {
-      this.loop.advance(dt, this.controller.speed);
-      this.ai?.update(dt * this.controller.speed);
+      if (this.controller.isPrepping()) {
+        // 开局准备阶段：只走倒计时。模拟与 AI 都不推进——部队不动，但输入照常产生命令，
+        // 所以玩家可以先把轨迹/急行军/进攻命令都排好，倒计时一结束部队直接执行（gdd.md §11）。
+        this.controller.tickPrep(dt);
+      } else {
+        this.loop.advance(dt, this.controller.speed);
+        this.ai?.update(dt * this.controller.speed);
+      }
     }
     // 渲染（每帧，只读状态；暂停时保持静态画面）
     this.unitRenderer.draw();
     this.fogRenderer.sync();
     this.controlLineRenderer.draw();
     this.drawOverlays();
+    this.syncPrepCountdown();
     this.hud.update(delta);
+  }
+
+  // 开局准备阶段的画面提示：大号倒计时数字 + 一行说明（超出准备阶段就隐藏）
+  createPrepCountdown() {
+    const font = { fontFamily: '"PingFang SC", "Microsoft YaHei", sans-serif', fontStyle: '600' };
+    const centerX = this.scale.width / 2;
+    const centerY = this.scale.height / 2;
+    this.prepNumber = this.add.text(centerX, centerY - 40, '', {
+      ...font, fontSize: '84px', color: '#8c1d1d',
+      shadow: { offsetX: 0, offsetY: 2, color: '#f1e9d2', blur: 0, fill: true },
+    }).setOrigin(0.5);
+    this.prepHint = this.add.text(centerX, centerY + 34, t('prep.hint'), {
+      ...font, fontSize: '15px', color: '#2c2c2c', align: 'center',
+      backgroundColor: 'rgba(241,233,210,0.82)', padding: { x: 10, y: 5 },
+    }).setOrigin(0.5);
+    this.prepOverlay = this.add.container(0, 0, [this.prepNumber, this.prepHint]).setDepth(40);
+  }
+
+  syncPrepCountdown() {
+    if (!this.prepOverlay) return;
+    const prepping = this.controller.isPrepping();
+    if (this.prepOverlay.visible !== prepping) this.prepOverlay.setVisible(prepping);
+    if (!prepping) return;
+    const seconds = String(Math.max(1, Math.ceil(this.controller.prepRemaining)));
+    if (this.prepNumber.text !== seconds) this.prepNumber.setText(seconds);
   }
 
   // 框选矩形与轨迹路径

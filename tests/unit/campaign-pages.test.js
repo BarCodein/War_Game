@@ -35,6 +35,15 @@ describe('战役页面：关卡 id 的多重兜底契约', () => {
     expect(html).toContain("sessionStorage.setItem('war-of-dots.campaign'");
   });
 
+  it('成就页由 entry 模块渲染，风格与 introduce 同源，首页有入口', () => {
+    const page = read('achievements.html');
+    expect(page).toContain('/src/entries/achievements.js'); // 判定逻辑在 src/achievements.js，页面只渲染
+    expect(page).toContain('members/css/introduce.css');     // 风格参考 introduce
+    expect(page).toContain('id="achGrid"');
+    expect(page).toContain('id="achSummary"');
+    expect(read('index.html')).toContain('href="/achievements.html"');
+  });
+
   it('result.html 读 casualtiesBlue / casualtiesRed 并展示双方伤亡', () => {
     // 结算页是 classic script 页面，参数解析与 src/rendering/hud.js 的 resultQuery 是同一套约定，
     // 但无法直接单测——这里守住契约：参数名一致、缺参数时整块隐藏。

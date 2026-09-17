@@ -316,6 +316,82 @@ describe('level：塔山阻击战（防守关卡 · 坚守时限）', () => {
       .reduce((sum, force) => sum + force.units.reduce((n, unit) => n + unit.count, 0), 0);
     expect(world.units.filter(u => u.faction === 'red').length).toBeGreaterThan(declaredRed);
   }, 20000);
+
+  // ⚠️ 塔山的分批规则会随平衡调整改动时刻（after / until、规则条数与 id 都可能变），
+  // 所以这里只检查**与时刻无关的不变量**：撤退命令只发给单支编队、目的地是红基地、
+  // 且那一支当时确实没有拿下自己的目标点。测试因此不会因为改数值而误报。
+  it('红军分批规则：撤退只发给"没拿下自己那一路"的编队，且目的地是红基地（不变量）', () => {
+    const targetOf = { landing: 'p1', center: 'p3', east: 'p6' };
+    const world = new World(mapData);
+    deployForces(world, level.forces, level.anchors);
+    world.mess = buildMission(level, world);
+    const redAi = new ScriptedAI(world, { faction: 'red', script: level.ai, anchors: level.anchors });
+    const redBase = world.cities.find(city => city.id === 'c8');
+
+    // 全程监听下令：本关只有"撤退"规则会用 move，所以任何 move 都是撤退命令
+    const violations = [];
+    let retreatOrders = 0;
+    const original = world.issueCommands.bind(world);
+    world.issueCommands = (ids, command) => {
+      if (command.type === 'move') {
+        retreatOrders += 1;
+        const groups = new Set(ids.map(id => world.units.find(unit => unit.id === id)?.group));
+        if (groups.size !== 1) violations.push(`一次撤退发给多支编队：${[...groups].join('/')}`);
+        const group = [...groups][0];
+        const end = command.path.at(-1);
+        if (!end || Math.hypot(end.x - redBase.x, end.y - redBase.y) > 1) {
+          violations.push(`${group} 的撤退目的地不是 redBase`);
+        }
+        const point = world.capturePoints.find(item => item.id === targetOf[group]);
+        if (!point) violations.push(`未知编队 ${group}`);
+        else if (point.faction === 'red') violations.push(`${group} 手里已经有 ${point.id}，却仍然被下令撤退`);
+      }
+      return original(ids, command);
+    };
+
+    runSimulation(world, [redAi], 200);
+    expect(violations).toEqual([]);
+    // 注意：当前配比下红军往往一开始就握住了三个点，可能整局都没有撤退命令，
+    // 所以这里不断言"撤退发生过"（那取决于平衡），只检查结构：三路各有规则、且指向自己的点。
+    const rules = level.ai.rules ?? [];
+    for (const [group, pointId] of Object.entries(targetOf)) {
+      const owned = rules.filter(rule => [...(rule.then ?? []), ...(rule.otherwise ?? [])]
+        .some(action => action.units?.group === group));
+      expect(owned.length, group).toBeGreaterThan(0);
+      expect(owned.some(rule => JSON.stringify(rule.when ?? {}).includes(pointId)), group).toBe(true);
+    }
+  }, 30000);
+
+  it('红军分批规则：坚守只影响自己那一路（不变量）', () => {
+    const targetOf = { landing: 'p1', center: 'p3', east: 'p6' };
+    const world = new World(mapData);
+    deployForces(world, level.forces, level.anchors);
+    world.mess = buildMission(level, world);
+    const redAi = new ScriptedAI(world, { faction: 'red', script: level.ai, anchors: level.anchors });
+
+    const violations = [];
+    let holdOrders = 0;
+    const original = world.issueCommands.bind(world);
+    world.issueCommands = (ids, command) => {
+      if (command.type === 'hold') {
+        holdOrders += 1;
+        const groups = new Set(ids.map(id => world.units.find(unit => unit.id === id)?.group));
+        if (groups.size !== 1) violations.push(`一次坚守发给多支编队：${[...groups].join('/')}`);
+        for (const group of groups) {
+          const point = world.capturePoints.find(item => item.id === targetOf[group]);
+          // 坚守只应在"手里有这个点"时下达（规则写的就是 when owner: self）
+          if (point?.faction !== 'red') {
+            violations.push(`${group} 没有 ${point?.id} 却被下令坚守（当前 ${point?.faction}）`);
+          }
+        }
+      }
+      return original(ids, command);
+    };
+
+    runSimulation(world, [redAi], 200);
+    expect(violations).toEqual([]);
+    expect(holdOrders).toBeGreaterThan(0);
+  }, 30000);
 });
 
 describe('level：胜负条件（victory → buildMission）', () => {
@@ -457,6 +533,93 @@ describe('level：非法关卡被拦截', () => {
 
     const badAction = { ...base(), ai: { faction: 'red', triggers: [{ at: { time: 1 }, actions: [{ type: 'nuke' }] }] } };
     expect(validateLevel(badAction).some(e => e.includes('unknown action'))).toBe(true);
+  });
+
+  it('条件规则（ai.rules）的校验：合法写法通过，写错了逐条报出来', () => {
+    const withRules = (rules) => ({ ...base(), ai: { faction: 'red', triggers: [{ at: { time: 1 }, actions: [{ type: 'hold' }] }], rules } });
+
+    // 合法：条件 + 单条/数组两种 then 写法 + retreat 的 to（含命名锚点）
+    const ok = withRules([
+      { when: { capturePoint: 'p1', owner: 'self' }, then: [{ type: 'hold' }], otherwise: { type: 'retreat' } },
+      { when: { city: 'c1', owner: 'enemy' }, then: { type: 'attackMove', target: { cityId: 'c2' }, forced: true } },
+      { when: { ownUnitsBelow: 3 }, otherwise: [{ type: 'retreat', to: { x: 10, y: 10 } }] },
+    ]);
+    ok.anchors = { home: { cityId: 'c1' } };
+    expect(validateLevel(ok)).toEqual([]);
+
+    // 条件写错 / owner 非法
+    const badCondition = withRules([{ when: { unknownKey: 1 }, then: [{ type: 'hold' }] }]);
+    expect(validateLevel(badCondition).some(e => e.includes('invalid condition'))).toBe(true);
+    const badOwner = withRules([{ when: { capturePoint: 'p1' }, then: [{ type: 'hold' }] }]);
+    expect(validateLevel(badOwner).some(e => e.includes('.owner must be one of'))).toBe(true);
+
+    // 缺 then 与 otherwise / then 里动作非法 / forced 非布尔 / retreat.to 非法
+    expect(validateLevel(withRules([{ when: { time: 1 } }])).some(e => e.includes('needs then and/or otherwise'))).toBe(true);
+    expect(validateLevel(withRules([{ when: { time: 1 }, then: [{ type: 'nuke' }] }])).some(e => e.includes('unknown action'))).toBe(true);
+    expect(validateLevel(withRules([{ when: { time: 1 }, then: [{ type: 'hold', forced: 'yes' }] }])).some(e => e.includes('.forced must be a boolean'))).toBe(true);
+    expect(validateLevel(withRules([{ when: { time: 1 }, then: [{ type: 'retreat', to: { anchor: 'nope' } }] }])).some(e => e.includes('未定义的命名锚点'))).toBe(true);
+
+    // rules 不是数组
+    expect(validateLevel({ ...base(), ai: { faction: 'red', triggers: [{ at: { time: 1 }, actions: [{ type: 'hold' }] }], rules: {} } }))
+      .toContain('ai.rules must be an array');
+  });
+
+  it('编队标签与单位选择器：forces[].group 与动作的 units: { group } 都要合法', () => {
+    const grouped = base();
+    grouped.forces[0].group = 'north';
+    grouped.ai = {
+      faction: 'red',
+      triggers: [{ at: { time: 1 }, actions: [{ type: 'hold', units: { group: 'north' } }] }],
+      rules: [{ when: { time: 2 }, then: [{ type: 'retreat', units: { group: 'north' } }] }],
+    };
+    expect(validateLevel(grouped)).toEqual([]);
+
+    const badForceGroup = base();
+    badForceGroup.forces[0].group = 5;
+    expect(validateLevel(badForceGroup).some(e => e.includes('forces[0].group must be a non-empty string'))).toBe(true);
+
+    const badSelector = {
+      ...base(),
+      ai: { faction: 'red', triggers: [{ at: { time: 1 }, actions: [{ type: 'hold', units: { team: 'north' } }] }] },
+    };
+    expect(validateLevel(badSelector).some(e => e.includes('.units must be { group'))).toBe(true);
+
+    const badSpawnGroup = {
+      ...base(),
+      ai: {
+        faction: 'red',
+        triggers: [{ at: { time: 1 }, actions: [{ type: 'spawn', unitType: 'light', count: 1, at: { x: 1, y: 1 }, group: 7 }] }],
+      },
+    };
+    expect(validateLevel(badSpawnGroup).some(e => e.includes('.group must be a non-empty string'))).toBe(true);
+  });
+
+  it('纯反应式 AI：没有 triggers、只有 rules 也合法（两者都没有才报错）', () => {
+    const ruleOnly = {
+      ...base(),
+      ai: { faction: 'red', rules: [{ when: { ownUnitsBelow: 3 }, then: [{ type: 'retreat' }] }] },
+    };
+    expect(validateLevel(ruleOnly)).toEqual([]);
+
+    const neither = { ...base(), ai: { faction: 'red' } };
+    expect(validateLevel(neither)).toContain('ai must have triggers[] and/or rules[]');
+
+    const emptyBoth = { ...base(), ai: { faction: 'red', triggers: [], rules: [] } };
+    expect(validateLevel(emptyBoth).some(e => e.includes('triggers must be a non-empty array'))).toBe(true);
+  });
+
+  it('条件规则里的点位引用参与交叉校验（拼错的城市/占领点会被指出）', () => {
+    const level = {
+      ...base(),
+      ai: {
+        faction: 'red',
+        triggers: [{ at: { time: 1 }, actions: [{ type: 'hold' }] }],
+        rules: [{ when: { capturePoint: 'p1', owner: 'self' }, otherwise: [{ type: 'retreat', to: { cityId: 'c99' } }] }],
+      },
+    };
+    const mapData = { spawns: [{ id: 's1' }, { id: 's2' }], cities: [{ id: 'c1' }], capturePoints: [{ id: 'p1' }] };
+    const errors = validateLevelReferences(level, mapData);
+    expect(errors.some(e => e.includes('ai.rules[0].otherwise[0].to') && e.includes('c99'))).toBe(true);
   });
 
   it('parseLevel 对非法数据抛错并聚合原因', () => {
