@@ -84,6 +84,17 @@ body { margin: 0; background: #e7efeb; color: var(--ink); font-family: 'Barlow C
 .battle-overlay { position: absolute; z-index: 6; pointer-events: none; background: #102a2be0; color: #d6e7df; padding: 8px 10px; border-left: 2px solid var(--lime); }
 .mission-overlay { top: 10px; left: 10px; width: 196px; }
 .feed-overlay { right: 10px; bottom: 10px; width: 216px; }
+.victory-conditions-overlay { position: absolute; z-index: 6; pointer-events: none; background: #102a2be0; color: #d6e7df; border-left: 2px solid var(--lime); }
+.victory-conditions-overlay .overlay-heading { margin-bottom: 6px; }
+.victory-conditions-overlay .victory-conditions-text { line-height: 1.4; color: #b9cbc4; word-wrap: break-word; overflow-wrap: break-word; }
+/* 准备阶段：居中大弹窗（上移避开 Phaser 倒计时 + 准备提示文字） */
+.victory-conditions-overlay.prep { top: 25%; left: 50%; width: 440px; transform: translate(-50%, -50%); padding: 24px 28px; border-radius: 6px; border-left: 3px solid var(--lime); background: rgba(12, 31, 31, 0.72); opacity: 1; transition: opacity 0.4s ease, transform 0.6s cubic-bezier(0.4, 0, 0.2, 1), width 0.6s cubic-bezier(0.4, 0, 0.2, 1), padding 0.6s cubic-bezier(0.4, 0, 0.2, 1), background 0.6s ease, border-radius 0.6s ease, border-left-width 0.6s ease; }
+.victory-conditions-overlay.prep .overlay-heading { font-size: 16px; border-bottom-color: #46625f; }
+.victory-conditions-overlay.prep .victory-conditions-text { font-size: 16px; font-weight: 500; color: #d6e7df; }
+/* 战斗阶段：缩小到右上角 */
+.victory-conditions-overlay.battle { top: 10px; right: 10px; left: auto; width: 200px; transform: none; padding: 8px 10px; border-radius: 0; border-left: none; border-right: 2px solid var(--lime); background: #102a2be0; opacity: 1; transition: opacity 0.4s ease, transform 0.6s cubic-bezier(0.4, 0, 0.2, 1), width 0.6s cubic-bezier(0.4, 0, 0.2, 1), padding 0.6s cubic-bezier(0.4, 0, 0.2, 1), background 0.6s ease, border-radius 0.6s ease, border-left-width 0.6s ease, border-right-width 0.6s ease; }
+.victory-conditions-overlay.battle .overlay-heading { font-size: 12px; border-bottom-color: #46625f; }
+.victory-conditions-overlay.battle .victory-conditions-text { font-size: 10px; font-weight: 400; color: #b9cbc4; }
 .overlay-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 12px; font-weight: 600; color: #f8fff7; border-bottom: 1px solid #46625f; padding-bottom: 5px; }
 .overlay-heading em { font: 10px 'IBM Plex Mono', monospace; color: var(--lime); font-style: normal; }
 .overlay-sub { color: #93abab; font-size: 10px; margin: 4px 0 0; }
