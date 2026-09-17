@@ -6,7 +6,7 @@ import {
   LEVEL_VERSION, VICTORY_MODES, parseLevel, validateLevel, validateLevelReferences,
   deployForces, buildMission, resolvePoint, resolveAnchor, resolveTarget,
 } from '../../src/simulation/level.js';
-import { attackMoveCommand } from '../../src/simulation/commands.js';
+import { attackMoveCommand, holdCommand } from '../../src/simulation/commands.js';
 import { World } from '../../src/simulation/world.js';
 import { ScriptedAI } from '../../src/simulation/ai.js';
 
@@ -265,6 +265,72 @@ describe('level：宿北战役（歼灭关卡 · 山地隘口）', () => {
 
     expect(world.winner).toBe('blue');
   });
+});
+
+describe('level：双堆集战役（歼灭关卡 · 围攻黄维兵团）', () => {
+  const level = parseLevel(loadLevel('shuangduiji_battle'));
+  const mapData = loadMap('shuangduiji');
+
+  it('引用全部有效：锚点/城市/占领点都指向这张地图里真实存在的目标', () => {
+    expect(level.id).toBe('shuangduiji_battle');
+    expect(level.map).toBe('/assets/maps/shuangduiji.json');
+    // 这关曾经是塔山关卡的拷贝，锚点全指向塔山地图的名字 → 关卡载入直接失败。
+    // 这条用例守住"引用与地图对得上"，避免再出现整关打不开的情况（关卡索引测试也会载入它）。
+    expect(validateLevelReferences(level, mapData)).toEqual([]);
+
+    const world = new World(mapData);
+    const spawned = deployForces(world, level.forces, level.anchors);
+    const declared = level.forces.reduce((sum, force) => sum
+      + force.units.reduce((n, unit) => n + unit.count, 0), 0);
+    expect(spawned).toHaveLength(declared);
+    expect(spawned.every(unit => world.terrain.passableAt(unit.x, unit.y))).toBe(true);
+    // 双方都要有兵，否则不构成一局
+    expect(spawned.filter(unit => unit.faction === 'blue').length).toBeGreaterThanOrEqual(6);
+    expect(spawned.filter(unit => unit.faction === 'red').length).toBeGreaterThanOrEqual(3);
+  });
+
+  it('胜负条件是歼灭：指定单位来自红方，数量与关卡声明一致', () => {
+    const world = new World(mapData);
+    deployForces(world, level.forces, level.anchors);
+    world.mess = buildMission(level, world);
+    expect(world.mess).toMatchObject({ mode: 'annihilative', faction: 'blue' });
+
+    const marked = world.units.filter(unit => unit.objective === 'annihilate');
+    const declared = level.forces
+      .filter(force => force.objective === 'annihilate')
+      .reduce((sum, force) => sum + force.units.reduce((n, unit) => n + unit.count, 0), 0);
+    expect(declared).toBeGreaterThan(0);
+    expect(marked).toHaveLength(declared);
+    expect(marked.every(unit => unit.faction === 'red')).toBe(true);
+    // AI 波次增援不应带上"指定单位"标记，否则歼灭目标会被越打越多
+    expect(level.ai.triggers.flatMap(trigger => trigger.actions)
+      .filter(action => action.type === 'spawn')
+      .every(action => action.objective === undefined)).toBe(true);
+  });
+
+  it('这关能打完：按关卡意图打（蓝军守住南平集，红军突围自投）300s 内蓝军歼灭指定单位', () => {
+    const world = new World(mapData);
+    deployForces(world, level.forces, level.anchors);
+    world.mess = buildMission(level, world);
+    const redAi = new ScriptedAI(world, { faction: 'red', script: level.ai, anchors: level.anchors });
+    // 蓝方（玩家）的合理打法：就地固守封锁线。
+    // 注意不要"全军压向红军集结地"——每座城只补给最近的 5 个单位（supply.js），
+    // 离开己城的部队会持续掉血，深插的打法在这张图上必输；这关的设计意图是围点打援。
+    const blueDefender = {
+      done: false,
+      update() {
+        if (this.done) return;
+        this.done = true;
+        const ids = world.units.filter(unit => unit.faction === 'blue' && unit.state !== 'dead').map(unit => unit.id);
+        if (ids.length) world.issueCommands(ids, holdCommand());
+      },
+    };
+
+    runSimulation(world, [redAi, blueDefender], 300);
+
+    expect(world.winner).toBe('blue');
+    expect(world.units.filter(unit => unit.objective === 'annihilate' && unit.state !== 'dead')).toHaveLength(0);
+  }, 20000);
 });
 
 describe('level：塔山阻击战（防守关卡 · 坚守时限）', () => {

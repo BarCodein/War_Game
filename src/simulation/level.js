@@ -1,4 +1,5 @@
 import { values } from '../config/index.js';
+import { validateAiTuning } from './ai/presets.js';
 
 // 关卡（Level）标准格式 v1（architecture.md §7.1）：
 // 把「地图 + 兵力部署 + 增援 + 关卡类型 + AI 脚本」全部数据化，
@@ -43,13 +44,14 @@ import { values } from '../config/index.js';
 //            | { ownUnitsBelow: n } | { enemyUnitsBelow: n }
 //            （据点条件支持 id 数组：任意一个的归属符合 owner 即成立）
 // Action     { type: 'spawn', ..., group? } | { type: 'attackNearest', units? } | { type: 'attackMove', target, forced?, units? }
+//            | { type: 'engage', target, units? }（战术层：队形推进 + 集中火力 + 追击溃逃，见 ai-design.md）
 //            | { type: 'hold', units? } | { type: 'retreat', to?, forced?, units? }
 //            `units: { group: 'x' }` = 只指挥该编队（省略 = 全军）；spawn 的 group 给新兵打标签
 // 触发语义   条件首次满足 → 立即执行一次 actions；若给了 repeatEvery → 此后每 repeatEvery 秒再执行一次
 
 export const LEVEL_VERSION = 1;
 export const LEVEL_TYPES = ['offensive', 'defensive', 'annihilative'];
-export const AI_ACTION_TYPES = ['spawn', 'attackNearest', 'attackMove', 'hold', 'retreat'];
+export const AI_ACTION_TYPES = ['spawn', 'attackNearest', 'attackMove', 'engage', 'hold', 'retreat'];
 // 条件里的 owner 可写 'self' / 'enemy'（相对脚本阵营，推荐）或直接写 'blue' / 'red' / 'neutral'
 export const AI_CONDITION_OWNERS = ['self', 'enemy', 'blue', 'red', 'neutral'];
 // victory 判定方式：captureAll = 占领全部敌方城市（基础失城判负天然覆盖，不做额外判定）；
@@ -165,6 +167,8 @@ export function validateLevel(data) {
     const ai = data.ai;
     if (!ai || !FACTIONS.includes(ai.faction)) errors.push('ai invalid faction');
     if (ai?.fallback !== undefined && !refOk(ai.fallback)) errors.push(refError(ai.fallback, 'ai.fallback'));
+    // 难度/性格档位与关卡级参数覆盖（docs/ai-design.md 阶段二）
+    errors.push(...validateAiTuning(ai));
     // 条件：触发器的 at 与规则的 when 共用
     const isIdList = (value) => isNonEmptyString(value)
       || (Array.isArray(value) && value.length > 0 && value.every(isNonEmptyString));
@@ -211,7 +215,8 @@ export function validateLevel(data) {
           errors.push(refError(action.order.target, `${where}.order.target`));
         }
       }
-      if (action.type === 'attackMove' && !refOk(action.target)) {
+      // engage（战术层）与 attackMove 一样必须有目标点；forced 对 engage 无意义（跟着队形走）
+      if ((action.type === 'attackMove' || action.type === 'engage') && !refOk(action.target)) {
         errors.push(refError(action.target, `${where}.target`));
       }
       // retreat 的 to 可省略：省略时撤向最近的己方城市（与溃逃一致）

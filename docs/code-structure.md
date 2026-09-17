@@ -225,15 +225,24 @@ war_game/
 - 触发条件：`{ time }`（经过秒数）、`{ enemyCrossX }`（任一敌军越过该 x）；首次满足**立即执行一次**动作，`repeatEvery` 存在时此后周期重复。
 - **条件规则 `rules`（`{ when, then, otherwise?, after?, until?, repeatEvery? }`）**：持续状态语义，用来看局势下命令（例：占领点在手 → 坚守，丢了 → 撤退）。`when` 额外支持 `{ capturePoint, owner }` / `{ city, owner }`（`owner` = `self` / `enemy` / `neutral` / `blue` / `red`；据点值可为 id 数组 = 任意一个符合）与 `{ ownUnitsBelow }` / `{ enemyUnitsBelow }`。
 - **只在条件翻转的那一帧下发命令**（`updateRule` 比对上一次的布尔值，`undefined` 视为尚未求值 → 首次也下发一次），避免每帧重发把行军路线反复重置；`after` / `until` 是生效时间窗，`repeatEvery` 让条件成立期间周期重发 `then`（一次 update 最多补发一次，不追帧）。
-- 动作：`spawn`（可按 `order` 逐单位下令，可用 `group` 给增援打标签）、`attackNearest`（各打最近敌军，无敌人时转向 `fallback`）、`attackMove`（可带 `forced: true` → 急行军）、`hold`、`retreat`（`to` 省略时撤向最近的己方城市，无城可退则驻守）；所有点位经 `resolvePoint(ref, world, this.anchors)` 解析，构造时传入关卡 `anchors`。
+- 动作：`spawn`（可按 `order` 逐单位下令，可用 `group` 给增援打标签）、`attackNearest`（各打最近敌军，无敌人时转向 `fallback`）、`attackMove`（可带 `forced: true` → 急行军）、`engage`（**战术层**：队形推进 + 不添油 + 集中火力 + 追击溃逃，见下）、`hold`、`retreat`（`to` 省略时撤向最近的己方城市，无城可退则驻守）；所有点位经 `resolvePoint(ref, world, this.anchors)` 解析，构造时传入关卡 `anchors`。
 - **只指挥一部分部队**：每个动作可选 `units: { group: 'x' }`，由 `ownUnits(selector)` / `commandUnits()` 过滤 `unit.group`（标签来自 `forces[].group` / `spawn.group`）；省略 = 全军，选不到单位时静默跳过。
+- **`engage` 与战术层**（docs/ai-design.md 阶段一）：`doEngage` 把编队登记进 `intents`（编队 → 目标点），此后每 `values.ai.decisionIntervalSeconds` 由 `runTactics()` 决策：① 队形槽位推进 ② 脱离队形的先锋 `hold` 等主力 ③ 集中火力（同目标 ≤ `maxAttackersPerTarget`）④ 溃逃目标优先。脚本下 `hold` / `retreat` / `attackMove` 会 `clearIntents`（脚本意图优先）；命令签名去重避免重置行军路线。
 - `nearestEnemy` 用空间区扩张半径查询，避免全图扫描。
+
+### `src/simulation/ai/`（战术层纯函数，docs/ai-design.md）
+- `tactics.js`：`combatPower`（复用 `combat.calcDamageRatio` + 士气倍率 + 地形防御）/ `localBalance`（半径内双方战力占比）/ `targetValue` / `scoreAttack`（含集火上限，达上限返回 null）/ `chooseTarget`（溃逃优先，再比分数）/ `enemiesWithin`（走空间网格）。
+- `squad.js`：`formationSlots`（line / column / wedge，按朝向旋转）/ `squadAnchor`（形心向目标推进 `advanceStep`，不越过目标）/ `needsColumn`（沿直线采样水域/不可通行）/ `cohesionRatio`·`isCohesive`·`isRushingAhead`（不添油）/ `assignSlots`（按距锚点距离 + id 的确定性分配）。
+- `front.js`（阶段二 B）：复用 `world.controlLineSegments`（控制线 0 等值线 = 实际战线）定位战线 → `pointStrength` 采样兵力比（空点记 1）→ `chooseWeakSpot` 选最弱段 / `approachAxes` 生成接近轴 → `chooseApproach` 按"敌弱 + 近 + 地形合口味"挑轴 → `approachWaypoint` 两段式推进；`terrainPreference` / `feintAxis` 供档位使用。**脚本目标点不变，只选接近方向。**
+- `presets.js`（阶段二 F）：`AI_PRESET_NAMES`（cautious / standard / sly）、`AI_TUNING_KEYS`（reserveRatio / pursuitRadius / useForcedMarch / terrainBias / feint）、`resolveAiConfig(preset, tuning)`（档位覆盖 values.ai，tuning 再覆盖，且 `pursuitRadius` 同步为 `engageRadius`）、`validateAiTuning`（关卡结构校验：档位 / tuning 键 / `ai.fog` 布尔）。
+- `perception.js`（阶段三）：`visibleEnemies`（`isSpotted`，含森林隐蔽）/ `rememberedEnemies`（`lastSeen` + 年龄衰减，低于 `staleConfidence` 即遗忘，条目带 `ghost: true`）/ `knownEnemies`·`perceive`（可见 + 记忆，或全知）/ `unexploredFrontier`（fog 网格上有界 BFS 找最近未探索格，同深度优先靠近敌城）/ `awarenessSummary`（调试用情报摘要）。
 
 ### `src/simulation/systems/movement.js`
 移动系统：
 - `updateMovement`：沿路径行进；交战中冻结；溃逃单位不受指挥、向最近己方城市全速撤退、无路可退/被困超时投降。
 - `findPath`：A*（4 方向，水域不可通行，森林代价更高；终点不可通行就近取格），含模块级 `pathCache` 确定性共享。
 - `planRoute`：下达命令时对每个途经点逐段 A*，返回去掉共线点的真实路径（`move`/`attackMove` 共用）。
+- 导出 `transitionToNewRoute`（新命令与当前路线合并，避免原地掉头）。
 - `forcedMarchMultiplier(world, unit)`：急行军速度倍率——除水域之外的地形 `values.movement.forcedMarch.speedMultiplier`（1.5，与地形/士气倍率叠乘），水面上返回 1（不给加成）。
 - 急行军代价在 `moveAlongRoute` 里结算：每秒 `hpPerSecond` 掉血（走 `world.damageUnit`，计入伤亡），掉光即 `killUnit(unit, 'forcedMarch')`。溃逃（`ignoreMoraleEffects`）不参与。
 - `clampToMap`：把目标点夹进地图矩形——`terrain.passableAt()` 会把格子索引夹到边缘格，因此**地图外的坐标看起来也可通行**，不夹取的话单位会走出地图、进入画布上未渲染的区域。
