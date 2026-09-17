@@ -323,6 +323,65 @@
         } catch (e) { /* 本地存储不可用时忽略 */ }
       }
 
+      // 失败标记（用于"胜败乃兵家常事"成就）
+      if (result === 'defeat') {
+        try { localStorage.setItem('war-of-dots.has-defeat', '1'); } catch (e) {}
+      }
+
+      /* =========================================================
+         成就判定与弹窗：战绩入库后检测新解锁的成就，逐个弹出
+         ========================================================= */
+      function showAchievementPopup(ach) {
+        var el = document.getElementById('achPopup');
+        if (!el) {
+          el = document.createElement('div');
+          el.id = 'achPopup';
+          el.style.cssText = 'position:fixed;top:24px;right:24px;z-index:99999;background:linear-gradient(135deg,#2a1810,#4a2818);border:2px solid #d4a843;border-radius:10px;padding:14px 20px;min-width:260px;box-shadow:0 8px 32px rgba(0,0,0,.6);font-family:"PingFang SC","Microsoft YaHei",sans-serif;transform:translateX(120%);transition:transform .4s ease;pointer-events:none;';
+          el.innerHTML = '<div style="font-size:11px;color:#d4a843;letter-spacing:2px;margin-bottom:4px;">成就解锁</div>' +
+            '<div style="display:flex;align-items:center;gap:8px;">' +
+            '<span id="achPopupStars" style="color:#ffd700;font-size:16px;"></span>' +
+            '<span id="achPopupName" style="color:#fff;font-size:16px;font-weight:bold;"></span>' +
+            '</div>' +
+            '<div id="achPopupDesc" style="color:#c8b89a;font-size:12px;margin-top:4px;line-height:1.5;"></div>';
+          document.body.appendChild(el);
+        }
+        document.getElementById('achPopupStars').textContent = '★'.repeat(ach.stars) + '☆'.repeat(3 - ach.stars);
+        document.getElementById('achPopupName').textContent = ach.name;
+        document.getElementById('achPopupDesc').textContent = ach.desc;
+        el.style.transform = 'translateX(0)';
+        try { window.playSfx?.('win'); } catch (e) {}
+        clearTimeout(el._timer);
+        el._timer = setTimeout(function() { el.style.transform = 'translateX(120%)'; }, 3500);
+      }
+      function checkNewAchievements() {
+        import('/src/achievements.js').then(function(mod) {
+          var ACH_UNLOCKED_KEY = 'war-of-dots.ach-unlocked';
+          function readJSON(key, fb) {
+            try { var r = localStorage.getItem(key); return r ? JSON.parse(r) : fb; } catch (e) { return fb; }
+          }
+          var prevUnlocked = readJSON(ACH_UNLOCKED_KEY, {});
+          var list = mod.evaluateAchievements({
+            progress: readJSON('war-of-dots.campaign-progress', {}),
+            stats: readJSON('war-of-dots.level-stats', {}),
+            levels: [],
+            climbCleared: localStorage.getItem('war-of-dots.climb-cleared') === '1',
+            climbStats: readJSON('war-of-dots.climb-stats', null),
+            customMapSaved: Boolean(localStorage.getItem('war-of-dots.custom-map')),
+            hasDefeat: localStorage.getItem('war-of-dots.has-defeat') === '1',
+          });
+          var newAchs = list.filter(function(a) { return a.unlocked && !prevUnlocked[a.id]; });
+          if (newAchs.length > 0) {
+            var unlocked = Object.assign({}, prevUnlocked);
+            newAchs.forEach(function(a) { unlocked[a.id] = true; });
+            localStorage.setItem(ACH_UNLOCKED_KEY, JSON.stringify(unlocked));
+            newAchs.forEach(function(a, i) {
+              setTimeout(function() { showAchievementPopup(a); }, i * 3800 + 800);
+            });
+          }
+        }).catch(function(e) { console.error('成就判定失败:', e); });
+      }
+      setTimeout(checkNewAchievements, 1200);
+
       /* =========================================================
          双方伤亡：URL 参数 casualtiesBlue / casualtiesRed
          （1 点损失的血量 = 1 点伤亡，由模拟层 World.damageUnit 累计）。

@@ -510,7 +510,6 @@ function buildStoryOverlay(opts) {
   function renderScene() {
     const s = scenes[curIdx];
     if (!s) return;
-    console.log("[剧情] renderScene: " + (s.talker||"") + " - " + (s.text||"").substring(0,30));
     overlay.style.backgroundImage = "url('" + AP + s.bg + "')";
     overlay.style.backgroundSize = "cover";
     overlay.style.backgroundPosition = "center";
@@ -525,15 +524,12 @@ function buildStoryOverlay(opts) {
       portraitEl.style.visibility = "visible";
       portraitEl.style.zIndex = "5";
     }
-    // 直接显示文字
+    // 打字机效果显示文字
     if (textEl) {
-      textEl.innerHTML = '<span class="story-talker" style="color:#ffb347;font-weight:bold;display:block;margin-bottom:10px;font-size:23px;">' + (s.talker || "") + '</span><span style="color:#fff;font-size:21px;line-height:1.9;">' + (s.text || "") + '</span>';
       textEl.style.display = "block";
       textEl.style.opacity = "1";
       textEl.style.visibility = "visible";
-      textEl.style.color = "#fff";
-      textEl.style.zIndex = "10";
-      textEl.style.position = "relative";
+      typeText(s.text || "", s.talker || "");
     }
     if (tipEl) tipEl.style.display = "block";
     if (s.audio && audioUnlocked) playSfx(s.audio);

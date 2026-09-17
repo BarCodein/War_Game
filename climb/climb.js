@@ -3,6 +3,7 @@
 // 主角: 穿睡衣的士兵 | 武器: 步枪 + 大刀
 // 目标: 在规定时间内爬上山顶
 // ============================================================
+console.log('[climb.js] 脚本开始执行')
 
 const canvas = document.querySelector('canvas')
 const ctx = canvas.getContext('2d')
@@ -550,6 +551,97 @@ let cp = { x: 60, y: START_Y - PLAYER_H }
 let fallRocks = []
 let rockTimer = rand(150, 300)
 
+// ---------- 成就系统 ----------
+const CLIMB_STATS_KEY = 'war-of-dots.climb-stats'
+const CLIMB_ACHIEVEMENTS = [
+  { id: 'climb-first-checkpoint', name: '初露锋芒', stars: 1, desc: '到达第一个检查点，登山之路迈出坚实的第一步。', hint: '到达第一个检查点' },
+  { id: 'climb-champion', name: '睡衣登山大赛冠军', stars: 3, desc: '在西安事变的登山小游戏里登顶成功。', hint: '登顶成功' },
+  { id: 'climb-speedrun', name: '神兵天降', stars: 2, desc: '90秒内快速登顶，兵贵神速。', hint: '90秒内登顶' },
+  { id: 'climb-flawless', name: '毫发无伤', stars: 3, desc: '全程零死亡登顶，身法如仙。', hint: '零死亡登顶' },
+  { id: 'climb-slaughter', name: '斩尽杀绝', stars: 2, desc: '击杀沿途所有敌人，一个不留。', hint: '击杀所有敌人' },
+  { id: 'climb-melee', name: '刀枪不入', stars: 1, desc: '不发射一颗子弹，只用大刀通关。', hint: '不射击通关' },
+  { id: 'climb-persistent', name: '屡败屡战', stars: 1, desc: '失败后再次挑战，最终登顶成功。', hint: '失败后最终登顶' },
+  { id: 'climb-rocked', name: '机械降神', stars: 1, desc: '被从天而降的巨石砸中，体验了一把神罚。', hint: '被落石砸死' },
+  { id: 'climb-shot', name: '枪林弹雨', stars: 1, desc: '在敌人的弹雨中倒下，虽败犹荣。', hint: '被敌人子弹打死' },
+  { id: 'climb-fell', name: '一失足成千古恨', stars: 1, desc: '脚下一空，坠入万丈深渊。', hint: '掉出地图摔死' },
+  { id: 'climb-early', name: '出师未捷身先死', stars: 1, desc: '还没到第一个检查点就倒下了，长使英雄泪满襟。', hint: '第一个检查点前死亡' },
+]
+let climbStats = {
+  deaths: 0, kills: 0, shots: 0,
+  rocked: false, shotDeath: false, fell: false, earlyDeath: false,
+  failedBefore: false, bestTime: null, reachedFirstCheckpoint: false,
+}
+let deathCause = null // 'rock' | 'shot' | 'fell' | null
+const unlockedThisRun = new Set()
+
+function loadClimbStats() {
+  try {
+    const raw = localStorage.getItem(CLIMB_STATS_KEY)
+    if (raw) {
+      const saved = JSON.parse(raw)
+      climbStats = { ...climbStats, ...saved }
+    }
+  } catch (e) {}
+}
+function saveClimbStats() {
+  try { localStorage.setItem(CLIMB_STATS_KEY, JSON.stringify(climbStats)) } catch (e) {}
+}
+function isAchievementUnlocked(id) {
+  try {
+    const raw = localStorage.getItem('war-of-dots.ach-unlocked')
+    if (raw) return JSON.parse(raw)[id] === true
+  } catch (e) {}
+  return false
+}
+function markAchievementUnlocked(id) {
+  try {
+    const raw = localStorage.getItem('war-of-dots.ach-unlocked')
+    const obj = raw ? JSON.parse(raw) : {}
+    obj[id] = true
+    localStorage.setItem('war-of-dots.ach-unlocked', JSON.stringify(obj))
+  } catch (e) {}
+}
+// 成就弹窗 + 音效接口（音频稍后替换）
+function playAchievementSfx() {
+  // 接口占位：后续替换为实际音效文件
+  try { sfx('win') } catch (e) {}
+}
+function showAchievementPopup(ach) {
+  let el = document.getElementById('achPopup')
+  if (!el) {
+    el = document.createElement('div')
+    el.id = 'achPopup'
+    el.style.cssText = 'position:fixed;top:24px;right:24px;z-index:99999;background:linear-gradient(135deg,#2a1810,#4a2818);border:2px solid #d4a843;border-radius:10px;padding:14px 20px;min-width:260px;box-shadow:0 8px 32px rgba(0,0,0,.6);font-family:"PingFang SC","Microsoft YaHei",sans-serif;transform:translateX(120%);transition:transform .4s ease;pointer-events:none;'
+    el.innerHTML = `
+      <div style="font-size:11px;color:#d4a843;letter-spacing:2px;margin-bottom:4px;">成就解锁</div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span id="achPopupStars" style="color:#ffd700;font-size:16px;"></span>
+        <span id="achPopupName" style="color:#fff;font-size:16px;font-weight:bold;"></span>
+      </div>
+      <div id="achPopupDesc" style="color:#c8b89a;font-size:12px;margin-top:4px;line-height:1.5;"></div>`
+    document.body.appendChild(el)
+  }
+  document.getElementById('achPopupStars').textContent = '★'.repeat(ach.stars) + '☆'.repeat(3 - ach.stars)
+  document.getElementById('achPopupName').textContent = ach.name
+  document.getElementById('achPopupDesc').textContent = ach.desc
+  el.style.transform = 'translateX(0)'
+  playAchievementSfx()
+  clearTimeout(el._timer)
+  el._timer = setTimeout(() => { el.style.transform = 'translateX(120%)' }, 3500)
+}
+function unlockAchievement(id) {
+  console.log('[成就] unlockAchievement 调用:', id, '已在本局解锁:', unlockedThisRun.has(id), '已永久解锁:', isAchievementUnlocked(id))
+  if (unlockedThisRun.has(id)) return
+  if (isAchievementUnlocked(id)) return
+  const ach = CLIMB_ACHIEVEMENTS.find(a => a.id === id)
+  if (!ach) { console.log('[成就] 未找到成就定义:', id); return }
+  unlockedThisRun.add(id)
+  markAchievementUnlocked(id)
+  showAchievementPopup(ach)
+  console.log('[成就] 弹窗已显示:', ach.name)
+}
+loadClimbStats()
+
 // ---------- input ----------
 const KEYMAP = {
   ArrowLeft: 'left', a: 'left',
@@ -637,6 +729,21 @@ if (btnAgain) {
     startGame()
   })
 }
+const btnMenu = document.getElementById('btnMenu')
+console.log('[菜单] btnMenu 元素:', btnMenu)
+if (btnMenu) {
+  btnMenu.addEventListener('click', () => {
+    console.log('[菜单] 返回菜单按钮点击, 当前 state=', state)
+    resetGame()
+    // 隐藏成就弹窗
+    const achPopup = document.getElementById('achPopup')
+    if (achPopup) achPopup.style.transform = 'translateX(120%)'
+    syncUI()
+    console.log('[菜单] 返回菜单完成, state=', state, 'menu显示=', document.getElementById('menu').classList.contains('show'))
+  })
+} else {
+  console.log('[菜单] 警告: btnMenu 元素未找到!')
+}
 if (btnSound) {
   btnSound.addEventListener('click', () => {
     soundOn = !soundOn
@@ -669,6 +776,7 @@ function tryShoot() {
   player.shootCd = 15
   player.muzzle = 5
   sfx('shoot')
+  climbStats.shots++
   const dir = player.facing
   bullets.push({
     x: dir === 1 ? player.x + player.w : player.x - 14,
@@ -698,23 +806,63 @@ function damagePlayer(dmg) {
   spawnBurst(player.x + player.w / 2, player.y + player.h / 2, '#c0392b', 8)
   if (player.hp <= 0) {
     player.hp = 0
+    climbStats.deaths++
     state = 'lose'
     sfx('lose')
+    onPlayerLose()
   }
 }
 
+// ---------- 成就判定 ----------
+function onPlayerLose() {
+  console.log('[成就] onPlayerLose 触发, deathCause=', deathCause, 'cpIndex=', cpIndex)
+  climbStats.failedBefore = true
+  // 失败成就（不标注为失败成就）
+  if (deathCause === 'rock') { climbStats.rocked = true; unlockAchievement('climb-rocked') }
+  if (deathCause === 'shot') { climbStats.shotDeath = true; unlockAchievement('climb-shot') }
+  if (deathCause === 'fell') { climbStats.fell = true; unlockAchievement('climb-fell') }
+  if (cpIndex === 0) { climbStats.earlyDeath = true; unlockAchievement('climb-early') }
+  saveClimbStats()
+}
+function onPlayerWin() {
+  const usedTime = TIME_LIMIT - timeLeft
+  if (climbStats.bestTime === null || usedTime < climbStats.bestTime) {
+    climbStats.bestTime = usedTime
+  }
+  // 永久标记
+  if (climbStats.deaths === 0) climbStats.flawless = true
+  if (climbStats.kills >= ENEMY_SPAWNS.length) climbStats.slaughter = true
+  if (climbStats.shots === 0) climbStats.melee = true
+  // 正面成就
+  unlockAchievement('climb-champion')
+  if (usedTime <= 90) unlockAchievement('climb-speedrun')
+  if (climbStats.flawless) unlockAchievement('climb-flawless')
+  if (climbStats.slaughter) unlockAchievement('climb-slaughter')
+  if (climbStats.melee) unlockAchievement('climb-melee')
+  if (climbStats.failedBefore) unlockAchievement('climb-persistent')
+  // 兼容旧成就系统的 climb-cleared 标记
+  try { localStorage.setItem('war-of-dots.climb-cleared', '1') } catch (e) {}
+  saveClimbStats()
+}
+
 function die() {
+  console.log('[成就] die() 调用, state=', state, 'hp=', player.hp)
   if (state !== 'play') return
+  deathCause = 'fell'
+  climbStats.deaths++
   player.hp -= 1
   shake = 8
   sfx('hurt')
   spawnBurst(player.x + player.w / 2, player.y + player.h / 2, '#c0392b', 14)
   if (player.hp <= 0) {
+    console.log('[成就] die() 导致 hp<=0, 触发 onPlayerLose')
     player.hp = 0
     state = 'lose'
     sfx('lose')
+    onPlayerLose()
     return
   }
+  console.log('[成就] die() 扣血后 hp=', player.hp, ', 传送回检查点')
   player.x = cp.x
   player.y = cp.y
   player.vx = 0
@@ -834,6 +982,12 @@ function resetGame() {
     }
   }
   state = 'start'
+  // 重置本局统计（跨局统计如 failedBefore/bestTime 保留）
+  climbStats.deaths = 0
+  climbStats.kills = 0
+  climbStats.shots = 0
+  deathCause = null
+  unlockedThisRun.clear()
 }
 
 // ---------- drawing helpers ----------
@@ -1218,6 +1372,12 @@ function updatePlayer() {
     spawnBurst(cp.x, cp.y + PLAYER_H / 2, '#7dd84a', 12)
     sfx('checkpoint')
     cpIndex++
+    // 到达第一个检查点成就
+    if (cpIndex === 1 && !climbStats.reachedFirstCheckpoint) {
+      climbStats.reachedFirstCheckpoint = true
+      saveClimbStats()
+      unlockAchievement('climb-first-checkpoint')
+    }
   }
 }
 
@@ -1329,6 +1489,7 @@ function checkCollisions() {
       r.dead = true
       spawnBurst(r.x + r.w / 2, r.y + r.h / 2, '#8a8f94', 8, 4)
       sfx('impact')
+      deathCause = 'rock'
       damagePlayer(1)
     }
     for (const e of enemies) {
@@ -1357,6 +1518,7 @@ function checkCollisions() {
         if (e.hp <= 0) {
           spawnBurst(e.x + e.w / 2, e.y + e.h / 2, '#6a6f74', 14)
           sfx('edie')
+          climbStats.kills++
         }
         break
       }
@@ -1368,6 +1530,7 @@ function checkCollisions() {
     if (b.owner !== 'enemy') continue
     if (overlap(b, player)) {
       b.life = 0
+      deathCause = 'shot'
       damagePlayer(1)
     }
   }
@@ -1391,6 +1554,7 @@ function checkCollisions() {
         if (e.hp <= 0) {
           spawnBurst(e.x + e.w / 2, e.y + e.h / 2, '#6a6f74', 16)
           sfx('edie')
+          climbStats.kills++
         }
       }
     }
@@ -1424,10 +1588,12 @@ function animate() {
     if (timeLeft <= 0 && state === 'play') {
       state = 'lose'
       sfx('lose')
+      onPlayerLose()
     }
     if (player.x >= WIN_X && state === 'play') {
       state = 'win'
       sfx('win')
+      onPlayerWin()
     }
   }
 
