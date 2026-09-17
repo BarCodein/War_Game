@@ -7,7 +7,7 @@ import {
 import { collectSources } from '../../src/simulation/systems/controlLine.js';
 import { FOG_VISIBLE } from '../../src/simulation/systems/fog.js';
 import { attackMoveCommand } from '../../src/simulation/commands.js';
-import { makePlainMap, makeWorld, loadTutorialMap, advance } from './helpers.js';
+import { makePlainMap, makeWorld, loadFractureCanyonMap, advance } from './helpers.js';
 
 // 实际控制线（gdd.md §9）：影响力衰减曲线、影响力网格、0 等值线。
 // 这些是纯函数，可以脱离渲染精确构造几何再断言。
@@ -241,7 +241,7 @@ describe('controlLine 系统（10 Hz 重算 + tick 集成）', () => {
   });
 
   it('教学地图上双方接火后能画出控制线', () => {
-    const world = makeWorld(loadTutorialMap());
+    const world = makeWorld(loadFractureCanyonMap());
     world.spawnUnit('blue', 'light', 500, 400);
     world.spawnUnit('red', 'light', 700, 400);
     advance(world, 1);

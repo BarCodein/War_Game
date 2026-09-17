@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { loadTutorialMap, runSimulation } from './helpers.js';
+import { loadFractureCanyonMap, runSimulation } from './helpers.js';
 import { World } from '../../src/simulation/world.js';
 import { ScriptedAI } from '../../src/simulation/ai.js';
 import { attackMoveCommand } from '../../src/simulation/commands.js';
@@ -7,7 +7,7 @@ import { attackMoveCommand } from '../../src/simulation/commands.js';
 // 阶段 2 出口条件：模拟层在无渲染环境下跑完整一局（headless）。
 describe('world integration', () => {
   it('教学地图上蓝军与脚本红军完整对局并分出胜负', () => {
-    const world = new World(loadTutorialMap());
+    const world = new World(loadFractureCanyonMap());
     // 蓝军初始兵力：6 轻型 + 2 重型（对局测试用；教学关兵力配比见 gdd.md §10）
     for (let i = 0; i < 6; i += 1) world.spawnUnit('blue', 'light', 200 + i * 15, 560);
     world.spawnUnit('blue', 'heavy', 260, 500);

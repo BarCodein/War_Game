@@ -192,7 +192,7 @@ export function createHud(scene, world, controller, selection, orders) {
     const beacon = world.cities.find(city => city.id === objective.cityId);
     if (!status.obj3Done && beacon && !world.units.some(unit =>
       unit.state !== 'dead' && unit.faction === 'red'
-      && Math.hypot(unit.x - beacon.x, unit.y - beacon.y) <= values.tutorial.clearRadius)) {
+      && Math.hypot(unit.x - beacon.x, unit.y - beacon.y) <= 200)) {
       status.obj3Done = true;
       objectiveCompleted('toast.obj3', 'event.obj3');
     }

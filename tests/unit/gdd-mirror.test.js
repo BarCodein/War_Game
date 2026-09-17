@@ -77,13 +77,6 @@ const MIRROR = {
   'simulation.maxCatchUpTicks': 5,
   'simulation.speeds': [0.5, 1, 2],
   'prep.seconds': 5,
-  'tutorial.map': { width: 1280, height: 800, midlineX: 640 },
-  'tutorial.forces': { blue: { light: 6, heavy: 2 }, red: { light: 2, heavy: 2 } },
-  'tutorial.garrisonRadius': 80,
-  'tutorial.clearRadius': 200,
-  'tutorial.reinforcement': {
-    atSecond: 60, count: 2, unitType: 'light', spawn: { x: 1230, y: 400 }, moveTo: { x: 1080, y: 160 },
-  },
 };
 
 function getByPath(root, path) {

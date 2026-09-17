@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { MAP_VERSION, migrateMap, parseMap, validateMap } from '../../src/simulation/map.js';
 import { values } from '../../src/config/index.js';
-import { loadTutorialMap, makePlainMap } from './helpers.js';
+import { loadFractureCanyonMap, makePlainMap } from './helpers.js';
 
 describe('map json', () => {
   it('教学地图解析成功：版本、地形尺寸、双阵营城市与出生点', () => {
-    const map = parseMap(loadTutorialMap());
+    const map = parseMap(loadFractureCanyonMap());
     expect(map.version).toBe(MAP_VERSION);
     expect(map.terrain.cols).toBe(128); // 10px 网格：1280 / 10
     expect(map.terrain.rows).toBe(80);  // 800 / 10
@@ -29,7 +29,7 @@ describe('map json', () => {
   });
 
   it('地形访问：河流为可减速水域，桥梁可通行，森林修正生效', () => {
-    const map = parseMap(loadTutorialMap());
+    const map = parseMap(loadFractureCanyonMap());
     const terrain = map.terrain;
     expect(terrain.terrainAt(100, 360)).toBe(values.terrain.codes.water);  // 河流
     expect(terrain.passableAt(100, 360)).toBe(true);
@@ -82,7 +82,7 @@ describe('map json', () => {
 
   it('出生点 id：缺省自动补 s1、s2…（已有 id 保留且不重复）', () => {
     // 教学地图手写了 id
-    expect(parseMap(loadTutorialMap()).spawns).toEqual([
+    expect(parseMap(loadFractureCanyonMap()).spawns).toEqual([
       { id: 's1', faction: 'blue', x: 200, y: 560 },
       { id: 's2', faction: 'red', x: 1080, y: 160 },
     ]);

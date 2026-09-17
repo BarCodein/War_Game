@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  loadLevel, loadLevelIndex, loadMap, loadTutorialMap, makePlainMap, runSimulation,
+  loadLevel, loadLevelIndex, loadMap, loadFractureCanyonMap, makePlainMap, runSimulation,
 } from './helpers.js';
 import {
   LEVEL_VERSION, VICTORY_MODES, parseLevel, validateLevel, validateLevelReferences,
@@ -61,7 +61,7 @@ describe('level：教学关已转为标准格式', () => {
 describe('level：引擎按数据部署兵力', () => {
   it('deployForces 精确复现教学关落点（锚点 + offset + spacing × i）', () => {
     const level = parseLevel(loadLevel('fracture-canyon'));
-    const world = new World(loadTutorialMap());
+    const world = new World(loadFractureCanyonMap());
     const spawned = deployForces(world, level.forces);
 
     expect(spawned).toHaveLength(12); // 蓝 8（6 轻 2 重）+ 红 4（2 轻 2 重）
@@ -87,7 +87,7 @@ describe('level：引擎按数据部署兵力', () => {
 
   it('坐标引用解析：绝对坐标 / 命名锚点 / 出生点 id / 城市 id 全覆盖', () => {
     const level = parseLevel(loadLevel('fracture-canyon'));
-    const world = new World(loadTutorialMap());
+    const world = new World(loadFractureCanyonMap());
     const anchors = level.anchors;
 
     expect(resolvePoint({ x: 10, y: 20 }, world, anchors)).toEqual({ x: 10, y: 20 });
@@ -162,7 +162,7 @@ describe('level：引擎按数据部署兵力', () => {
   });
 
   it('引用交叉校验：拼错的 spawnId / cityId 会被逐个指出', () => {
-    const mapData = loadTutorialMap();
+    const mapData = loadFractureCanyonMap();
     const level = parseLevel(loadLevel('fracture-canyon'));
     expect(validateLevelReferences(level, mapData)).toEqual([]);
 
@@ -178,7 +178,7 @@ describe('level：引擎按数据部署兵力', () => {
 describe('level：AI 脚本由数据驱动', () => {
   it('教学关脚本：60s 在命名锚点触发增援，增援 attackMove 指向 redBase（城市 c2）', () => {
     const level = parseLevel(loadLevel('fracture-canyon'));
-    const world = new World(loadTutorialMap());
+    const world = new World(loadFractureCanyonMap());
     deployForces(world, level.forces, level.anchors);
     const ai = new ScriptedAI(world, {
       faction: level.ai.faction, script: level.ai, anchors: level.anchors,
@@ -457,7 +457,7 @@ describe('level：胜负条件（victory → buildMission）', () => {
 
   it('victory.points 引用不存在的据点会被交叉校验指出', () => {
     const level = parseLevel({ ...base(), victory: { mode: 'defend', faction: 'blue', points: ['nope'] } });
-    const errors = validateLevelReferences(level, loadTutorialMap());
+    const errors = validateLevelReferences(level, loadFractureCanyonMap());
     expect(errors).toContainEqual(expect.stringContaining('不存在据点 "nope"'));
   });
 });
