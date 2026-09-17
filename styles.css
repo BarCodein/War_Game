@@ -1,52 +1,156 @@
-/* HUD 视觉沿用原型军事风格（git 历史 019796f），调整见 docs/gdd.md §11。 */
+/* 视觉主题：复古战地档案
+   -----------------------------------------------------
+   关键约束（保留不动，game.js / hud.js 依赖）：
+   - DOM id 全部保留：#battlefield / #timer / #missionLevelName / #unitList / #cityCard 等
+   - class 全部保留：.topbar / .game-layout / .left-panel / .panel / .icon-button / .canvas-frame / .battle-overlay
+   - 美术改动：只换皮，把"现代军事极简"换为"暗红+军绿+米白+黄铜+旧纸张"复古档案风
+   - 沙盘全屏：.canvas-frame 去边框/撑满，让 Phaser 画布真正铺到屏幕
+*/
 @import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
 
+* { box-sizing: border-box; }
 :root {
-  --ink: #102124;
-  --muted: #6f8585;
-  --line: #dbe5e2;
-  --paper: #f3f7f4;
-  --panel: #fbfcf8;
-  --lime: #c9f25a;
-  --red: #f06d5f;
-  --yellow: #f4be4f;
+  --ink: #2b1d12;          /* 深棕字（原 #102124 偏冷蓝）*/
+  --muted: #6b4a22;        /* 暗黄铜次要字（原 #6f8585 偏冷灰）*/
+  --line: #6b4a22;         /* 暖棕边线（原冷绿）*/
+  --paper: #f1e3c4;        /* 米白纸张底（原 #f3f7f4 偏冷白）*/
+  --panel: #fff4d2;        /* 米白面板（原 #fbfcf8）*/
+  --lime: #c9f25a;         /* 战场事件条强调色保留 */
+  --red: #c8261a;          /* 暗红（原 #f06d5f 偏粉）*/
+  --yellow: #f4be4f;       /* 黄铜金（原 #f4be4f 同名）*/
 }
 
-* { box-sizing: border-box; }
+body {
+  margin: 0;
+  color: var(--ink);
+  font-family: 'Barlow Condensed', 'STKaiti', 'KaiTi', 'Microsoft YaHei', sans-serif;
+  letter-spacing: .2px;
+  /* 暗红 + 军绿 + 暗棕径向渐变铺底（与 Phaser 画布背景 #193d3d 协调） */
+  background:
+    /* 整屏铺满的暗红/军绿/暗棕底色（与画布背景色 #193d3d 协调） */
+    radial-gradient(ellipse at 20% 0%, #5b1f1c 0%, transparent 55%),
+    radial-gradient(ellipse at 80% 100%, #1f3a2a 0%, transparent 50%),
+    #193d3d;
+  overflow: hidden;
+}
 
-body { margin: 0; background: #e7efeb; color: var(--ink); font-family: 'Barlow Condensed', sans-serif; letter-spacing: .2px; }
+.app-shell { min-height: 100vh; background: transparent; }
 
-.app-shell { min-height: 100vh; background: var(--paper); }
-
-/* 顶栏 */
-.topbar { height: 74px; background: #102a2b; color: #f8fff7; display: flex; align-items: center; justify-content: space-between; padding: 0 34px; }
+/* 顶栏：深棕底 + 米白字，去掉黑色基调 */
+.topbar {
+  height: 74px;
+  background: linear-gradient(180deg, #2b1d12 0%, #1a0e06 100%);
+  color: #f1e3c4;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 34px;
+  border-bottom: 1px solid #6b4a22;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, .55);
+  position: relative;
+  z-index: 10;
+}
 .brand { display: flex; align-items: center; gap: 10px; letter-spacing: 1.5px; }
-.brand-mark { display: grid; place-items: center; width: 29px; height: 29px; border: 2px solid var(--lime); color: var(--lime); font-size: 24px; line-height: 20px; }
-.brand strong { font-size: 20px; display: block; line-height: 18px; }
-.brand small, .mission-name .eyebrow, .battlefield-head .eyebrow { font-family: 'IBM Plex Mono', monospace; font-size: 9px; color: #93abab; letter-spacing: 1.5px; }
-.mission-name { display: flex; gap: 16px; align-items: center; color: #d8e6df; font-size: 15px; }
-.mission-name .eyebrow { color: var(--lime); }
+/* 五角星标：用 ::before 注入红色 ★（黄铜色块） */
+.brand-mark {
+  display: grid;
+  place-items: center;
+  width: 29px;
+  height: 29px;
+  border: 2px solid #f4be4f;
+  color: #c8261a;
+  font-size: 24px;
+  line-height: 20px;
+  background: linear-gradient(180deg, #d4b67c 0%, #a37b3a 100%);
+  text-shadow: 0 0 3px rgba(255, 200, 130, .5);
+}
+.brand strong { font-size: 20px; display: block; line-height: 18px; color: #f1e3c4; }
+.brand small, .mission-name .eyebrow, .battlefield-head .eyebrow { font-family: 'IBM Plex Mono', monospace; font-size: 9px; color: #d4b67c; letter-spacing: 1.5px; }
+.mission-name { display: flex; gap: 16px; align-items: center; color: #f1e3c4; font-size: 15px; }
+.mission-name .eyebrow { color: #c8261a; font-weight: 700; }   /* OPERATION 07 用暗红 */
 .top-actions { display: flex; gap: 9px; align-items: center; }
 .speed-controls { display: flex; gap: 4px; margin-right: 6px; }
+
 /* 地图缩放：百分比读数 + 复位按钮（1× 时按钮变暗，避免误以为还有可复位的状态） */
 .zoom-controls { display: flex; gap: 6px; align-items: center; margin-right: 6px; }
-.zoom-readout { color: #9fb8b3; font-family: 'IBM Plex Mono', monospace; font-size: 12px; min-width: 44px; text-align: right; }
+.zoom-readout { color: #d4b67c; font-family: 'IBM Plex Mono', monospace; font-size: 12px; min-width: 44px; text-align: right; }
 .zoom-controls .icon-button:disabled { opacity: .45; cursor: default; }
 .zoom-controls .icon-button:disabled:hover { background: transparent; }
-.icon-button { border: 1px solid #46625f; background: transparent; color: #d6e7df; height: 31px; min-width: 32px; cursor: pointer; font: inherit; font-family: 'IBM Plex Mono', monospace; font-size: 12px; }
-.icon-button:hover { background: #294746; }
-.icon-button.active { background: #294746; border-color: var(--lime); color: var(--lime); }
 
-/* 布局：左栏 + 战场两列，战场占满余下空间（原右侧栏已移除） */
-.game-layout { display: grid; grid-template-columns: 235px minmax(520px, 1fr); gap: 20px; margin: auto; padding: 24px 34px; }
-.panel { background: var(--panel); border: 1px solid var(--line); box-shadow: 0 4px 13px #9bb1a50d; }
-.panel-heading { height: 46px; padding: 0 16px; border-bottom: 1px solid var(--line); display: flex; align-items: center; justify-content: space-between; font-size: 16px; font-weight: 600; }
-.panel-heading em { font: 10px 'IBM Plex Mono', monospace; color: #8da29d; font-style: normal; }
+/* 黄铜渐变按钮（替换原透明 + 冷绿描边） */
+.icon-button {
+  border: 1px solid #4a2f12;
+  background: linear-gradient(180deg, #d4b67c 0%, #a37b3a 100%);
+  color: #2b1d12;
+  height: 31px;
+  min-width: 32px;
+  cursor: pointer;
+  font: inherit;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 12px;
+  font-weight: 600;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .35),
+    inset 0 -2px 4px rgba(0, 0, 0, .3),
+    0 2px 4px rgba(0, 0, 0, .5);
+  text-decoration: none;
+  padding: 0 6px;
+}
+.icon-button:hover {
+  background: linear-gradient(180deg, #e0c08a 0%, #b08840 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .5),
+    inset 0 -2px 4px rgba(0, 0, 0, .3),
+    0 4px 8px rgba(0, 0, 0, .6);
+}
+/* 激活态：暗红 + 米白字（关键交互状态用暗红）*/
+.icon-button.active {
+  background: linear-gradient(180deg, #c8261a 0%, #8b1a12 100%);
+  color: #f1e3c4;
+  border-color: #4a0a06;
+}
 
-/* 左栏：编队与城市 */
+/* 布局：左栏 + 战场两列。战场已占满 100%，左栏正常占 235px */
+.game-layout {
+  display: grid;
+  grid-template-columns: 1fr;            /* 全屏布局：左栏消失，整个视口给战场 */
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  height: 100vh;
+}
+/* 米白纸张面板：叠加 but1.png 旧纸纹理 */
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  box-shadow: inset 0 0 30px rgba(120, 70, 20, .15);
+  background-image: url('/assets/texture/but1.png');
+  background-blend-mode: multiply;
+  background-size: 220px 220px;
+}
+.panel-heading {
+  height: 46px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--ink);
+  background: rgba(56, 28, 10, .12);
+}
+.panel-heading em { font: 10px 'IBM Plex Mono', monospace; color: var(--muted); font-style: normal; }
+
+/* 左栏：编队与城市（米白旧纸 + 暗红选中态） */
 .unit-list { padding: 7px; }
 .unit-card { display: flex; gap: 9px; align-items: center; padding: 10px 8px; border: 1px solid transparent; cursor: pointer; }
-.unit-card.active { background: #edf8dd; border-color: #cde89b; }
+.unit-card.active {
+  background: #c8261a;                   /* 暗红高亮（区别于原 #edf8dd 浅黄绿）*/
+  border-color: #6b4a22;
+  color: #f1e3c4;
+}
+.unit-card.active small { color: #f4ecd0; }
 .unit-avatar { width: 34px; height: 34px; display: grid; place-items: center; background: #d7e6e2; color: #15474a; font-size: 19px; }
 .unit-card b, .unit-card small { display: block; }
 .unit-card b { font-size: 15px; }
@@ -54,20 +158,26 @@ body { margin: 0; background: #e7efeb; color: var(--ink); font-family: 'Barlow C
 .unit-hp { margin-left: auto; width: 42px; height: 4px; background: #e2e9e6; }
 .unit-hp i { display: block; background: #68b99c; height: 100%; }
 .tech-title { margin-top: 8px; }
-.status-card { margin: 12px; padding: 12px; background: #f0f5f1; }
+.status-card { margin: 12px; padding: 12px; background: rgba(56, 28, 10, .08); }
 .status-row { display: flex; justify-content: space-between; font-size: 12px; margin-top: 10px; }
 .status-row b { font-family: 'IBM Plex Mono', monospace; font-size: 11px; }
 .progress { height: 5px; background: #dfe8e3; margin-top: 7px; }
-.progress i { display: block; height: 100%; background: var(--lime); }
+.progress i { display: block; height: 100%; background: var(--red); }    /* 进度条改用暗红 */
 
-/* 战场 */
-.battlefield-head { height: 51px; display: flex; justify-content: space-between; align-items: start; }
-.battlefield-head h1 { font-size: 25px; margin: 2px 0 0; font-weight: 600; }
-.battlefield-tools { display: flex; gap: 12px; align-items: center; }
-.selection-readout, .timer-readout { font: 10px 'IBM Plex Mono', monospace; color: #718680; }
-.timer-readout { font-size: 12px; }
-.canvas-frame { position: relative; border: 1px solid #a9c2b7; background: #193d3d; box-shadow: 0 12px 24px #284d4214; }
-.canvas-frame > #battlefield { display: flex; justify-content: center; }
+/* 战场：去掉顶/底标签条，让 .canvas-frame 直接占满 battlefield-wrap
+   这是 game.js 通过 #battlefield 注入 Phaser 的容器，全屏但保留 canvas 物理尺寸 */
+.battlefield-head { display: none; }    /* 隐藏"TACTICAL VIEW / 前线态势"标题行（沙盘全屏后多余）*/
+.battlefield-foot { display: none; }    /* 隐藏图例 / 坐标条（沙盘全屏后多余）*/
+.canvas-frame {
+  position: relative;
+  border: 0;
+  background: #193d3d;                 /* Phaser 画布的 backgroundColor，画布加载前不闪白 */
+  box-shadow: none;
+  width: 100%;
+  height: 100vh;                       /* 全屏：占满整个视口 */
+  min-height: 600px;
+}
+.canvas-frame > #battlefield { display: flex; justify-content: center; align-items: center; width: 100%; height: 100%; }
 .canvas-frame canvas { display: block; cursor: crosshair; }
 .canvas-tip { position: absolute; bottom: 10px; left: 14px; background: #102a2bd9; color: #c6d7d0; padding: 5px 9px; font: 9px 'IBM Plex Mono', monospace; pointer-events: none; }
 .toast { position: absolute; top: 13px; left: 50%; transform: translateX(-50%); background: #f6f8f3; color: var(--ink); border-left: 3px solid var(--lime); padding: 8px 14px; font-size: 13px; opacity: 0; transition: opacity .2s; pointer-events: none; }
@@ -80,39 +190,74 @@ body { margin: 0; background: #e7efeb; color: var(--ink); font-family: 'Barlow C
 .coords { margin-left: auto; }
 
 /* 战场内叠加信息层（替代原右侧栏：任务进度 + 战场通讯）
-   绝对定位在画布上，不占用横向空间；pointer-events:none 保证不拦截画布操作。 */
-.battle-overlay { position: absolute; z-index: 6; pointer-events: none; background: #102a2be0; color: #d6e7df; padding: 8px 10px; border-left: 2px solid var(--lime); }
+   复古档案色：深棕半透 + 米白字 + 暗红强调 */
+.battle-overlay {
+  position: absolute;
+  z-index: 6;
+  pointer-events: none;
+  background: rgba(20, 12, 4, .82);
+  color: #f1e3c4;
+  padding: 8px 10px;
+  border: 1px solid rgba(180, 130, 70, .5);
+  border-left: 2px solid var(--red);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, .55);
+  background-image:
+    linear-gradient(180deg, rgba(20, 12, 4, .82), rgba(20, 12, 4, .82)),
+    url('/assets/texture/but1.png');
+  background-blend-mode: normal, overlay;
+  background-size: cover, 200px 200px;
+}
 .mission-overlay { top: 10px; left: 10px; width: 196px; }
 .feed-overlay { right: 10px; bottom: 10px; width: 216px; }
-.overlay-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 12px; font-weight: 600; color: #f8fff7; border-bottom: 1px solid #46625f; padding-bottom: 5px; }
-.overlay-heading em { font: 10px 'IBM Plex Mono', monospace; color: var(--lime); font-style: normal; }
-.overlay-sub { color: #93abab; font-size: 10px; margin: 4px 0 0; }
-.battle-overlay .progress { height: 4px; background: #294746; margin: 6px 0; }
-.battle-overlay .progress i { background: var(--lime); }
-.battle-overlay .sub-objective { padding: 3px 0; font-size: 10px; color: #b9cbc4; }
-.battle-overlay .sub-objective span { display: inline-grid; place-items: center; width: 13px; height: 13px; border: 1px solid #46625f; border-radius: 50%; font-family: serif; font-size: 9px; margin-right: 5px; }
-.battle-overlay .sub-objective.done { color: var(--lime); }
-.battle-overlay .sub-objective.done span { background: #294746; border-color: var(--lime); color: var(--lime); }
+.overlay-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #f1e3c4;
+  border-bottom: 1px solid #6b4a22;
+  padding-bottom: 5px;
+}
+.overlay-heading em { font: 10px 'IBM Plex Mono', monospace; color: var(--yellow); font-style: normal; }
+.overlay-sub { color: #d4b67c; font-size: 10px; margin: 4px 0 0; }
+.battle-overlay .progress { height: 4px; background: rgba(180, 130, 70, .25); margin: 6px 0; }
+.battle-overlay .progress i { background: var(--red); }
+.battle-overlay .sub-objective { padding: 3px 0; font-size: 10px; color: #d4b67c; }
+.battle-overlay .sub-objective span { display: inline-grid; place-items: center; width: 13px; height: 13px; border: 1px solid #6b4a22; border-radius: 50%; font-family: serif; font-size: 9px; margin-right: 5px; color: #d4b67c; }
+.battle-overlay .sub-objective.done { color: var(--red); }
+.battle-overlay .sub-objective.done span { background: var(--red); border-color: var(--red); color: #f1e3c4; }
 .battle-overlay .event-log { margin-top: 6px; max-height: 92px; overflow: hidden; }
-.battle-overlay .event-log p { font-size: 10px; margin: 0; padding: 3px 0; border-bottom: 1px solid #294746; line-height: 1.25; color: #c6d7d0; }
-.battle-overlay .event-log time { font: 9px 'IBM Plex Mono', monospace; color: #93abab; margin-right: 5px; }
+.battle-overlay .event-log p { font-size: 10px; margin: 0; padding: 3px 0; border-bottom: 1px solid rgba(180, 130, 70, .25); line-height: 1.25; color: #f1e3c4; }
+.battle-overlay .event-log time { font: 9px 'IBM Plex Mono', monospace; color: #d4b67c; margin-right: 5px; }
 .event-tag { font: 8px 'IBM Plex Mono', monospace; margin-right: 5px; }
-.event-tag.OK { color: #7fd08f; }
-.event-tag.WARN { color: #ff8a76; }
-.event-tag.blue { color: #63a6d8; }
+.event-tag.OK { color: #c9f25a; }
+.event-tag.WARN { color: #f4be4f; }
+.event-tag.blue { color: #d4b67c; }      /* 蓝色系替换为黄铜（避免冷蓝） */
 
-/* 胜利结算 */
-.victory-overlay { position: fixed; inset: 0; background: rgba(16, 33, 36, .72); display: none; place-items: center; z-index: 50; }
+/* 胜利结算：暗红顶条 + 米白卡 */
+.victory-overlay { position: fixed; inset: 0; background: rgba(20, 12, 4, .82); display: none; place-items: center; z-index: 50; }
 .victory-overlay.show { display: grid; }
-.victory-card { background: var(--paper); border-top: 4px solid var(--lime); padding: 40px 64px; text-align: center; }
+.victory-card { background: var(--paper); border-top: 4px solid var(--red); padding: 40px 64px; text-align: center; border: 1px solid var(--line); box-shadow: 0 12px 32px rgba(0, 0, 0, .65); }
 .victory-card h2 { margin: 0 0 10px; font-size: 42px; letter-spacing: 6px; }
-.victory-card h2.win { color: #47885e; }
-.victory-card h2.lose { color: #d95c4d; }
+.victory-card h2.win { color: #6b4a22; }   /* 胜利用暗黄铜（避免原 #47885e 冷绿）*/
+.victory-card h2.lose { color: var(--red); }
 .victory-card p { color: var(--muted); font-size: 15px; margin: 0 0 20px; }
-.victory-card button { border: 1px solid #46625f; background: #102a2b; color: #d6e7df; padding: 8px 24px; cursor: pointer; font: inherit; font-size: 14px; }
-.victory-card button:hover { background: #294746; }
+.victory-card button {
+  border: 1px solid #4a2f12;
+  background: linear-gradient(180deg, #d4b67c 0%, #a37b3a 100%);
+  color: var(--ink);
+  padding: 8px 24px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .35), 0 2px 4px rgba(0, 0, 0, .5);
+}
+.victory-card button:hover { background: linear-gradient(180deg, #e0c08a 0%, #b08840 100%); }
 
-/* 地图编辑器 */
+/* 地图编辑器（保留原深色冷调，避免改编辑器视觉）*/
 .editor-toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; padding: 10px 34px; background: #102a2b; border-bottom: 1px solid #46625f; }
 .editor-group { display: flex; gap: 6px; align-items: center; }
 .editor-toolbar button, .editor-toolbar .editor-exit { border: 1px solid #46625f; background: transparent; color: #d6e7df; padding: 6px 12px; cursor: pointer; font: inherit; font-size: 13px; text-decoration: none; }
@@ -129,31 +274,242 @@ body.editor-mode .speed-controls,
 body.editor-mode #pauseButton { display: none; }
 body.editor-mode .game-layout { grid-template-columns: 1fr; }
 
+/* 全屏战场：整个电脑屏幕都是战场
+   顶栏小尺寸（36px 高）：左品牌 + 中战役名 + 右 5 个功能按钮（主菜单/½×/1×/2×/暂停）
+   左栏隐藏 */
+body.game-fullscreen .topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 20;
+  height: 36px;
+  padding: 0 14px;
+  background: linear-gradient(180deg, rgba(43, 29, 18, .92) 0%, rgba(26, 14, 6, .78) 100%);
+  border-bottom: 1px solid #6b4a22;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, .45);
+  font-size: 12px;
+}
+/* 顶栏内部所有元素缩小 */
+body.game-fullscreen .topbar .brand { display: flex; align-items: center; gap: 6px; }
+body.game-fullscreen .topbar .brand-mark { width: 20px; height: 20px; font-size: 14px; line-height: 14px; }
+body.game-fullscreen .topbar .brand strong { font-size: 13px; line-height: 13px; }
+body.game-fullscreen .topbar .brand small { font-size: 8px; }
+body.game-fullscreen .topbar .mission-name {
+  display: flex; gap: 10px; align-items: center; font-size: 12px;
+  position: absolute; left: 50%; transform: translateX(-50%);
+}
+body.game-fullscreen .topbar .top-actions {
+  display: flex;
+  gap: 1px;
+  align-items: center;
+  /* 钉在顶栏右侧，按钮组整体在右侧 1/4 区域（视口 1600 → 按钮组最右 x ≈ 1586、最左 x ≈ 1200） */
+  position: absolute;
+  top: 0;
+  right: 14px;
+  height: 36px;
+  padding: 9px 0;            /* 上下内边距让 18px 高的按钮垂直居中 */
+  width: 40vw;
+  max-width: 640px;
+  justify-content: flex-end; /* 按钮在容器内右对齐 */
+  box-sizing: border-box;
+}
+/* ---------------- 战场通讯：仅在有变化时短暂显示 ----------------
+   默认隐藏（display: none），JS 通过 MutationObserver 监听 #eventLog
+   子节点变化时设 display: block 并加 vg-feed-active 类（透明度 1，4s 后渐隐） */
+body.game-fullscreen .battle-overlay.feed-overlay {
+  display: none;
+  position: fixed;
+  bottom: 48px;
+  right: 14px;
+  z-index: 15;
+  width: 240px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity .6s ease;
+}
+body.game-fullscreen .battle-overlay.feed-overlay.vg-feed-active {
+  display: block;
+  opacity: 1;
+}
+/* 任务进度框：左侧已有自定义任务面板，原生 mission-overlay 隐藏避免重复 */
+body.game-fullscreen .battle-overlay.mission-overlay { display: none !important; }
+
+/* 左上角计时器：纯 CSS 浮层，紧贴任务面板下方 */
+body.game-fullscreen .vg-clock-panel {
+  position: fixed;
+  top: 50%;
+  left: 14px;
+  transform: translateY(calc(-50% + 90px));   /* 任务面板下方 90px */
+  z-index: 15;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 10px;
+  background: linear-gradient(180deg, rgba(20, 12, 4, .85) 0%, rgba(10, 6, 2, .85) 100%);
+  border: 1px solid #6b4a22;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 200, 130, .25),
+    0 2px 6px rgba(0, 0, 0, .5);
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 13px;
+  font-weight: 700;
+  color: #f4be4f;
+  letter-spacing: 2px;
+  pointer-events: none;
+}
+body.game-fullscreen .vg-clock-panel::before {
+  content: '⏱';
+  font-size: 14px;
+  color: #d4b67c;
+  margin-right: 2px;
+}
+body.game-fullscreen .left-panel { display: none; }
+body.game-fullscreen .game-layout { grid-template-columns: 1fr; height: 100vh; }
+
+/* ---------------- 左侧任务面板（悬浮 HUD） ----------------
+   标题"任务"用 but1.png 米白底，条目由 sanjiaoxing.png（左）+ renwukuang.png（右）拼成 */
+body.game-fullscreen .vg-task-panel {
+  position: fixed;
+  top: 50%;
+  left: 14px;
+  transform: translateY(-50%);
+  z-index: 15;
+  width: 300px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  pointer-events: none;        /* 默认让出事件给画布 */
+}
+body.game-fullscreen .vg-task-title {
+  position: relative;
+  width: 90px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  background:
+    linear-gradient(180deg, rgba(255, 244, 210, .95) 0%, rgba(232, 200, 140, .92) 100%),
+    url('/assets/texture/but1.png') no-repeat center / 220px 220px;
+  background-blend-mode: normal, multiply;
+  border: 1px solid #6b4a22;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, .5);
+}
+body.game-fullscreen .vg-task-title-text {
+  font-family: 'Barlow Condensed', 'STKaiti', 'KaiTi', sans-serif;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 6px;
+  color: #2b1d12;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, .5);
+}
+body.game-fullscreen .vg-task-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+body.game-fullscreen .vg-task-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 36px;
+  pointer-events: none;        /* 任务条本体不拦截画布事件 */
+}
+body.game-fullscreen .vg-task-tri {
+  flex: 0 0 22px;
+  width: 22px;
+  height: 36px;
+  /* 用 sanjiaoxing.png 当左侧装饰 + 切换按钮 */
+  background: url('/assets/texture/sanjiaoxing.png') no-repeat center / 18px 18px;
+  filter: drop-shadow(0 0 2px rgba(0, 0, 0, .6));
+  pointer-events: auto;        /* 只 sanjiaoxing 可点 */
+  cursor: pointer;
+  transition: transform .15s, filter .15s;
+}
+body.game-fullscreen .vg-task-tri:hover {
+  transform: scale(1.15);
+  filter: drop-shadow(0 0 4px rgba(244, 190, 79, .8)) drop-shadow(0 0 2px rgba(0, 0, 0, .6));
+}
+body.game-fullscreen .vg-task-card {
+  flex: 1;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  padding: 0 14px;
+  background: url('/assets/texture/renwukuang.png') no-repeat center / 100% 100%;
+  font-size: 13px;
+  color: #f4ecd0;
+  text-shadow: 0 1px 1px rgba(0, 0, 0, .6);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+body.game-fullscreen .vg-task-done .vg-task-card {
+  background: url('/assets/texture/renwukuang.png') no-repeat center / 100% 100%;
+  filter: sepia(1) saturate(4) hue-rotate(330deg);
+  opacity: .8;
+  text-decoration: line-through;
+}
+
+/* game.html 整屏背景：map_pics/tashan.png 铺满整个视口，作为战场氛围底图
+   关键：背景在 body 底，Phaser canvas (z-index 更高) 仍正常显示
+   background-size: 100% 100% 强制拉伸铺满整屏（不留任何空白边） */
+body.game-fullscreen {
+  margin: 0;
+  background:
+    url('/assets/map_pics/tashan.png') center / 100% 100% no-repeat,
+    #193d3d;
+  background-attachment: fixed;
+}
+/* 抹掉 main / app-shell / 顶栏的 user-agent margin，让画布真正贴到 0,0 */
+body.game-fullscreen main,
+body.game-fullscreen .app-shell,
+body.game-fullscreen .topbar,
+body.game-fullscreen .game-layout,
+body.game-fullscreen .battlefield-wrap,
+body.game-fullscreen .canvas-frame { margin: 0; padding: 0; }
+/* canvas-frame / battlefield / canvas 占满除顶栏 36px 之外的视口 */
+body.game-fullscreen .canvas-frame,
+body.game-fullscreen .battlefield-wrap,
+body.game-fullscreen #battlefield {
+  position: fixed !important;
+  top: 36px !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  width: 100vw !important;
+  height: calc(100vh - 36px) !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+body.game-fullscreen #battlefield canvas {
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+}
+
 /* 主页（落地页） */
 .home-shell { min-height: 100vh; background: var(--paper); display: flex; flex-direction: column; }
 .home-topbar { flex-shrink: 0; }
 .home-hero { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 36px; padding: 40px 24px; text-align: center; }
-.home-heading .eyebrow { color: #6f8585; font: 10px 'IBM Plex Mono', monospace; letter-spacing: 2px; }
+.home-heading .eyebrow { color: var(--muted); font: 10px 'IBM Plex Mono', monospace; letter-spacing: 2px; }
 .home-heading h1 { font-size: 58px; margin: 12px 0 8px; letter-spacing: 4px; font-weight: 700; }
 .home-heading p { color: var(--muted); font-size: 15px; margin: 0; }
 .home-actions { display: flex; gap: 22px; flex-wrap: wrap; justify-content: center; }
 .home-card { display: flex; flex-direction: column; align-items: flex-start; gap: 7px; width: 232px; padding: 22px 24px; background: var(--panel); border: 1px solid var(--line); box-shadow: 0 8px 22px #9bb1a50d; text-decoration: none; color: var(--ink); transition: transform .12s, border-color .12s, box-shadow .12s; }
-.home-card:hover { transform: translateY(-3px); border-color: var(--lime); box-shadow: 0 14px 28px #9bb1a51f; }
-.home-card.primary { border-top: 4px solid var(--lime); }
-.home-icon { font-size: 26px; color: #74a72d; line-height: 1; }
+.home-card:hover { transform: translateY(-3px); border-color: var(--red); box-shadow: 0 14px 28px rgba(107, 74, 34, .25); }
+.home-card.primary { border-top: 4px solid var(--red); }
+.home-icon { font-size: 26px; color: #c8261a; line-height: 1; }
 .home-card b { font-size: 20px; letter-spacing: 1px; }
 .home-card small { font: 11px 'IBM Plex Mono', monospace; color: var(--muted); }
 
-/* 响应式 */
-@media (max-width: 1050px) {
-  .game-layout { grid-template-columns: 200px minmax(450px, 1fr); padding: 18px; }
-}
-@media (max-width: 700px) {
-  .topbar { padding: 0 15px; }
-  .mission-name { display: none; }
-  .game-layout { display: block; padding: 14px; }
-  .left-panel { margin-bottom: 14px; }
-  .unit-list { display: flex; }
-  .unit-card { flex: 1; }
-  .canvas-tip { font-size: 8px; }
+/* 响应式：全屏后战场占主区，断点只调左栏 */
+@media (max-width: 900px) {
+  .game-layout { grid-template-columns: 180px 1fr; }
 }

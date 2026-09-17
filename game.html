@@ -1,70 +1,93 @@
-<!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>沙盘战争</title>
-  <link rel="stylesheet" href="/styles.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>沙盘战争</title>
+  <link rel="stylesheet" href="/styles.css">
 </head>
-<body>
-  <main class="app-shell">
-    <header class="topbar">
-      <div class="brand"><span class="brand-mark">+</span><div><strong>沙盘战争</strong><small>FRONTLINE COMMAND</small></div></div>
-      <div class="mission-name"><span class="eyebrow" id="missionEyebrow">OPERATION 07</span><span id="missionLevelName">—</span></div>
-      <div class="top-actions">
-        <button class="icon-button" id="exitPlaytest" title="返回编辑器" hidden>返回编辑器</button>
-        <a class="icon-button editor-link" href="/index.html" title="主菜单">主菜单</a>
-        <div class="zoom-controls">
-          <span class="zoom-readout" id="zoomLabel">100%</span>
-          <button class="icon-button" id="zoomReset" title="缩放复位到 100%（1×）">↺</button>
+<body class="game-fullscreen">
+  <!-- 左上角计时器（独立于原 #timer 元素，自己跑 setInterval） -->
+  <div class="vg-clock-panel" id="vgClockPanel">
+    <span id="vgClockText">00:00</span>
+  </div>
+  <main class="app-shell">
+    <header class="topbar">
+      <div class="brand"><span class="brand-mark">+</span><div><strong>沙盘战争</strong><small>FRONTLINE COMMAND</small></div></div>
+      <div class="mission-name"><span class="eyebrow" id="missionEyebrow">OPERATION 07</span><span id="missionLevelName">—</span></div>
+      <div class="top-actions">
+        <button class="icon-button" id="exitPlaytest" title="返回编辑器" hidden>返回编辑器</button>
+        <a class="icon-button editor-link" href="/index.html" title="主菜单">主菜单</a>
+        <div class="zoom-controls">
+          <span class="zoom-readout" id="zoomLabel">100%</span>
+          <button class="icon-button" id="zoomReset" title="缩放复位到 100%（1×）">↺</button>
+        </div>
+        <div class="speed-controls">
+          <button class="icon-button" data-speed="0.5" title="0.5×">½×</button>
+          <button class="icon-button active" data-speed="1" title="1×">1×</button>
+          <button class="icon-button" data-speed="2" title="2×">2×</button>
+        </div>
+        <button class="icon-button" id="pauseButton" title="暂停游戏">Ⅱ</button>
+      </div>
+    </header>
+    <div class="game-layout">
+      <aside class="left-panel panel">
+        <div class="panel-heading"><span>我的编队</span><em id="unitCount">00 UNITS</em></div>
+        <div id="unitList" class="unit-list"></div>
+        <div class="panel-heading tech-title"><span>城市状态</span><em>CITY</em></div>
+        <div class="status-card" id="cityCard"></div>
+      </aside>
+      <!-- 左侧任务面板（悬浮 HUD，CSS 定位） -->
+      <aside class="vg-task-panel" aria-label="任务">
+        <div class="vg-task-title">
+          <span class="vg-task-title-text">任务</span>
         </div>
-        <div class="speed-controls">
-          <button class="icon-button" data-speed="0.5" title="0.5×">½×</button>
-          <button class="icon-button active" data-speed="1" title="1×">1×</button>
-          <button class="icon-button" data-speed="2" title="2×">2×</button>
-        </div>
-        <button class="icon-button" id="pauseButton" title="暂停游戏">Ⅱ</button>
-      </div>
-    </header>
-    <div class="game-layout">
-      <aside class="left-panel panel">
-        <div class="panel-heading"><span>我的编队</span><em id="unitCount">00 UNITS</em></div>
-        <div id="unitList" class="unit-list"></div>
-        <div class="panel-heading tech-title"><span>城市状态</span><em>CITY</em></div>
-        <div class="status-card" id="cityCard"></div>
+        <ul class="vg-task-list">
+          <li class="vg-task-item">
+            <span class="vg-task-tri"></span>
+            <span class="vg-task-card">攻占塔山堡，封锁敌军增援通道</span>
+          </li>
+          <li class="vg-task-item">
+            <span class="vg-task-tri"></span>
+            <span class="vg-task-card">切断锦西至沈阳铁路补给线</span>
+          </li>
+          <li class="vg-task-item vg-task-done">
+            <span class="vg-task-tri"></span>
+            <span class="vg-task-card">完成部队集结与火力配置</span>
+          </li>
+        </ul>
       </aside>
       <section class="battlefield-wrap">
-        <div class="battlefield-head">
-          <div><span class="eyebrow" id="tacticalEyebrow">TACTICAL VIEW / —</span><h1>前线态势</h1></div>
-          <div class="battlefield-tools"><span class="selection-readout" id="selectionReadout">未选择单位</span><span class="timer-readout" id="timer">00:00</span></div>
-        </div>
-        <div class="canvas-frame">
-          <div id="battlefield"></div>
-          <div class="canvas-tip">左键选择 · Shift 增减选 · 从已选单位拖动绘制轨迹 · 右键移动 / 攻击 · 按住 E + 右键 / E + 拖轨迹 = 急行军 · 滚轮缩放</div>
-          <div class="toast" id="toast"></div>
-          <!-- 任务进度与战场通讯改为战场内叠加层（原右侧栏已移除），不占用横向空间 -->
-          <div class="battle-overlay mission-overlay" id="missionPanel">
-            <div class="overlay-heading"><span>任务进度</span><em id="missionPercent">0%</em></div>
-            <div class="overlay-sub">夺取北方信标 · 控制并守住高地信标</div>
-            <div class="progress"><i id="missionProgress" style="width:0%"></i></div>
-            <div id="missionList"></div>
-          </div>
-          <div class="battle-overlay feed-overlay">
-            <div class="overlay-heading"><span>战场通讯</span></div>
-            <div id="eventLog" class="event-log"><p><time>09:41</time><span class="event-tag blue">SYS</span>通讯已接通，等待战报。</p></div>
-          </div>
-        </div>
-        <div class="battlefield-foot"><span><i class="legend-dot friendly"></i>己方</span><span><i class="legend-dot hostile"></i>敌方</span><span><i class="legend-dot city-dot"></i>城市</span><span class="coords" id="coords">GRID 00 : 00</span></div>
-      </section>
-    </div>
-  </main>
-  <div class="victory-overlay" id="victoryOverlay">
-    <div class="victory-card">
-      <h2 id="victoryTitle">胜利</h2>
-      <p id="victoryDetail"></p>
-      <button id="restartButton">重新开始</button>
-    </div>
-  </div>
+        <div class="battlefield-head">
+          <div><span class="eyebrow" id="tacticalEyebrow">TACTICAL VIEW / —</span><h1>前线态势</h1></div>
+          <div class="battlefield-tools"><span class="selection-readout" id="selectionReadout">未选择单位</span><span class="timer-readout" id="timer">00:00</span></div>
+        </div>
+        <div class="canvas-frame">
+          <div id="battlefield"></div>
+          <div class="canvas-tip">左键选择 · Shift 增减选 · 从已选单位拖动绘制轨迹 · 右键移动 / 攻击 · 按住 E + 右键 / E + 拖轨迹 = 急行军 · 滚轮缩放</div>
+          <div class="toast" id="toast"></div>
+          <!-- 任务进度与战场通讯改为战场内叠加层（原右侧栏已移除），不占用横向空间 -->
+          <div class="battle-overlay mission-overlay" id="missionPanel">
+            <div class="overlay-heading"><span>任务进度</span><em id="missionPercent">0%</em></div>
+            <div class="overlay-sub">夺取北方信标 · 控制并守住高地信标</div>
+            <div class="progress"><i id="missionProgress" style="width:0%"></i></div>
+            <div id="missionList"></div>
+          </div>
+          <div class="battle-overlay feed-overlay">
+            <div class="overlay-heading"><span>战场通讯</span></div>
+            <div id="eventLog" class="event-log"><p><time>09:41</time><span class="event-tag blue">SYS</span>通讯已接通，等待战报。</p></div>
+          </div>
+        </div>
+        <div class="battlefield-foot"><span><i class="legend-dot friendly"></i>己方</span><span><i class="legend-dot hostile"></i>敌方</span><span><i class="legend-dot city-dot"></i>城市</span><span class="coords" id="coords">GRID 00 : 00</span></div>
+      </section>
+    </div>
+  </main>
+  <div class="victory-overlay" id="victoryOverlay">
+    <div class="victory-card">
+      <h2 id="victoryTitle">胜利</h2>
+      <p id="victoryDetail"></p>
+      <button id="restartButton">重新开始</button>
+    </div>
+  </div>
   <script src="/audio.js"></script>
   <script>
     // UI 音效：暂停 / 速度切换 / 主菜单 / 返回编辑器 / 重新开始
@@ -75,8 +98,51 @@
       '#exitPlaytest': 'click',
       '#restartButton': 'button'
     });
+    // 任务面板：点击 sanjiaoxing 切换任务行隐藏/显示
+    document.querySelectorAll('.vg-task-tri').forEach(tri => {
+      tri.style.cursor = 'pointer';
+      tri.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const item = tri.closest('.vg-task-item');
+        const card = item?.querySelector('.vg-task-card');
+        if (!card) return;
+        card.style.display = (card.style.display === 'none') ? '' : 'none';
+      });
+    });
+    // 战场通讯：监听 #eventLog 子节点变化时显示 4s 后渐隐消失
+    (function() {
+      const feed = document.querySelector('.feed-overlay');
+      const log = document.querySelector('#eventLog');
+      if (!feed || !log) return;
+      let hideTimer = null;
+      // 启动后等游戏初始化（4s）再首次显示 4s
+      const showAndFade = () => {
+        feed.classList.add('vg-feed-active');
+        clearTimeout(hideTimer);
+        hideTimer = setTimeout(() => feed.classList.remove('vg-feed-active'), 4000);
+      };
+      // 首次：等 Phaser/boot 启动后（约 1.5s）显示一次"通讯已接通"
+      setTimeout(showAndFade, 1500);
+      // 后续：监听 eventLog 子节点变化（hud.js 写入新事件时）
+      new MutationObserver((muts) => {
+        // 过滤掉只是 textContent 变化的；只要新增 child 才显示
+        if (muts.some(m => m.addedNodes.length > 0)) showAndFade();
+      }).observe(log, { childList: true });
+    })();
+    // 左上角计时器：每秒 +1
+    (function() {
+      const el = document.getElementById('vgClockText');
+      if (!el) return;
+      const start = Date.now();
+      const fmt = (ms) => {
+        const s = Math.floor(ms / 1000);
+        return String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0');
+      };
+      el.textContent = fmt(0);
+      setInterval(() => { el.textContent = fmt(Date.now() - start); }, 1000);
+    })();
   </script>
-  <script type="module" src="/src/auth.js"></script>
-  <script type="module" src="/src/entries/game.js"></script>
+  <script type="module" src="/src/auth.js"></script>
+  <script type="module" src="/src/entries/game.js"></script>
 </body>
 </html>
