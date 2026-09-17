@@ -24,7 +24,7 @@ if (levelId !== TUTORIAL_LEVEL_ID) return;
  *  - onStart: 剧情开始时回调
  *  - onComplete: 剧情结束、教学开始时回调
  * ============================================================ */
-const TUTORIAL_STORY = {
+let TUTORIAL_STORY = {
   enabled: true,
   assetPath: "/assets/tutorial/",
   scenes: [
@@ -44,7 +44,7 @@ const TUTORIAL_STORY = {
 };
 
 /* ---------- 教学结束剧情配置 ---------- */
-const TUTORIAL_END_STORY = {
+let TUTORIAL_END_STORY = {
   enabled: true,
   assetPath: "/assets/tutorial/",
   scenes: [
@@ -59,7 +59,7 @@ const TUTORIAL_END_STORY = {
 };
 
 /* ---------- 教学步骤定义 ---------- */
-const steps = [
+let steps = [
   {
     id: "select",
     title: "选择部队",
@@ -121,6 +121,98 @@ const steps = [
     expectRouteDraw: true,
   },
 ];
+
+/* ================================================================
+   第二关：地形与士气教学 配置
+   ================================================================ */
+const STEPS_LEVEL2 = [
+  {
+    id: "recon",
+    title: "侦察地形",
+    desc: "用左键选中一支部队，观察界面上显示的当前地形类型。不同地形对移动速度、防御和士气有不同影响。",
+    hint: "左键点击蓝色部队，查看地形信息",
+    allowedButtons: [0],
+    requireSelection: false,
+  },
+  {
+    id: "roadmarch",
+    title: "道路快速机动",
+    desc: "选中部队后右键点击前方道路。道路地形移动速度×1.25，且行军士气消耗减半，是快速机动的首选。",
+    hint: "右键点击道路区域，快速推进",
+    allowedButtons: [2],
+    requireSelection: true,
+  },
+  {
+    id: "cottontown",
+    title: "抢占城镇要点",
+    desc: "命令部队进入前方城镇。城镇地形防御修正×0.6（受到伤害大幅降低），是绝佳的防御依托。",
+    hint: "右键点击城镇区域，进入据守",
+    allowedButtons: [2],
+    requireSelection: true,
+  },
+  {
+    id: "towndefense",
+    title: "依托城镇歼敌",
+    desc: "城镇中有敌军来犯。保持部队在城镇中，右键点击红色敌军发动攻击。城镇防御加成会让你伤亡更小。",
+    hint: "右键点击城镇附近的红色敌军",
+    allowedButtons: [2],
+    requireSelection: true,
+  },
+  {
+    id: "crossmountain",
+    title: "穿越复杂地形",
+    desc: "命令部队穿越山地或森林。山地移动速度×0.65但防御×0.75；森林移动×0.6但隐蔽性好。复杂地形虽慢，却适合防御。",
+    hint: "右键点击山地/森林区域，穿越复杂地形",
+    allowedButtons: [2],
+    requireSelection: true,
+  },
+  {
+    id: "waterattack",
+    title: "水域围歼敌军",
+    desc: "水域附近有敌军。注意：水域中移动速度×0.4，攻击力×0.5（站不稳），且每秒掉血。尽量在岸上攻击水中之敌。",
+    hint: "右键点击水域附近的红色敌军",
+    allowedButtons: [2],
+    requireSelection: true,
+  },
+  {
+    id: "moralefinal",
+    title: "士气决胜总攻",
+    desc: "框选所有部队，对残敌发动总攻！持续交战会消耗双方士气，当敌军士气归零且受攻击时会溃逃（承受伤害×1.5），此时正是歼灭良机！",
+    hint: "左键框选所有部队，右键总攻残敌",
+    allowedButtons: [0, 2],
+    requireSelection: false,
+    expectMultiSelect: true,
+  },
+];
+
+/* ---------- 第二关开场剧情 ---------- */
+const STORY2_INTRO = {
+  enabled: true,
+  assetPath: "/assets/tutorial/",
+  scenes: [
+    { talker: "纵队司令部", text: "基础操作训练合格！但战场不是训练场——真正的战斗，地形和士气决定生死！", bg: "images/bg-command.jpg", audio: "drum", alert: false, portrait: "images/port-hq.png" },
+    { talker: "纵队司令部", text: "据前线战报：我部在塔山、宿北方向均与敌激战。指战员反映——不熟悉地形者，往往全军覆没！", bg: "images/bg-command.jpg", audio: "drum", alert: false, portrait: "images/port-hq.png" },
+    { talker: "纵队司令员", text: "道路跑得快，城镇守得住，山地好设伏，水域是绝地！这些道理，必须让每一个指挥员刻在脑子里！", bg: "images/bg-command.jpg", audio: "drum", alert: false, portrait: "images/port-hq.png" },
+    { talker: "纵队司令员", text: "还有士气！部队打光了可以再建，士气垮了就一溃千里！士气低于60，战斗力削弱；低于30，军心动摇；归零且受攻击，当场溃逃！", bg: "images/bg-command.jpg", audio: "", alert: false, portrait: "images/port-hq.png" },
+    { talker: "纵队司令员", text: "现在，进入战术演训场！那里有道路、城镇、山地、森林、水域——每一种地形，都要亲手体会！", bg: "images/bg-command.jpg", audio: "", alert: false, portrait: "images/port-hq.png" },
+    { talker: "前线指挥员", text: "明白！这就进入演训场，务必把地形和士气的要领吃透！", bg: "images/bg-command.jpg", audio: "", alert: false, portrait: "images/port-commander.png" }
+  ],
+  buttonText: "进入战术演训场"
+};
+
+/* ---------- 第二关结束剧情 ---------- */
+const STORY2_OUTRO = {
+  enabled: true,
+  assetPath: "/assets/tutorial/",
+  scenes: [
+    { talker: "通讯员", text: "报告！战术演训全部完成！指挥员已熟练掌握地形利用与士气决胜要领！", bg: "images/bg-command.jpg", audio: "drum", alert: false, portrait: "images/port-hq.png" },
+    { talker: "纵队司令员", text: "好！记住——善用地形者，以少胜多；士气高昂者，以弱胜强！这是我军以弱胜强的法宝！", bg: "images/bg-command.jpg", audio: "drum", alert: false, portrait: "images/port-hq.png" },
+    { talker: "纵队司令员", text: "塔山阻击战、宿北战役……前线的同志们正在用鲜血验证这些道理。你们，准备好接过钢枪了吗？", bg: "images/bg-command.jpg", audio: "", alert: false, portrait: "images/port-hq.png" },
+    { talker: "前线指挥员", text: "时刻准备着！请党和人民放心，我们一定在战场上打出威风、打出胜利！", bg: "images/bg-command.jpg", audio: "", alert: false, portrait: "images/port-commander.png" },
+    { talker: "纵队司令员", text: "好！返回作战地图，真正的战斗在等着你们！", bg: "images/bg-command.jpg", audio: "", alert: false, portrait: "images/port-hq.png" }
+  ],
+  buttonText: "返回作战地图"
+};
 
 /* ---------- 状态 ---------- */
 const state = {
@@ -524,8 +616,8 @@ function buildPanel() {
   panel.id = "tutorialChecklist";
   panel.innerHTML = `
     <div class="tut-header">
-      <div class="tut-tag">COMMAND TRAINING</div>
-      <h3>新兵指挥训练</h3>
+      <div class="tut-tag">${panelTag}</div>
+      <h3>${panelTitle}</h3>
       <div class="tut-progress-bar"><i id="tutProgressFill"></i></div>
     </div>
     <div class="tut-step-list" id="tutStepList"></div>
@@ -624,7 +716,7 @@ function finishTutorial() {
   // 标记教学关卡完成
   try {
     const prog = JSON.parse(localStorage.getItem("war-of-dots.campaign-progress") || "{}");
-    prog["fracture-canyon-tutorial"] = Object.assign({}, prog["fracture-canyon-tutorial"] || {}, { completed: true, wins: 1 });
+    prog[currentLevelId] = Object.assign({}, prog[currentLevelId] || {}, { completed: true, wins: 1 });
     localStorage.setItem("war-of-dots.campaign-progress", JSON.stringify(prog));
   } catch (_) {}
   // 隐藏教学面板，播放结束剧情
@@ -716,20 +808,26 @@ function handlePointerDown(e) {
     }
   }
 
-  // 右键移动/攻击
+  // 右键移动/攻击（支持多关卡步骤ID）
   if (e.button === 2) {
-    if (step.id === "move") {
-      // 延迟确认移动（等游戏处理命令）
+    const moveIds = ["move", "roadmarch", "cottontown", "crossmountain"];
+    const attackIds = ["attack", "towndefense", "waterattack"];
+    const curIdx = state.stepIndex;
+    if (moveIds.includes(step.id)) {
       state.movedConfirmed = true;
       setTimeout(() => {
-        if (state.stepIndex === 1 && state.movedConfirmed) completeCurrentStep();
+        if (state.stepIndex === curIdx && state.movedConfirmed) completeCurrentStep();
       }, 300);
     }
-    if (step.id === "attack") {
+    if (attackIds.includes(step.id)) {
       state.attackedConfirmed = true;
       setTimeout(() => {
-        if (state.stepIndex === 2 && state.attackedConfirmed) completeCurrentStep();
+        if (state.stepIndex === curIdx && state.attackedConfirmed) completeCurrentStep();
       }, 300);
+    }
+    // 最后总攻步骤：框选后右键攻击即完成
+    if (step.id === "moralefinal" && activeSelectionCount() >= 2) {
+      setTimeout(() => { completeCurrentStep(); }, 300);
     }
   }
 }
@@ -827,18 +925,20 @@ function handleContextMenu(e) {
 
 /* ---------- DOM 观察：辅助检测 ---------- */
 function watchDOM() {
+  const selectIds = ["select", "recon"];
+  const dragIds = ["dragselect", "moralefinal"];
   const observer = new MutationObserver(() => {
     if (state.finished) return;
     const step = steps[state.stepIndex];
     const count = activeSelectionCount();
 
-    // 第1步辅助：如果通过其他方式选中了单位
-    if (step.id === "select" && count > 0) {
+    // 选中步骤辅助：如果通过其他方式选中了单位
+    if (selectIds.includes(step.id) && count > 0) {
       completeCurrentStep();
     }
 
-    // 第5步辅助：框选后检测
-    if (step.id === "dragselect" && count >= 2 && state.dragMoved) {
+    // 框选步骤辅助：框选后检测
+    if (dragIds.includes(step.id) && count >= 2 && state.dragMoved) {
       completeCurrentStep();
     }
 
@@ -853,13 +953,45 @@ function watchDOM() {
     const step = steps[state.stepIndex];
     const count = activeSelectionCount();
 
-    if (step.id === "select" && count > 0) completeCurrentStep();
-    if (step.id === "dragselect" && count >= 2) completeCurrentStep();
+    if (selectIds.includes(step.id) && count > 0) completeCurrentStep();
+    if (dragIds.includes(step.id) && count >= 2) completeCurrentStep();
   }, 400);
 }
 
+/* ---------- 关卡检测 ---------- */
+function detectLevelId() {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const lvl = params.get("level") || params.get("id") || params.get("map");
+    if (lvl) return lvl;
+  } catch (_) {}
+  // 兜底：从全局游戏状态尝试获取
+  try {
+    if (window.__currentLevelId) return window.__currentLevelId;
+  } catch (_) {}
+  return "fracture-canyon-tutorial";
+}
+
+let currentLevelId = "fracture-canyon-tutorial";
+let panelTitle = "新兵指挥训练";
+let panelTag = "COMMAND TRAINING";
+
 /* ---------- 初始化 ---------- */
 function init() {
+  // 检测当前关卡，切换教学配置
+  currentLevelId = detectLevelId();
+  if (currentLevelId === "tactical-training-tutorial") {
+    steps = STEPS_LEVEL2;
+    TUTORIAL_STORY = STORY2_INTRO;
+    TUTORIAL_END_STORY = STORY2_OUTRO;
+    panelTitle = "地形与士气训练";
+    panelTag = "TERRAIN & MORALE";
+  }
+  // 重置状态（steps 可能已切换）
+  state.stepIndex = 0;
+  state.completed = new Array(steps.length).fill(false);
+  state.finished = false;
+
   // 彻底隐藏游戏原有的任务进度面板
   const hideMission = () => {
     const mp = document.getElementById("missionPanel");
