@@ -18,7 +18,7 @@ export default {
   'hud.battlefield.title': 'Frontline',
   'hud.selection.none': 'No units selected',
   'hud.selection.count': '{n} unit(s) selected',
-  'hud.tip': 'Left click to select · Drag straight from a unit to move it (no pre-selection) · Shift to add · Right click to move / attack · Hold E + right click / E + drag = forced march',
+  'hud.tip': 'Left click to select · Drag straight from a unit to move it (no pre-selection) · Shift to add · Right click to move / attack · Hold E + right click / E + drag = forced march · Wheel to zoom (cursor-focused)',
   'prep.hint': 'Preparation: issue orders now (routes / forced march / attacks). Units start moving when the countdown ends.',
   'hud.legend.friendly': 'Friendly',
   'hud.legend.hostile': 'Hostile',

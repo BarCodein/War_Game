@@ -7,6 +7,7 @@ import { createTerrainRenderer } from '../terrainRenderer.js';
 import { createFogRenderer } from '../fogRenderer.js';
 import { createUnitRenderer } from '../unitRenderer.js';
 import { createControlLineRenderer } from '../controlLineRenderer.js';
+import { createMapCamera } from '../cameraView.js';
 import { createHud } from '../hud.js';
 import { createSelection } from '../../input/selection.js';
 import { createOrders } from '../../input/orders.js';
@@ -120,6 +121,8 @@ export class GameScene extends Phaser.Scene {
     this.controlLineRenderer = createControlLineRenderer(this, world);
     this.overlayGraphics = this.add.graphics().setDepth(30);
     this.createPrepCountdown();
+    // 地图相机：滚轮以光标为焦点缩放（渲染层只读世界状态，相机不参与模拟）
+    this.mapCamera = createMapCamera(this, world);
 
     // HUD（DOM）
     this.hud = createHud(this, world, this.controller, this.selection, this.orders);
@@ -159,6 +162,7 @@ export class GameScene extends Phaser.Scene {
 
   update(time, delta) {
     const dt = delta / 1000;
+    this.mapCamera.update(dt); // 平滑缩放（渲染侧，与模拟无关；暂停时也让它收尾到位）
     if (!this.controller.paused && !this.world.winner) {
       if (this.controller.isPrepping()) {
         // 开局准备阶段：只走倒计时。模拟与 AI 都不推进——部队不动，但输入照常产生命令，

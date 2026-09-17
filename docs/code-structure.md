@@ -65,6 +65,7 @@ war_game/
 │  │  ├─ fogRenderer.js        #    迷雾罩层
 │  │  ├─ unitRenderer.js       #    单位/城市/血条/裂纹/虚影
 │  │  ├─ controlLineRenderer.js#    实际控制线
+│  │  ├─ cameraView.js         #    地图缩放（滚轮以光标为焦点，纯函数 + Phaser 接线）
 │  │  └─ scenes/               #    Phaser 场景
 │  │     ├─ BootScene.js       #      游戏页启动/路由
 │  │     ├─ GameScene.js       #      游戏主场景（组装各层）
@@ -367,6 +368,12 @@ DOM 编辑器工具栏：
 - 每帧读 `world.controlLinePaths`（已串联 + Chaikin 平滑的折线），用 `values.controlLine.style`（4 px / `0x101414` / 0.82）每条折线一次 `moveTo` 起头再 `lineTo`，最后一次性 `strokePath`（Phaser 的 `MOVE_TO` 会开新子路径，多条战线不会连错）。
 - **永远可见**：底衬 / 主线两个图形 depth = 2、标签 depth = 3，都高于迷雾罩层的 depth = 1（`fogRenderer`）；且用 `style.haloWidth/haloColor/haloAlpha`（9 px 浅色）垫在 `style.lineWidth`（4 px 深色）之下做**双色描边**——深色线单独叠在迷雾/森林上对比度会归零，看起来像被迷雾盖住。
 - 可能在多段（包围、多个战场）时把「实际控制线」标签贴在**最靠上**的那条战线旁边。
+
+### `src/rendering/cameraView.js`
+游戏页的地图相机（`gdd.md §11`）：**滚轮以光标为焦点缩放**，视口夹在地图内。
+- 纯函数（可单测）：`clampZoom`、`worldAt` / `scrollForPoint`（互为逆运算，用来把"光标下的世界点"钉在原处）、`clampScroll`（把可见范围夹进地图，地图比视口小时居中）。
+- `createMapCamera(scene, world, cfg)`：接线 Phaser（`input.on('wheel')` + `cameras.main.setZoom/setScroll`）；`update(dt)` 每帧推进平滑缩放（系数按 60fps 标定、与帧率无关），`reset()` 以当前视野中心为焦点回到 1×，另暴露 `zoom` / `zoomPercent` / `isZoomed` 供 HUD 读数。
+- 只影响渲染相机，不参与模拟：`orders.js` / `selection.js` 用的 `pointer.worldX/worldY` 由 Phaser 换算，缩放后下令与框选仍然精确。
 
 ### `src/rendering/scenes/BootScene.js`
 游戏页启动场景：把 URL 解析为**关卡**再启动游戏。
