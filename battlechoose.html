@@ -84,6 +84,11 @@
           <span class="pin-dot"></span>
           <span class="pin-label">西安</span>
         </div>
+        <!-- 第四关：双堆集战役 —— 跳转链接由脚本里的 battleData[4].level 提供 -->
+        <div class="battle-pin unlocked" data-level="4" style="left:133%; top:132%;">
+          <span class="pin-dot"></span>
+          <span class="pin-label">双堆集战役</span>
+        </div>
 
       </div>
 
@@ -265,8 +270,10 @@
         applyTransform(false);
       });
       window.addEventListener('mouseup', function () {
-        dragging = false;
-        viewport.classList.remove('dragging');
+        if (dragging) {
+          dragging = false;
+          viewport.classList.remove('dragging');
+        }
       });
 
       // 触屏：单指平移 / 双指缩放（带边界 clamp）
@@ -352,17 +359,25 @@
       var mapImg = document.getElementById('mapImg');
       if (mapImg && mapImg.complete) {
         resetMap();
+        var sp = document.querySelector('.battle-pin[data-level="2"]');
+        if (sp && !isTutorialCompleted()) requestAnimationFrame(function () { positionGuideElements(sp); });
       } else if (mapImg) {
-        mapImg.addEventListener('load', resetMap);
+        mapImg.addEventListener('load', function () {
+          resetMap();
+          var sp = document.querySelector('.battle-pin[data-level="2"]');
+          if (sp && !isTutorialCompleted()) requestAnimationFrame(function () { positionGuideElements(sp); });
+        });
         mapImg.addEventListener('error', resetMap);
       } else {
         resetMap();
       }
 
-      // 窗口尺寸变化时，重新 clamp 防越界
+      // 窗口尺寸变化时，重新 clamp 防越界 + 重新定位引导元素
       window.addEventListener('resize', function () {
         clampPan();
         applyTransform();
+        var subeiPin = document.querySelector('.battle-pin[data-level="2"]');
+        if (subeiPin && !isTutorialCompleted()) positionGuideElements(subeiPin);
       });
 
       /* ---------- 关卡点交互 ---------- */
@@ -373,7 +388,8 @@
       var battleData = {
         1: { name: '辽沈战役', date: '1948年9月 — 1948年11月', desc: '东北野战军发起辽沈战役，解放东北全境，奠定全国胜利基础。', level: 'tashan_battle' },
         2: { name: '宿北战役', date: '1946年12月', desc: '山东野战军与华中野战军联合作战，于江苏宿迁北部歼灭国民党军整编第69师，是解放战争战略防御阶段的重要转折。', level: 'subei_battle' },
-        3: { name: '西安', date: '1936年12月', desc: '回到了36年12月的西安', level: 'xian_battle' }
+        3: { name: '西安', date: '1936年12月', desc: '回到了36年12月的西安', level: 'xian_battle' },
+        4: { name: '双堆集战役', date: '1948年11月 — 1948年12月', desc: '中原野战军将黄维兵团包围于双堆集，经二十余日激战将其全歼，淮海战役第二阶段胜利结束。', level: 'shuangduiji_battle' }
       };
 
       function battleHref(level) {
@@ -393,11 +409,11 @@
       var previewEnter = document.getElementById('previewEnter');
 
       var pins = document.querySelectorAll('.battle-pin');
+
       pins.forEach(function (pin) {
         pin.addEventListener('click', function (e) {
           e.stopPropagation();
           var lv = pin.getAttribute('data-level');
-          if (pin.classList.contains('locked')) return; // 锁定关卡不可进入
 
           // 高亮当前 pin
           pins.forEach(function (p) { p.classList.remove('current'); });
@@ -425,16 +441,12 @@
         var pinCenterY = pinRect.top - rect.top + pinRect.height / 2;
 
         var targetScale = 2.0; // 自动聚焦目标缩放
-        // 视口坐标 = tx + scale * 画布坐标，pin 当前的画布坐标 = (pinCenter - tx) / scale。
-        // 想让它缩放后落在视口正中：(pinCenter - tx) / scale * targetScale + tx' = 视口中心。
-        // 旧写法是 tx = 视口中心 - pinCenter * (targetScale/scale) + tx，
-        // 把旧 tx 加了进来（应为按比例扣掉），结果点关卡后地图飞到左上角、关卡点被推出视口。
         var ratio = targetScale / scale;
         tx = rect.width / 2 - (pinCenterX - tx) * ratio;
         ty = rect.height / 2 - (pinCenterY - ty) * ratio;
         scale = targetScale;
 
-        clampPan(); // 和其他交互一样做边界约束，避免把地图拖出视口留下空白
+        clampPan();
         applyTransform();
       }
 

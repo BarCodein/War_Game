@@ -33,7 +33,9 @@ src/
     map.js                   # 地图 JSON 解析、结构校验、版本迁移
     spatial.js               # 均匀网格空间分区（邻居查询）
     influence.js             # 影响力场 + 0 等值线（实际控制线，纯函数）
-    ai.js                    # 脚本敌军指令生成器（走统一命令接口）
+    ai.js                    # 脚本敌军指令生成器（走统一命令接口）+ 战术层调度（engage）
+    ai/                      # 战术层纯函数：tactics.js（效用打分）· squad.js（编队协同）
+                             #   front.js（战线薄弱点/接近轴）· presets.js（难度档）· perception.js（迷雾情报）
     systems/
       movement.js            # 移动、寻路、碰撞软排斥
       combat.js              # 目标选择、攻击冷却、伤害结算
@@ -108,6 +110,7 @@ world.issueCommands(unitIds, command)           // 唯一入口，附带校验
 
 - 命令进入每 tick 清空的队列，由 movement/combat 系统消费。
 - 脚本敌军（`ai.js`）是纯指令生成器：读世界状态（同玩家可见信息或全量，关卡配置决定）→ 定时/条件触发 → 产出上述命令对象。它不直接改状态。
+- **AI 与固定步长**（docs/ai-design.md §3）：AI 由 `createLoop(world, [ai])` 在**每个固定 tick 之后**按同一步长推进，而非按渲染帧调用——实机与 headless（`runSimulation`）节奏一致，AI 决策可复现、可单测。战术层（`engage`）内部再用累加器把决策压到每 `values.ai.decisionIntervalSeconds` 一次。
 
 ## 6. 实体与状态
 

@@ -1,5 +1,6 @@
 import { isSpotted } from '../simulation/systems/fog.js';
 import { t } from '../i18n/index.js';
+import { values } from '../config/index.js';
 
 // 单位贴图（美术资源，置于项目根 assets/texture/，由 Vite 以 /assets/** 提供）。
 // 按「阵营 × 档次」各一张：普通（轻型/步兵师）与精英（重型/装甲师）使用不同贴图；
@@ -43,13 +44,14 @@ const SPRITE_DIAGONAL_FACTOR = 3;
 const SELECTED_TINT = 0x5a5a5a;
 
 // 单位与城市渲染（每帧重绘，只读世界状态）：
-// 层级：terrain 0 < fog 1 < 控制线 2 < 城市/基地 3 < 单位贴图 4 < 覆盖层(裂纹/血条/虚影) 5 < 城市标签 6。
+// 层级：terrain 0 < fog 1 < 控制线 2 < 城市/基地 3 < 单位贴图 4 < 覆盖层(裂纹/血条/虚影) 5 < 城市标签 6 < 状态标签 7。
 // 单位改为贴图精灵（等比缩放至对角线 = 碰撞直径、随行进/交战方向旋转、选中着色加深），
 // 贴图缺失时回退圆形；城市、裂纹、血条/士气条、交战抖动、溃逃闪圈、敌军虚影仍用 Graphics 绘制。
 export function createUnitRenderer(scene, world, selection) {
   // 城市/基地单独一层，深度低于单位精灵，避免基地图案遮挡单位（bugfix）
   const cityGraphics = scene.add.graphics().setDepth(3);
   const graphics = scene.add.graphics().setDepth(5);
+  const badgeGraphics = scene.add.graphics().setDepth(7); // 状态标签背景
   const sprites = new Map(); // unitId → Phaser.GameObjects.Image
   const stats = { ghostCount: 0 };
   // 贴图是否已加载：按纹理键记录（未加载则对应阵营/档次回退圆形）
@@ -79,6 +81,103 @@ export function createUnitRenderer(scene, world, selection) {
     }).setOrigin(0.5).setDepth(6));
   }
 
+  // ─── 状态标签系统（留接口供后续美化） ───
+  // getStatusEffects(unit) 返回当前单位的状态效果列表，供渲染和未来 UI 系统共用。
+  // 每个效果: { icon: string, color: number, bg: number, priority: number }
+  // priority 越高越优先显示（仅显示 priority 最高的一个）。
+  function getStatusEffects(unit) {
+    const effects = [];
+    // 急行军
+    if (unit.forcedMarch) effects.push({ icon: '冲', color: 0xffd700, bg: 0x8b6914, priority: 10 });
+    // 交战
+    if (unit.state === 'combat') effects.push({ icon: '战', color: 0xff6a33, bg: 0x7a2e0d, priority: 9 });
+    // 溃逃
+    if (unit.state === 'rout') effects.push({ icon: '溃', color: 0xff4444, bg: 0x8b1a1a, priority: 8 });
+    // 士气动摇
+    if (unit.morale < values.morale.thresholds.shakenBelow) effects.push({ icon: '摇', color: 0xff8a76, bg: 0x7a3020, priority: 7 });
+    // 士气削弱
+    else if (unit.morale < values.morale.thresholds.weakenedBelow) effects.push({ icon: '弱', color: 0xf2d42a, bg: 0x6b5c0e, priority: 6 });
+    // 水域掉血
+    if (world.terrain.terrainAt(unit.x, unit.y) === values.terrain.codes.water) effects.push({ icon: '水', color: 0x63a6d8, bg: 0x1a3d5c, priority: 5 });
+    // 补给断裂
+    if (!unit.supplied) effects.push({ icon: '断', color: 0xc7c7c7, bg: 0x4a4a4a, priority: 4 });
+    // 地形减速（森林/山地）
+    else {
+      const terrainCode = world.terrain.terrainAt(unit.x, unit.y);
+      if (terrainCode === values.terrain.codes.forest) effects.push({ icon: '林', color: 0x7fd08f, bg: 0x1a4a2a, priority: 3 });
+      else if (terrainCode === values.terrain.codes.mountain) effects.push({ icon: '山', color: 0xb9a87a, bg: 0x4a3d1a, priority: 3 });
+    }
+    return effects;
+  }
+
+  // 标签文字对象池（按 unitId 复用，避免每帧创建/销毁）
+  const badgeTextPool = new Map();
+  function badgeTextFor(unitId) {
+    let text = badgeTextPool.get(unitId);
+    if (!text) {
+      text = scene.add.text(0, 0, '', {
+        fontFamily: '"PingFang SC", "Microsoft YaHei", sans-serif',
+        fontSize: '10px',
+        fontStyle: 'bold',
+        color: '#ffffff',
+      }).setOrigin(0.5).setDepth(8);
+      badgeTextPool.set(unitId, text);
+    }
+    return text;
+  }
+
+  // 重叠检测：检查目标单位附近是否有其他存活单位
+  function isOverlapped(unit) {
+    const threshold = unit.radius * 2;
+    for (const other of world.units) {
+      if (other.id === unit.id || other.state === 'dead') continue;
+      if (other.faction !== unit.faction) continue;
+      if (Math.hypot(other.x - unit.x, other.y - unit.y) < threshold) return true;
+    }
+    return false;
+  }
+
+  // 绘制所有存活单位的状态标签
+  function drawStatusBadges() {
+    badgeGraphics.clear();
+    for (const unit of world.units) {
+      if (unit.state === 'dead') {
+        const text = badgeTextPool.get(unit.id);
+        if (text) text.setVisible(false);
+        continue;
+      }
+      if (unit.faction === 'red' && !isSpotted(world, unit, 'blue')) {
+        const text = badgeTextPool.get(unit.id);
+        if (text) text.setVisible(false);
+        continue;
+      }
+      const effects = getStatusEffects(unit);
+      if (effects.length === 0) {
+        const text = badgeTextPool.get(unit.id);
+        if (text) text.setVisible(false);
+        continue;
+      }
+      // 显示 priority 最高的效果
+      const top = effects.reduce((a, b) => a.priority >= b.priority ? a : b);
+      const alpha = isOverlapped(unit) ? 0.5 : 1;
+      const badgeX = unit.x + unit.radius + 4;
+      const badgeY = unit.y - unit.radius - 2;
+      // 背景圆角矩形
+      const bw = 18;
+      const bh = 14;
+      badgeGraphics.fillStyle(top.bg, 0.85 * alpha);
+      badgeGraphics.fillRoundedRect(badgeX - bw / 2, badgeY - bh / 2, bw, bh, 3);
+      badgeGraphics.lineStyle(1, top.color, 0.6 * alpha);
+      badgeGraphics.strokeRoundedRect(badgeX - bw / 2, badgeY - bh / 2, bw, bh, 3);
+      // 文字
+      const text = badgeTextFor(unit.id);
+      text.setText(top.icon);
+      text.setPosition(badgeX, badgeY);
+      text.setAlpha(alpha);
+      text.setVisible(true);
+    }
+  }
+
   function draw() {
     graphics.clear();
     cityGraphics.clear();
@@ -101,6 +200,7 @@ export function createUnitRenderer(scene, world, selection) {
       }
       drawUnit(unit);
     }
+    drawStatusBadges();
   }
 
   // 按需创建贴图精灵（单位可能在开局后才生产/增援出现），层级低于 overlay graphics 以便裂纹/血条盖在上面

@@ -228,6 +228,16 @@ body {
 .battle-overlay .sub-objective span { display: inline-grid; place-items: center; width: 13px; height: 13px; border: 1px solid #6b4a22; border-radius: 50%; font-family: serif; font-size: 9px; margin-right: 5px; color: #d4b67c; }
 .battle-overlay .sub-objective.done { color: var(--red); }
 .battle-overlay .sub-objective.done span { background: var(--red); border-color: var(--red); color: #f1e3c4; }
+/* 胜利条件弹窗（来自队友分支） */
+.victory-conditions-overlay { position: absolute; z-index: 6; pointer-events: none; background: rgba(20, 12, 4, .82); color: #f1e3c4; border-left: 2px solid var(--red); }
+.victory-conditions-overlay .overlay-heading { margin-bottom: 6px; }
+.victory-conditions-overlay .victory-conditions-text { line-height: 1.4; color: #d4b67c; word-wrap: break-word; overflow-wrap: break-word; }
+.victory-conditions-overlay.prep { top: 25%; left: 50%; width: 440px; transform: translate(-50%, -50%); padding: 24px 28px; border-radius: 6px; border-left: 3px solid var(--red); background: rgba(12, 31, 31, 0.72); opacity: 1; transition: opacity 0.4s ease, transform 0.6s cubic-bezier(0.4, 0, 0.2, 1), width 0.6s cubic-bezier(0.4, 0, 0.2, 1), padding 0.6s cubic-bezier(0.4, 0, 0.2, 1), background 0.6s ease, border-radius 0.6s ease, border-left-width 0.6s ease; }
+.victory-conditions-overlay.prep .overlay-heading { font-size: 16px; border-bottom-color: #6b4a22; }
+.victory-conditions-overlay.prep .victory-conditions-text { font-size: 16px; font-weight: 500; color: #f1e3c4; }
+.victory-conditions-overlay.battle { top: 10px; right: 10px; left: auto; width: 200px; transform: none; padding: 8px 10px; border-radius: 0; border-left: none; border-right: 2px solid var(--red); background: rgba(20, 12, 4, .82); opacity: 1; transition: opacity 0.4s ease, transform 0.6s cubic-bezier(0.4, 0, 0.2, 1), width 0.6s cubic-bezier(0.4, 0, 0.2, 1), padding 0.6s cubic-bezier(0.4, 0, 0.2, 1), background 0.6s ease, border-radius 0.6s ease, border-left-width 0.6s ease, border-right-width 0.6s ease; }
+.victory-conditions-overlay.battle .overlay-heading { font-size: 12px; border-bottom-color: #6b4a22; }
+.victory-conditions-overlay.battle .victory-conditions-text { font-size: 10px; font-weight: 400; color: #d4b67c; }
 .battle-overlay .event-log { margin-top: 6px; max-height: 92px; overflow: hidden; }
 .battle-overlay .event-log p { font-size: 10px; margin: 0; padding: 3px 0; border-bottom: 1px solid rgba(180, 130, 70, .25); line-height: 1.25; color: #f1e3c4; }
 .battle-overlay .event-log time { font: 9px 'IBM Plex Mono', monospace; color: #d4b67c; margin-right: 5px; }

@@ -77,7 +77,39 @@ const MIRROR = {
   'simulation.maxCatchUpTicks': 5,
   'simulation.speeds': [0.5, 1, 2],
   'prep.seconds': 5,
-  'camera': { zoomMin: 1, zoomMax: 3, zoomStep: 1.1, zoomSmoothing: 0.18 },
+  'camera': { zoomMin: 1, zoomMax: 3, zoomStep: 1.1, zoomSmoothing: 1 },
+<<<<<<< HEAD
+=======
+  'ai.preset': 'standard',
+  'ai.presets': {
+    cautious: { reserveRatio: 0.3, pursuitRadius: 180, useForcedMarch: false, terrainBias: 'defensive', feint: false },
+    standard: { reserveRatio: 0.15, pursuitRadius: 320, useForcedMarch: true, terrainBias: 'balanced', feint: false },
+    sly: { reserveRatio: 0, pursuitRadius: 520, useForcedMarch: true, terrainBias: 'mobility', feint: true },
+  },
+  'ai.decisionIntervalSeconds': 0.5,
+  'ai.hysteresis': 0.15,
+  'ai.engageRadius': 320,
+  'ai.localForceRadius': 180,
+  'ai.weights': {
+    threat: 0.3, kill: 0.15, distance: 0.15, value: 0.15, vulnerability: 0.1, chase: 0.15, terrain: 0.15,
+    approach: 0.4,
+  },
+  'ai.squad': {
+    cohesionRadius: 170, cohesionRatio: 0.7, slotSpacing: 34, maxAttackersPerTarget: 2,
+    columnSampleStep: 20, advanceStep: 60,
+  },
+  'ai.weakSpot': { frontSearchRadius: 460, sampleRadius: 170, pointLimit: 24, axisCount: 3, axisSpread: 0.6, standoff: 220 },
+  'ai.terrainBias': {
+    defensive: { defense: 0.7, mobility: 0.1 },
+    balanced: { defense: 0.4, mobility: 0.4 },
+    mobility: { defense: 0.15, mobility: 0.7 },
+  },
+  'ai.reserve': { commitMainRatio: 0.6, commitWeaknessRatio: 0.7, rallyBehind: 170 },
+  'ai.regroup': { hpRatio: 0.45, morale: 40, recoverHpRatio: 0.75, recoverMorale: 60, cooldownSeconds: 12 },
+  'ai.march': { minDistance: 650 },
+  'ai.fog': false,
+  'ai.memory': { fadeSeconds: 25, staleConfidence: 0.35 },
+  'ai.scout': { enabled: true, perGroup: 1, minSquadSize: 3, maxExploreRadius: 900 },
   'tutorial.map': { width: 1280, height: 800, midlineX: 640 },
   'tutorial.forces': { blue: { light: 6, heavy: 2 }, red: { light: 2, heavy: 2 } },
   'tutorial.garrisonRadius': 80,
@@ -85,6 +117,7 @@ const MIRROR = {
   'tutorial.reinforcement': {
     atSecond: 60, count: 2, unitType: 'light', spawn: { x: 1230, y: 400 }, moveTo: { x: 1080, y: 160 },
   },
+>>>>>>> 901499926356e795d4ff7a22d13ea9a6491fd034
 };
 
 function getByPath(root, path) {

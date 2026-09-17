@@ -192,6 +192,7 @@
 
   "ai": {
     "faction": "red",
+    "preset": "standard",
     "fallback": { "anchor": "blueBase" },
     "triggers": [
       {
@@ -290,7 +291,7 @@
         "until": 90,
         "repeatEvery": 10,
         "when": { "capturePoint": "p1", "owner": "enemy" },
-        "then": [{ "type": "attackMove", "target": { "anchor": "dayushan" }, "units": { "group": "landing" } }]
+        "then": [{ "type": "engage", "target": { "anchor": "dayushan" }, "units": { "group": "landing" } }]
       },
       {
         "id": "pressCenter1",
@@ -298,7 +299,7 @@
         "until": 90,
         "repeatEvery": 10,
         "when": { "capturePoint": "p3", "owner": "enemy" },
-        "then": [{ "type": "attackMove", "target": { "anchor": "tashan" }, "units": { "group": "center" } }]
+        "then": [{ "type": "engage", "target": { "anchor": "tashan" }, "units": { "group": "center" } }]
       },
       {
         "id": "pressEast1",
@@ -306,7 +307,7 @@
         "until": 90,
         "repeatEvery": 10,
         "when": { "capturePoint": "p6", "owner": "enemy" },
-        "then": [{ "type": "attackMove", "target": { "anchor": "baitaishan" }, "units": { "group": "east" } }]
+        "then": [{ "type": "engage", "target": { "anchor": "baitaishan" }, "units": { "group": "east" } }]
       },
       {
         "id": "pressLanding2",
@@ -314,7 +315,7 @@
         "until": 150,
         "repeatEvery": 10,
         "when": { "capturePoint": "p1", "owner": "enemy" },
-        "then": [{ "type": "attackMove", "target": { "anchor": "dayushan" }, "units": { "group": "landing" } }]
+        "then": [{ "type": "engage", "target": { "anchor": "dayushan" }, "units": { "group": "landing" } }]
       },
       {
         "id": "pressCenter2",
@@ -322,7 +323,7 @@
         "until": 150,
         "repeatEvery": 10,
         "when": { "capturePoint": "p3", "owner": "enemy" },
-        "then": [{ "type": "attackMove", "target": { "anchor": "tashan" }, "units": { "group": "center" } }]
+        "then": [{ "type": "engage", "target": { "anchor": "tashan" }, "units": { "group": "center" } }]
       },
       {
         "id": "pressEast2",
@@ -330,7 +331,7 @@
         "until": 150,
         "repeatEvery": 10,
         "when": { "capturePoint": "p6", "owner": "enemy" },
-        "then": [{ "type": "attackMove", "target": { "anchor": "baitaishan" }, "units": { "group": "east" } }]
+        "then": [{ "type": "engage", "target": { "anchor": "baitaishan" }, "units": { "group": "east" } }]
       },
       {
         "id": "landingHoldOrWithdraw1",

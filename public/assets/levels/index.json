@@ -27,6 +27,15 @@
       "difficulty": "教学",
       "order": 3,
       "description": "坚守塔山阵地，击退敌军的海陆协同进攻"
+    },
+    {
+      "id": "shuangduiji_battle",
+      "name": "双堆集阻击战",
+      "subtitle": "SHUANGDUIJI BATTLE",
+      "type": "offensive",
+      "difficulty": "教学",
+      "order": 4,
+      "description": "阻止黄维兵团北进增援徐州战场，将其歼灭在双堆集"
     }
   ]
 }

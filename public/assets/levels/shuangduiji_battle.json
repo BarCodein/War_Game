@@ -1,0 +1,203 @@
+{
+  "version": 1,
+  "id": "shuangduiji_battle",
+  "name": "双堆集战役",
+  "subtitle": "SHUANGDUIJI BATTLE",
+  "type": "offensive",
+  "difficulty": "教学",
+  "description": "阻止黄维兵团北进增援徐州战场，将其歼灭在双堆集",
+  "map": "/assets/maps/shuangduiji.json",
+
+  "anchors": {
+    "northRiver": { "spawnId": "s3" },
+    "shuangduiji": { "cityId": "c7"},
+    "nanpingji": { "spawnId": "s2"},
+    "westNorth": { "spawnId": "s4"},
+    "eastSouth": { "spawnId": "s1"},
+    "redDeploy": { "spawnId": "s5"}
+  },
+
+  "forces": [
+    {
+      "faction": "blue",
+      "at": { "spawnId": "s2" },
+      "units": [
+        { "type": "light", "count": 5 },
+        { "type": "heavy", "count": 2 }
+      ]
+    },
+    {
+      "faction": "blue",
+      "at": { "spawnId": "s3" },
+      "units": [
+        { "type": "light", "count": 3 }
+      ]
+    },
+    {
+      "faction": "blue",
+      "at": { "spawnId": "s4" },
+      "units": [
+        { "type": "light", "count": 3 }
+      ]
+    },
+    {
+      "faction": "red",
+      "objective": "annihilate",
+      "group": "north",
+      "at": { "spawnId": "s5" },
+      "units": [
+        { "type": "heavy", "count": 2 },
+        { "type": "light", "count": 1 }
+      ]
+    },
+    {
+      "faction": "red",
+      "group": "pocket",
+      "at": { "cityId": "c6" },
+      "units": [
+        { "type": "light", "count": 2 }
+      ]
+    }
+  ],
+
+  "ai": {
+    "faction": "red",
+    "preset": "standard",
+    "fallback": { "anchor": "nanpingji" },
+    "triggers": [
+      {
+        "id": "attack_nanpingji",
+        "at": { "time": 20 },
+        "actions": [
+          { "type": "engage", "target": { "anchor": "nanpingji" }, "units": { "group": "north" } },
+          {
+            "type": "spawn",
+            "unitType": "light",
+            "count": 1,
+            "at": { "cityId": "c7" },
+            "group": "east",
+            "order": { "type": "attackMove", "target": { "capturePointId": "p6" } }
+          }
+        ]
+      },
+      {
+        "id": "firstWave",
+        "at": { "time": 45 },
+        "actions": [
+          {
+            "type": "spawn",
+            "unitType": "light",
+            "count": 2,
+            "at": { "cityId": "c6" },
+            "group": "north",
+            "spacing": { "x": 0, "y": 24 },
+            "order": { "type": "attackMove", "target": { "anchor": "nanpingji" } }
+          },
+          {
+            "type": "spawn",
+            "unitType": "light",
+            "count": 1,
+            "at": { "cityId": "c7" },
+            "group": "east",
+            "spacing": { "x": 0, "y": 24 },
+            "order": { "type": "attackMove", "target": { "capturePointId": "p6" } }
+          }
+        ]
+      },
+      {
+        "id": "secondWave",
+        "at": { "time": 90 },
+        "actions": [
+          {
+            "type": "spawn",
+            "unitType": "heavy",
+            "count": 1,
+            "at": { "cityId": "c6" },
+            "group": "north",
+            "spacing": { "x": 0, "y": 24 },
+            "order": { "type": "attackMove", "target": { "anchor": "nanpingji" } }
+          },
+          {
+            "type": "spawn",
+            "unitType": "light",
+            "count": 1,
+            "at": { "cityId": "c7" },
+            "group": "east",
+            "spacing": { "x": 0, "y": 24 },
+            "order": { "type": "attackMove", "target": { "capturePointId": "p6" } }
+          }
+        ]
+      },
+      {
+        "id": "reliefWave",
+        "at": { "time": 150 },
+        "actions": [
+          {
+            "type": "spawn",
+            "unitType": "heavy",
+            "count": 1,
+            "at": { "cityId": "c5" },
+            "group": "north",
+            "spacing": { "x": 0, "y": 24 },
+            "order": { "type": "attackMove", "target": { "anchor": "nanpingji" } }
+          },
+          {
+            "type": "spawn",
+            "unitType": "light",
+            "count": 1,
+            "at": { "cityId": "c5" },
+            "group": "east",
+            "spacing": { "x": 0, "y": 24 },
+            "order": { "type": "attackMove", "target": { "capturePointId": "p6" } }
+          }
+        ]
+      }
+    ],
+
+    "rules": [
+      {
+        "id": "pressNorth",
+        "after": 40,
+        "repeatEvery": 15,
+        "when": { "capturePoint": "p7", "owner": "enemy" },
+        "then": [{ "type": "engage", "target": { "anchor": "nanpingji" }, "units": { "group": "north" } }]
+      },
+      {
+        "id": "pressEast",
+        "after": 40,
+        "repeatEvery": 15,
+        "when": { "capturePoint": "p6", "owner": "enemy" },
+        "then": [{ "type": "engage", "target": { "capturePointId": "p6" }, "units": { "group": "east" } }]
+      },
+      {
+        "id": "pocketCounterattack",
+        "after": 40,
+        "repeatEvery": 20,
+        "when": { "city": "c7", "owner": "enemy" },
+        "then": [{ "type": "engage", "target": { "anchor": "shuangduiji" }, "units": { "group": "pocket" } }]
+      },
+      {
+        "id": "northHoldOrWithdraw",
+        "after": 150,
+        "when": { "capturePoint": "p7", "owner": "self" },
+        "then": [{ "type": "hold", "units": { "group": "north" } }],
+        "otherwise": [{ "type": "retreat", "to": { "anchor": "redDeploy" }, "units": { "group": "north" } }]
+      },
+      {
+        "id": "eastHoldOrWithdraw",
+        "after": 150,
+        "when": { "capturePoint": "p6", "owner": "self" },
+        "then": [{ "type": "hold", "units": { "group": "east" } }],
+        "otherwise": [{ "type": "retreat", "to": { "anchor": "redDeploy" }, "units": { "group": "east" } }]
+      },
+      {
+        "id": "pocketHold",
+        "after": 60,
+        "when": { "city": "c7", "owner": "self" },
+        "then": [{ "type": "hold", "units": { "group": "pocket" } }]
+      }
+    ]
+  },
+
+  "victory": { "mode": "annihilative", "faction": "blue" }
+}

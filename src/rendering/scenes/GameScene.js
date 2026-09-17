@@ -105,7 +105,8 @@ export class GameScene extends Phaser.Scene {
     }
 
     this.controller = createGameController();
-    this.loop = createLoop(world);
+    // AI 由固定步长循环驱动（与 headless 测试同一节奏），不再按渲染帧调用（docs/ai-design.md §4）
+    this.loop = createLoop(world, this.ai ? [this.ai] : []);
     // 编辑器试玩跳过开局准备阶段（反复试地图不该每次都等倒计时）
     if (this.fromEditor) this.controller.skipPrep();
 
@@ -169,8 +170,8 @@ export class GameScene extends Phaser.Scene {
         // 所以玩家可以先把轨迹/急行军/进攻命令都排好，倒计时一结束部队直接执行（gdd.md §11）。
         this.controller.tickPrep(dt);
       } else {
+        // AI 跟着固定步长走（createLoop 的 controllers），这里不再单独 update，避免双倍推进
         this.loop.advance(dt, this.controller.speed);
-        this.ai?.update(dt * this.controller.speed);
       }
     }
     // 渲染（每帧，只读状态；暂停时保持静态画面）

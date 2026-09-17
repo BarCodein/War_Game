@@ -423,9 +423,47 @@ h1, h2, h3, h4 {
     box-shadow: 0 0 0 2px #4a4a4a, 0 2px 8px rgba(0, 0, 0, 0.4);
     opacity: 0.7;
 }
+
 @keyframes pin-pulse {
     0%, 100% { transform: scale(1); }
     50% { transform: scale(1.25); }
+}
+
+/* 锁定关卡遮罩与锁头 */
+.battle-pin.locked {
+    pointer-events: auto;
+    cursor: not-allowed;
+}
+.battle-pin.locked .pin-dot {
+    background: #6b6b6b;
+    border-color: #9a9a9a;
+    box-shadow: 0 0 0 2px #4a4a4a, 0 2px 8px rgba(0, 0, 0, 0.4);
+    opacity: 0.6;
+}
+.battle-pin.locked .pin-label {
+    color: #999;
+    border-color: #bbb;
+    background: #e0ddd5;
+    opacity: 0.6;
+}
+.pin-lock-icon {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 12px;
+    height: 12px;
+    pointer-events: none;
+    z-index: 2;
+}
+.pin-lock-icon::before {
+    content: "🔒";
+    font-size: 10px;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    filter: grayscale(0.3);
 }
 
 /* 关卡点气球标签 */

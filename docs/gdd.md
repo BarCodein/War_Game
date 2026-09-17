@@ -312,7 +312,18 @@
 | simulation.fixedStep / maxCatchUpTicks | 1/60 s / 5 |
 | simulation.speeds | 0.5 / 1 / 2 |
 | prep.seconds | 5（开局准备阶段倒计时；期间可下达预先指令，部队与 AI 都不行动。编辑器试玩跳过） |
-| camera：zoomMin / zoomMax / zoomStep / zoomSmoothing | 1 / 3 / 1.1（每格滑轮）/ 0.18（按 60fps 标定的逼近系数） |
+| camera：zoomMin / zoomMax / zoomStep / zoomSmoothing | 1 / 3 / 1.1（每格滑轮）/ 1（向目标缩放逼近系数，1 = 直接到位） |
+| ai：decisionIntervalSeconds / hysteresis / engageRadius / localForceRadius | 0.5 s / 0.15 / 320 px / 180 px |
+| ai.presets：cautious / standard / sly（reserveRatio·追击半径·急行军·地形偏好·佯动） | 0.30·180·否·防守·否 / 0.15·320·是·均衡·否 / 0·520·是·机动·是 |
+| ai.weights：threat / kill / distance / value / vulnerability / chase / terrain / approach | 0.30 / 0.15 / 0.15 / 0.15 / 0.10 / 0.15 / 0.15 / 0.40 |
+| ai.squad：cohesionRadius / cohesionRatio / slotSpacing / maxAttackersPerTarget / columnSampleStep / advanceStep | 170 px / 0.7 / 34 px / 2 人 / 20 px / 60 px |
+| ai.weakSpot：frontSearchRadius / sampleRadius / pointLimit / axisCount / axisSpread / standoff | 460 px / 170 px / 24 / 3 / 0.6 rad / 220 px |
+| ai.reserve：commitMainRatio / commitWeaknessRatio / rallyBehind | 0.6 / 0.7 / 170 px |
+| ai.regroup：hpRatio / morale / recoverHpRatio / recoverMorale / cooldownSeconds | 0.45 / 40 / 0.75 / 60 / 12 s |
+| ai.march.minDistance | 650 px（超过才考虑急行军；档位允许时。急行军代价见 §4：士气 −10/s、掉血 1.5/s） |
+| ai.fog | false（迷雾公平模式默认关；关卡写 `"fog": true` 开启：AI 只看视野内 + lastSeen 记忆） |
+| ai.memory：fadeSeconds / staleConfidence | 25 s / 0.35（置信度 = 1 − 记忆年龄/fadeSeconds） |
+| ai.scout：enabled / perGroup / minSquadSize / maxExploreRadius | true / 1 / 3 / 900 px |
 
 ### 教学关卡数值
 

@@ -54,7 +54,7 @@ export function runSimulation(world, controllers, seconds) {
   }
 }
 
-export function loadTutorialMap() {
+export function loadFractureCanyonMap() {
   const url = new URL('../../public/assets/maps/fracture-canyon.json', import.meta.url);
   return JSON.parse(readFileSync(url, 'utf8'));
 }

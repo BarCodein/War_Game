@@ -56,6 +56,8 @@ export default {
   // 事件与提示
   'event.cityCaptured': '{faction} 占领了城市 {city}',
   'event.surrender': '敌军投降',
+  'event.timeWarning': '注意：剩余时间不足 {time} 秒！',
+  'event.timeWarning.critical': '紧急：仅剩 {time} 秒，任务即将失败！',
   'toast.orderMove': '部队向目标推进。',
   'toast.orderForcedMove': '急行军命令已下达：速度提升，但士气与体力消耗更快。',
   'toast.routeForced': '急行军轨迹已记录：速度提升，但士气与体力消耗更快。',
@@ -79,6 +81,16 @@ export default {
   'victory.next': '下一关',
   'victory.select': '返回关卡选择',
   'victory.restart': '重新开始',
+  // 胜利条件弹窗
+  'victory.conditions.title': '胜利条件',
+  'victory.conditions.annihilative': '在 {time} 秒内歼灭所有指定敌军',
+  'victory.conditions.annihilative.notime': '歼灭所有指定敌军',
+  'victory.conditions.defend': '坚守阵地 {time} 秒',
+  'victory.conditions.defend.notime': '坚守阵地',
+  'victory.conditions.attack': '在 {time} 秒内夺取所有目标据点',
+  'victory.conditions.attack.notime': '夺取所有目标据点',
+  'victory.conditions.captureAll': '占领所有敌方城市',
+  'victory.conditions.default': '占领所有敌方城市',
   // 地图编辑器
   'editor.new': '新建',
   'editor.save': '保存',
