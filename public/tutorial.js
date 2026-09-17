@@ -1,5 +1,6 @@
 (function(){
 "use strict";
+console.log("%c[教学系统] tutorial.js 已加载", "color:#4ec9a0;font-weight:bold");
 
 /* ============================================================
  *  War of Dots · 教学关卡系统
@@ -8,12 +9,6 @@
 
 const TUTORIAL_LEVEL_ID = "fracture-canyon-tutorial";
 
-const params = new URLSearchParams(location.search);
-const hashParams = new URLSearchParams(location.hash.replace(/^#/, ""));
-const levelId = params.get("level") || hashParams.get("level");
-
-// 仅在教学关卡激活
-if (levelId !== TUTORIAL_LEVEL_ID) return;
 
 /* ============================================================
  *  剧情过场配置（接口）
@@ -127,57 +122,85 @@ let steps = [
    ================================================================ */
 const STEPS_LEVEL2 = [
   {
-    id: "recon",
-    title: "侦察地形",
-    desc: "用左键选中一支部队，观察界面上显示的当前地形类型。不同地形对移动速度、防御和士气有不同影响。",
-    hint: "左键点击蓝色部队，查看地形信息",
+    id: "select",
+    title: "选择部队",
+    desc: "用左键点击一支部队将其选中。选中后部队上方会出现选择标记，这是下达一切命令的前提。",
+    hint: "左键点击蓝色部队选中",
     allowedButtons: [0],
     requireSelection: false,
   },
   {
+    id: "plainmarch",
+    title: "平原行军",
+    desc: "选中部队后，右键点击前方平原区域下达移动命令。平原是最基础的地形：移动速度×1.0，防御×1.0，无任何加成或惩罚。",
+    hint: "右键点击前方平原，部队开始移动",
+    allowedButtons: [2],
+    requireSelection: true,
+    targetPoint: { x: 130, y: 550 },
+    targetRadius: 100,
+  },
+  {
     id: "roadmarch",
-    title: "道路快速机动",
-    desc: "选中部队后右键点击前方道路。道路地形移动速度×1.25，且行军士气消耗减半，是快速机动的首选。",
-    hint: "右键点击道路区域，快速推进",
+    title: "道路急行军",
+    desc: "右键点击前方道路。道路是机动的命脉：移动速度×1.25（比平原快25%），且行军士气消耗减半。大部队转移务必走道路！",
+    hint: "右键点击道路区域，体会更快的移动速度",
     allowedButtons: [2],
     requireSelection: true,
+    targetPoint: { x: 350, y: 560 },
+    targetRadius: 70,
   },
   {
-    id: "cottontown",
-    title: "抢占城镇要点",
-    desc: "命令部队进入前方城镇。城镇地形防御修正×0.6（受到伤害大幅降低），是绝佳的防御依托。",
-    hint: "右键点击城镇区域，进入据守",
+    id: "forestmarch",
+    title: "森林潜行",
+    desc: "右键点击前方森林。森林中移动速度×0.6（明显变慢），但防御×0.85，且视野内敌军可见距离缩短——适合隐蔽设伏。",
+    hint: "右键点击森林区域，体会移动减速",
     allowedButtons: [2],
     requireSelection: true,
+    targetPoint: { x: 270, y: 440 },
+    targetRadius: 80,
   },
   {
-    id: "towndefense",
-    title: "依托城镇歼敌",
-    desc: "城镇中有敌军来犯。保持部队在城镇中，右键点击红色敌军发动攻击。城镇防御加成会让你伤亡更小。",
-    hint: "右键点击城镇附近的红色敌军",
+    id: "mountainmarch",
+    title: "山地设伏",
+    desc: "右键点击前方山地。山地移动速度×0.65，但防御×0.75（受到伤害降低25%）。高山（颜色更深）不可通行。山地是防御战的天然屏障。",
+    hint: "右键点击山地区域，体会易守难攻",
     allowedButtons: [2],
     requireSelection: true,
+    targetPoint: { x: 800, y: 220 },
+    targetRadius: 80,
   },
   {
-    id: "crossmountain",
-    title: "穿越复杂地形",
-    desc: "命令部队穿越山地或森林。山地移动速度×0.65但防御×0.75；森林移动×0.6但隐蔽性好。复杂地形虽慢，却适合防御。",
-    hint: "右键点击山地/森林区域，穿越复杂地形",
+    id: "townmarch",
+    title: "城镇据守",
+    desc: "右键点击前方城镇。城镇是防御最强的地形：防御修正×0.6（受到伤害仅为60%）！占领城镇据守，能以少胜多。",
+    hint: "右键点击城镇区域，进入最强防御地形",
     allowedButtons: [2],
     requireSelection: true,
+    targetPoint: { x: 640, y: 360 },
+    targetRadius: 50,
   },
   {
-    id: "waterattack",
-    title: "水域围歼敌军",
-    desc: "水域附近有敌军。注意：水域中移动速度×0.4，攻击力×0.5（站不稳），且每秒掉血。尽量在岸上攻击水中之敌。",
-    hint: "右键点击水域附近的红色敌军",
+    id: "watermarch",
+    title: "水域涉渡",
+    desc: "右键点击前方水域。水域是绝地：移动速度×0.4（最慢），攻击力×0.5（站不稳），且每秒掉血1点！非必要绝不涉水，尽量在岸上攻击水中之敌。",
+    hint: "右键点击水域区域，体会最恶劣的地形",
+    allowedButtons: [2],
+    requireSelection: true,
+    targetPoint: { x: 450, y: 350 },
+    targetRadius: 70,
+  },
+  {
+    id: "terrainattack",
+    title: "依托地形歼敌",
+    desc: "现在你已体会了全部地形！选择有利地形（如城镇、山地）据守，右键点击红色敌军发动攻击。善用地形者，以少胜多。",
+    hint: "右键点击红色敌军，利用地形优势歼敌",
     allowedButtons: [2],
     requireSelection: true,
   },
   {
     id: "moralefinal",
     title: "士气决胜总攻",
-    desc: "框选所有部队，对残敌发动总攻！持续交战会消耗双方士气，当敌军士气归零且受攻击时会溃逃（承受伤害×1.5），此时正是歼灭良机！",
+    desc: "框选所有部队，对残敌发动总攻！持续交战会消耗双方士气：士气<60进入削弱（伤害×0.75），<30动摇（伤害×0.5），归零且受攻击则溃逃（承受伤害×1.5）！趁敌士气崩溃，全歼残敌！",
     hint: "左键框选所有部队，右键总攻残敌",
     allowedButtons: [0, 2],
     requireSelection: false,
@@ -190,12 +213,15 @@ const STORY2_INTRO = {
   enabled: true,
   assetPath: "/assets/tutorial/",
   scenes: [
-    { talker: "纵队司令部", text: "基础操作训练合格！但战场不是训练场——真正的战斗，地形和士气决定生死！", bg: "images/bg-command.jpg", audio: "drum", alert: false, portrait: "images/port-hq.png" },
-    { talker: "纵队司令部", text: "据前线战报：我部在塔山、宿北方向均与敌激战。指战员反映——不熟悉地形者，往往全军覆没！", bg: "images/bg-command.jpg", audio: "drum", alert: false, portrait: "images/port-hq.png" },
-    { talker: "纵队司令员", text: "道路跑得快，城镇守得住，山地好设伏，水域是绝地！这些道理，必须让每一个指挥员刻在脑子里！", bg: "images/bg-command.jpg", audio: "drum", alert: false, portrait: "images/port-hq.png" },
-    { talker: "纵队司令员", text: "还有士气！部队打光了可以再建，士气垮了就一溃千里！士气低于60，战斗力削弱；低于30，军心动摇；归零且受攻击，当场溃逃！", bg: "images/bg-command.jpg", audio: "", alert: false, portrait: "images/port-hq.png" },
-    { talker: "纵队司令员", text: "现在，进入战术演训场！那里有道路、城镇、山地、森林、水域——每一种地形，都要亲手体会！", bg: "images/bg-command.jpg", audio: "", alert: false, portrait: "images/port-hq.png" },
-    { talker: "前线指挥员", text: "明白！这就进入演训场，务必把地形和士气的要领吃透！", bg: "images/bg-command.jpg", audio: "", alert: false, portrait: "images/port-commander.png" }
+    { talker: "纵队司令部", text: "基础操作训练，考核通过！但这只是入门——战场上，决定生死的是地形和士气！", bg: "images/bg-command.jpg", audio: "drum", alert: false, portrait: "images/port-hq.png" },
+    { talker: "纵队司令部", text: "据前线战报，塔山、宿北方向连日激战。不少新指挥员因不熟悉地形、不掌握士气，吃了大亏，甚至全军覆没！", bg: "images/bg-command.jpg", audio: "drum", alert: false, portrait: "images/port-hq.png" },
+    { talker: "纵队司令员", text: "先讲地形！道路——移动速度最快，行军士气消耗减半，是调兵命脉；平原——无加成无惩罚，最基础的战场。", bg: "images/bg-command.jpg", audio: "drum", alert: false, portrait: "images/port-hq.png" },
+    { talker: "纵队司令员", text: "森林——移动慢但隐蔽性好，适合设伏；山地——移动慢但防御强，易守难攻；城镇——防御最强，受到伤害仅六成，是据守要点！", bg: "images/bg-command.jpg", audio: "drum", alert: false, portrait: "images/port-hq.png" },
+    { talker: "纵队司令员", text: "水域——最危险！移动最慢，攻击力减半，还每秒掉血！非万不得已，绝不涉水！高山——不可通行，是天然屏障！", bg: "images/bg-command.jpg", audio: "", alert: false, portrait: "images/port-hq.png" },
+    { talker: "纵队司令员", text: "再说士气！部队打光了可以再建，士气垮了就一溃千里！士气低于六十，战斗力削弱；低于三十，军心动摇；归零且受攻击，当场溃逃！", bg: "images/bg-command.jpg", audio: "", alert: false, portrait: "images/port-hq.png" },
+    { talker: "纵队司令员", text: "友军在身边、靠近己方城市、有补给，士气会回升；孤军深入、长时间交战、急行军，士气会暴跌！善用士气者，以弱胜强！", bg: "images/bg-command.jpg", audio: "", alert: false, portrait: "images/port-hq.png" },
+    { talker: "纵队司令员", text: "现在，进入战术演训场！那里有道路、城镇、山地、森林、水域——每一种地形，每一种士气变化，都要亲手体会！", bg: "images/bg-command.jpg", audio: "", alert: false, portrait: "images/port-hq.png" },
+    { talker: "前线指挥员", text: "明白！请司令员放心！我一定把地形和士气的要领刻在脑子里，随时准备投入真正的战斗！", bg: "images/bg-command.jpg", audio: "", alert: false, portrait: "images/port-commander.png" }
   ],
   buttonText: "进入战术演训场"
 };
@@ -385,6 +411,15 @@ function buildStoryOverlay(opts) {
     <audio id="storySfxTyping" loop><source src="${AP}audio/sfx-typing.mp3" type="audio/mpeg"></audio>
   `;
   document.body.appendChild(overlay);
+  // 所有关卡：用 !important 强制设置样式，排除任何CSS覆盖
+  overlay.style.setProperty("z-index", "2147483647", "important");
+  overlay.style.setProperty("opacity", "1", "important");
+  overlay.style.setProperty("display", "block", "important");
+  overlay.style.setProperty("visibility", "visible", "important");
+  overlay.style.setProperty("position", "fixed", "important");
+  overlay.style.setProperty("inset", "0", "important");
+  overlay.style.setProperty("background", "#111 center/cover no-repeat", "important");
+  overlay.style.setProperty("pointer-events", "auto", "important");
 
   const textEl = document.getElementById("storyText");
   const tipEl = document.getElementById("storyTip");
@@ -393,6 +428,42 @@ function buildStoryOverlay(opts) {
   const portraitEl = document.getElementById("storyPortrait");
   const panelEl = document.getElementById("storyPanel");
   typingAudio = document.getElementById("storySfxTyping");
+  // 强制子元素可见（用 !important）
+  if (textEl) {
+    textEl.style.setProperty("opacity", "1", "important");
+    textEl.style.setProperty("display", "block", "important");
+    textEl.style.setProperty("visibility", "visible", "important");
+    textEl.style.setProperty("color", "#fff", "important");
+    textEl.style.setProperty("position", "relative", "important");
+    textEl.style.setProperty("z-index", "10", "important");
+  }
+  if (portraitEl) {
+    portraitEl.style.setProperty("opacity", "1", "important");
+    portraitEl.style.setProperty("display", "block", "important");
+    portraitEl.style.setProperty("visibility", "visible", "important");
+    portraitEl.style.setProperty("position", "fixed", "important");
+    portraitEl.style.setProperty("z-index", "5", "important");
+    portraitEl.style.setProperty("left", "3%", "important");
+    portraitEl.style.setProperty("top", "50%", "important");
+    portraitEl.style.setProperty("transform", "translateY(-50%)", "important");
+    portraitEl.style.setProperty("width", "45%", "important");
+    portraitEl.style.setProperty("height", "80%", "important");
+  }
+  if (panelEl) {
+    panelEl.style.setProperty("opacity", "1", "important");
+    panelEl.style.setProperty("display", "block", "important");
+    panelEl.style.setProperty("visibility", "visible", "important");
+    panelEl.style.setProperty("position", "fixed", "important");
+    panelEl.style.setProperty("z-index", "6", "important");
+    panelEl.style.setProperty("bottom", "0", "important");
+    panelEl.style.setProperty("left", "0", "important");
+    panelEl.style.setProperty("right", "0", "important");
+  }
+  if (tipEl) {
+    tipEl.style.setProperty("opacity", "1", "important");
+    tipEl.style.setProperty("display", "block", "important");
+  }
+  console.log("[剧情] overlay已添加, textEl=" + !!textEl + ", portraitEl=" + !!portraitEl + ", panelEl=" + !!panelEl);
 
   function playSfx(id) {
     if (!id) return;
@@ -412,6 +483,7 @@ function buildStoryOverlay(opts) {
     let charIdx = 0;
     textEl.innerHTML = '<span class="story-talker">' + talker + '</span><span id="storyTypedContent"></span><span class="story-cursor"></span>';
     const contentEl = document.getElementById("storyTypedContent");
+
     // 播放打字音效
     if (audioUnlocked && typingAudio) {
       typingAudio.currentTime = 0;
@@ -437,10 +509,33 @@ function buildStoryOverlay(opts) {
 
   function renderScene() {
     const s = scenes[curIdx];
+    if (!s) return;
+    console.log("[剧情] renderScene: " + (s.talker||"") + " - " + (s.text||"").substring(0,30));
     overlay.style.backgroundImage = "url('" + AP + s.bg + "')";
-    alertEl.classList.toggle("active", !!s.alert);
-    portraitEl.style.backgroundImage = "url('" + AP + s.portrait + "')";
-    typeText(s.text, s.talker);
+    overlay.style.backgroundSize = "cover";
+    overlay.style.backgroundPosition = "center";
+    if (alertEl) alertEl.classList.toggle("active", !!s.alert);
+    if (portraitEl) {
+      portraitEl.style.backgroundImage = "url('" + AP + s.portrait + "')";
+      portraitEl.style.backgroundSize = "contain";
+      portraitEl.style.backgroundPosition = "left center";
+      portraitEl.style.backgroundRepeat = "no-repeat";
+      portraitEl.style.display = "block";
+      portraitEl.style.opacity = "1";
+      portraitEl.style.visibility = "visible";
+      portraitEl.style.zIndex = "5";
+    }
+    // 直接显示文字
+    if (textEl) {
+      textEl.innerHTML = '<span class="story-talker" style="color:#ffb347;font-weight:bold;display:block;margin-bottom:10px;font-size:23px;">' + (s.talker || "") + '</span><span style="color:#fff;font-size:21px;line-height:1.9;">' + (s.text || "") + '</span>';
+      textEl.style.display = "block";
+      textEl.style.opacity = "1";
+      textEl.style.visibility = "visible";
+      textEl.style.color = "#fff";
+      textEl.style.zIndex = "10";
+      textEl.style.position = "relative";
+    }
+    if (tipEl) tipEl.style.display = "block";
     if (s.audio && audioUnlocked) playSfx(s.audio);
   }
 
@@ -486,6 +581,8 @@ function buildStoryOverlay(opts) {
   function closeStory() {
     stopTyping();
     playSfx("click");
+    // 移除剧情层的键盘事件监听器（必须加 true，与 addEventListener 匹配）
+    document.removeEventListener("keydown", storyKeyHandler, true);
     overlay.classList.add("closing");
     setTimeout(() => {
       overlay.remove();
@@ -495,19 +592,66 @@ function buildStoryOverlay(opts) {
     }, 500);
   }
 
-  // 交互
-  panelEl.addEventListener("click", (e) => { if (e.target !== btnEl) goNext(); });
-  document.addEventListener("keydown", function storyKey(e) {
+  // 交互：第一关用 click+底部面板（原样）；第二关用 pointerdown+全屏（修复被游戏拦截的问题）
+  if (currentLevelId === "tactical-training-tutorial") {
+    overlay.addEventListener("pointerdown", (e) => {
+
+      if (e.target === btnEl) { closeStory(); return; }
+      if (e.target.id === "storySkipBtn") { skipStory(); return; }
+      goNext();
+    }, true);
+  } else {
+    // 第一关：原样，只绑定底部面板的 click
+    panelEl.addEventListener("click", (e) => { if (e.target !== btnEl) goNext(); });
+    document.getElementById("storySkipBtn").addEventListener("click", (e) => { e.stopPropagation(); skipStory(); });
+    btnEl.addEventListener("click", closeStory);
+  }
+  // 命名函数，方便 closeStory 时移除
+  function storyKeyHandler(e) {
     if (e.code === "Space" || e.code === "Enter") {
       e.preventDefault();
+      e.stopPropagation();
       if (btnEl.style.display === "block") closeStory();
       else goNext();
     }
-  });
-  document.getElementById("storySkipBtn").addEventListener("click", (e) => { e.stopPropagation(); skipStory(); });
-  btnEl.addEventListener("click", closeStory);
+  }
+  document.addEventListener("keydown", storyKeyHandler, true);
 
   renderScene();
+}
+
+/* ---------- 地图目标区域标注 ---------- */
+let targetMarker = null;
+function showTargetMarker() {
+  hideTargetMarker();
+  const step = steps[state.stepIndex];
+  if (!step || !step.targetPoint) return;
+  try {
+    const game = window.__rtsGame;
+    if (!game || !game.scene) return;
+    let scene = null;
+    for (const s of game.scene.scenes) {
+      if (s.scene && s.scene.isActive && s.scene.isActive()) { scene = s; break; }
+    }
+    if (!scene) return;
+    const g = scene.add.graphics();
+    const tp = step.targetPoint;
+    const r = step.targetRadius || 80;
+    g.fillStyle(0x4ec9a0, 0.18);
+    g.fillCircle(tp.x, tp.y, r);
+    g.lineStyle(3, 0x4ec9a0, 0.9);
+    g.strokeCircle(tp.x, tp.y, r);
+    g.lineStyle(2, 0xffffff, 0.7);
+    g.lineBetween(tp.x - 8, tp.y, tp.x + 8, tp.y);
+    g.lineBetween(tp.x, tp.y - 8, tp.x, tp.y + 8);
+    targetMarker = g;
+  } catch (e) {}
+}
+function hideTargetMarker() {
+  if (targetMarker) {
+    try { targetMarker.destroy(); } catch (e) {}
+    targetMarker = null;
+  }
 }
 
 /* ---------- 面板构建 ---------- */
@@ -683,9 +827,16 @@ function completeCurrentStep() {
 
   state.completed[idx] = true;
 
-  // 移动步骤完成：显示迷雾消散提示
-  if (idx === 1) {
+  // 第一关：移动步骤完成显示迷雾消散
+  if (currentLevelId === "fracture-canyon-tutorial" && idx === 1) {
     showFogToast();
+  }
+  // 第二关：地形步骤完成显示地形提示
+  if (currentLevelId === "tactical-training-tutorial") {
+    const sid = steps[idx].id;
+    if (TERRAIN_TOASTS[sid]) {
+      showTerrainToast(TERRAIN_TOASTS[sid]);
+    }
   }
 
   // 播放完成音效（如果有）
@@ -707,6 +858,7 @@ function completeCurrentStep() {
   state.lastSelectionSize = activeSelectionCount();
 
   renderSteps();
+  showTargetMarker();
 }
 
 function finishTutorial() {
@@ -732,7 +884,7 @@ function finishTutorial() {
   }, 1200);
 }
 
-// 显示迷雾消散的浮动提示
+// 显示迷雾消散的浮动提示（第一关，保持原样）
 function showFogToast() {
   const toast = document.getElementById("toast");
   if (!toast) return;
@@ -751,7 +903,63 @@ function showFogToast() {
   }, 2200);
 }
 
+// 显示地形提示（第二关，字体更小）
+function showTerrainToast(text) {
+  const toast = document.getElementById("toast");
+  if (!toast) return;
+  toast.textContent = text;
+  toast.style.fontSize = "16px";
+  toast.style.fontWeight = "600";
+  toast.style.letterSpacing = "1px";
+  toast.style.padding = "10px 24px";
+  toast.classList.add("show");
+  setTimeout(() => {
+    toast.classList.remove("show");
+    toast.style.fontSize = "";
+    toast.style.fontWeight = "";
+    toast.style.letterSpacing = "";
+    toast.style.padding = "";
+  }, 2400);
+}
+
+// 地形提示映射（第二关）
+const TERRAIN_TOASTS = {
+  plainmarch: "平原地形 · 移动×1.0 防御×1.0",
+  roadmarch: "道路地形 · 移动×1.25 士气消耗减半",
+  forestmarch: "森林地形 · 移动×0.6 隐蔽性好",
+  mountainmarch: "山地地形 · 移动×0.65 防御×0.75",
+  townmarch: "城镇地形 · 防御×0.6 据守最佳",
+  watermarch: "水域地形 · 移动×0.4 攻击×0.5 每秒掉血"
+};
+
 /* ---------- 事件处理：操作锁定 ---------- */
+// 把 DOM 鼠标事件坐标转换为 Phaser 世界坐标
+function getWorldPoint(e) {
+  try {
+    // 优先用游戏入口暴露的全局实例
+    let g = window.__rtsGame;
+    // 兜底：Phaser.GAMES 数组
+    if (!g && typeof Phaser !== "undefined" && Phaser.GAMES) g = Phaser.GAMES[0];
+    // 兜底：通过 canvas 元素查找
+    if (!g) {
+      const canvas = document.querySelector("canvas");
+      if (canvas && canvas.parentElement) {
+        for (const key in canvas.parentElement) {
+          if (canvas.parentElement[key] && canvas.parentElement[key].input) {
+            g = canvas.parentElement[key];
+            break;
+          }
+        }
+      }
+    }
+    if (g && g.input && g.input.activePointer) {
+      const wp = { x: g.input.activePointer.worldX, y: g.input.activePointer.worldY };
+      return wp;
+    }
+  } catch (err) {}
+  return null;
+}
+
 function handlePointerDown(e) {
   if (state.finished) return;
   if (!isCanvasEvent(e)) return;
@@ -786,6 +994,27 @@ function handlePointerDown(e) {
     return;
   }
 
+  // 检查目标区域（第二关地形步骤：只能点击指定地形区域）
+  if (step.targetPoint && e.button === 2) {
+    const wp = getWorldPoint(e);
+    if (!wp) {
+      // 获取不到世界坐标时也阻止，避免任意点击完成任务
+      blockEvent(e);
+      flashHint(step.hint);
+      return;
+    }
+    const dx = wp.x - step.targetPoint.x;
+    const dy = wp.y - step.targetPoint.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    const radius = step.targetRadius || 120;
+    if (dist > radius) {
+      blockEvent(e);
+      const terrainName = step.title.replace(/行军|急行军|潜行|设伏|据守|涉渡/g, "");
+      flashHint("请点击" + terrainName + "区域（地图中标注的位置），其他区域暂不可点击");
+      return;
+    }
+  }
+
   // Shift 步骤检查
   if (step.requireShift && !(e.shiftKey || e.event?.shiftKey)) {
     blockEvent(e);
@@ -810,8 +1039,8 @@ function handlePointerDown(e) {
 
   // 右键移动/攻击（支持多关卡步骤ID）
   if (e.button === 2) {
-    const moveIds = ["move", "roadmarch", "cottontown", "crossmountain"];
-    const attackIds = ["attack", "towndefense", "waterattack"];
+    const moveIds = ["move", "plainmarch", "roadmarch", "forestmarch", "mountainmarch", "townmarch", "watermarch"];
+    const attackIds = ["attack", "terrainattack"];
     const curIdx = state.stepIndex;
     if (moveIds.includes(step.id)) {
       state.movedConfirmed = true;
@@ -958,18 +1187,25 @@ function watchDOM() {
   }, 400);
 }
 
-/* ---------- 关卡检测 ---------- */
+/* ---------- 关卡检测（与游戏 level-link.js 逻辑一致：query → hash → sessionStorage） ---------- */
+const TUTORIAL_LEVEL_IDS = ["fracture-canyon-tutorial", "tactical-training-tutorial"];
 function detectLevelId() {
   try {
-    const params = new URLSearchParams(window.location.search);
-    const lvl = params.get("level") || params.get("id") || params.get("map");
-    if (lvl) return lvl;
+    // 1. URL 查询参数 ?level=
+    const fromQuery = new URLSearchParams(window.location.search).get("level");
+    if (fromQuery) return fromQuery;
+    // 2. URL hash #level=（服务器重写后 hash 永远保留）
+    const hash = window.location.hash.replace(/^#/, "");
+    const fromHash = new URLSearchParams(hash).get("level");
+    if (fromHash) return fromHash;
+    // 3. sessionStorage（同一标签页内的点击跳转）
+    const fromStorage = window.sessionStorage.getItem("war-of-dots.campaign");
+    if (fromStorage) return fromStorage;
   } catch (_) {}
-  // 兜底：从全局游戏状态尝试获取
-  try {
-    if (window.__currentLevelId) return window.__currentLevelId;
-  } catch (_) {}
-  return "fracture-canyon-tutorial";
+  return null;
+}
+function isTutorialLevel(id) {
+  return TUTORIAL_LEVEL_IDS.includes(id);
 }
 
 let currentLevelId = "fracture-canyon-tutorial";
@@ -977,9 +1213,26 @@ let panelTitle = "新兵指挥训练";
 let panelTag = "COMMAND TRAINING";
 
 /* ---------- 初始化 ---------- */
+let tutorialInitialized = false;
 function init() {
-  // 检测当前关卡，切换教学配置
+  console.log("%c[教学系统] init() 被调用", "color:#4ec9a0");
+  // 防重复初始化
+  if (tutorialInitialized) { console.log("[教学系统] 已初始化，跳过"); return; }
+  // 清理可能残留的旧元素
+  const oldOverlay = document.getElementById("tutorialStoryOverlay");
+  if (oldOverlay) oldOverlay.remove();
+  const oldPanel = document.getElementById("tutorialChecklist");
+  if (oldPanel) oldPanel.remove();
+  const oldStyle = document.getElementById("tutorialStyle");
+  if (oldStyle) oldStyle.remove();
+  // 检测当前关卡，非教学关卡直接退出
   currentLevelId = detectLevelId();
+  console.log("%c[教学系统] 检测到关卡ID: " + currentLevelId, "color:#4ec9a0");
+  if (!currentLevelId || !isTutorialLevel(currentLevelId)) {
+    console.log("%c[教学系统] 非教学关卡，退出", "color:#888");
+    return;
+  }
+  tutorialInitialized = true;
   if (currentLevelId === "tactical-training-tutorial") {
     steps = STEPS_LEVEL2;
     TUTORIAL_STORY = STORY2_INTRO;
@@ -987,22 +1240,13 @@ function init() {
     panelTitle = "地形与士气训练";
     panelTag = "TERRAIN & MORALE";
   }
+  console.log("%c[教学系统] 激活教学: " + panelTitle + " (" + steps.length + "步)", "color:#4ec9a0;font-weight:bold");
   // 重置状态（steps 可能已切换）
   state.stepIndex = 0;
   state.completed = new Array(steps.length).fill(false);
   state.finished = false;
 
-  // 彻底隐藏游戏原有的任务进度面板
-  const hideMission = () => {
-    const mp = document.getElementById("missionPanel");
-    if (mp) { mp.style.display = "none"; mp.style.visibility = "hidden"; }
-  };
-  hideMission();
-  const missionObserver = new MutationObserver(hideMission);
-  missionObserver.observe(document.body, { subtree: true, childList: true });
-  const missionCss = document.createElement("style");
-  missionCss.textContent = "#missionPanel{display:none!important;visibility:hidden!important;}";
-  document.head.appendChild(missionCss);
+  // 保留游戏原有的任务进度面板
 
   // 先播放剧情过场，剧情结束后才开始教学引导
   buildStoryOverlay();
@@ -1023,16 +1267,39 @@ function startTutorial() {
   watchDOM();
 
   const waitCanvas = setInterval(() => {
-    if (battlefield()) clearInterval(waitCanvas);
+    if (battlefield()) {
+      clearInterval(waitCanvas);
+      setTimeout(showTargetMarker, 500);
+    }
   }, 200);
 
   console.log("%c[教学系统] 新兵指挥训练已激活", "color:#4ec9a0;font-weight:bold");
 }
 
-if (document.readyState === "loading") {
-  document.addEventListener("DOMContentLoaded", init);
-} else {
+
+// 直接调用 init（脚本在 body 末尾，DOM 已就绪）
+
+try {
   init();
+  
+} catch (e) {
+  console.error("[教学系统] init 出错:", e);
 }
+
+// 兜底：如果 init 因关卡ID未就绪而退出，轮询等待后重试
+let tutorialRetries = 0;
+const tutorialRetryTimer = setInterval(() => {
+  tutorialRetries++;
+  if (tutorialRetries > 30) { clearInterval(tutorialRetryTimer); return; }
+  // 如果教学已经激活（面板存在），停止重试
+  if (document.getElementById("tutorialChecklist")) { clearInterval(tutorialRetryTimer); return; }
+  // 尝试从 sessionStorage 再次检测（游戏 BootScene 会写入）
+  const retryId = detectLevelId();
+  if (retryId && isTutorialLevel(retryId)) {
+    clearInterval(tutorialRetryTimer);
+    console.log("%c[教学系统] 重试成功，关卡ID: " + retryId, "color:#4ec9a0");
+    init();
+  }
+}, 500);
 
 })();

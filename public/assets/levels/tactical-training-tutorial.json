@@ -10,32 +10,19 @@
     "redBase": {"cityId": "c2"},
     "blueStart": {"spawnId": "s1"},
     "redStart": {"spawnId": "s2"},
-    "townPoint": {"x": 660, "y": 400},
-    "forestPoint": {"x": 280, "y": 420},
-    "mountainPoint": {"x": 820, "y": 300},
-    "waterPoint": {"x": 400, "y": 320},
-    "roadPoint": {"x": 400, "y": 500}
+    "plainPoint": {"x": 130, "y": 550},
+    "roadPoint": {"x": 350, "y": 560},
+    "forestPoint": {"x": 270, "y": 440},
+    "mountainPoint": {"x": 800, "y": 220},
+    "townPoint": {"x": 640, "y": 360},
+    "waterPoint": {"x": 450, "y": 350}
   },
   "forces": [
     {
       "faction": "blue",
       "at": {"anchor": "blueStart"},
       "units": [
-        {"type": "light", "count": 2, "spacing": {"x": 24, "y": 0}}
-      ]
-    },
-    {
-      "faction": "blue",
-      "at": {"x": 660, "y": 420},
-      "units": [
-        {"type": "light", "count": 1}
-      ]
-    },
-    {
-      "faction": "blue",
-      "at": {"x": 380, "y": 340},
-      "units": [
-        {"type": "light", "count": 1}
+        {"type": "light", "count": 4, "spacing": {"x": 30, "y": 20}}
       ]
     },
     {
