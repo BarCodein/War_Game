@@ -83,6 +83,21 @@ export const values = {
       cooldownSeconds: 12,      // 休整完的冷却，避免来回抖动
     },
     march: { minDistance: 650 }, // 距目标超过这个距离且档位允许时才走急行军（代价：士气 -10/s、掉血 1.5/s）
+
+    // ---- 阶段三：迷雾公平 + 侦察（docs/ai-design.md §3.4）----
+    // 默认关闭：旧的关卡（塔山/宿北）行为与平衡完全不变；想公平的关卡写 "ai": { "fog": true }。
+    fog: false,
+    memory: {
+      fadeSeconds: 25,       // lastSeen 记忆的有效期（秒）：超过就当忘了
+      staleConfidence: 0.35, // 置信度低于此值的记忆不再用于行动
+      // 置信度 = 1 - 记忆年龄 / fadeSeconds（可见目标置信度恒为 1）
+    },
+    scout: {
+      enabled: true,         // 公平模式下是否派侦察兵
+      perGroup: 1,           // 每个编队抽几个侦察兵
+      minSquadSize: 3,       // 编队人数小于此值不抽（免得把主力抽空）
+      maxExploreRadius: 900, // 侦察兵不会离出发点超过这个距离（px，防止满地图乱跑）
+    },
   },
 
   // 开局准备阶段（gdd.md §11）：进关卡后先倒计时若干秒，期间**可以下达预先指令**

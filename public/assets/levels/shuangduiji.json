@@ -78,21 +78,6 @@
             "order": { "type": "attackMove", "target": { "anchor": "nanpingji" } }
           }
         ]
-      },
-      {
-        "id": "attack_nanpingji",
-        "at": { "time": 0 },
-        "actions": [
-          {
-            "type": "spawn",
-            "unitType": "heavy",
-            "count": 2,
-            "at": { "anchor": "redDeploy" },
-            "group": "vanguard",
-            "spacing": { "x": 0, "y": 24 },
-            "order": { "type": "attackMove", "target": { "anchor": "nanpingji" } }
-          }
-        ]
       }
       
     ],
@@ -103,7 +88,7 @@
         "after": 76,
         "until": 90,
         "repeatEvery": 10,
-        "when": { "capturePoint": "p1", "owner": "enemy" },
+        "when": { "capturePoint": "p7", "owner": "enemy" },
         "then": [{ "type": "attackMove", "target": { "anchor": "shuangduiji" }, "units": { "group": "vanguard" } }]
       }
     ]

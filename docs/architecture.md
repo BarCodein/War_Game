@@ -35,6 +35,7 @@ src/
     influence.js             # 影响力场 + 0 等值线（实际控制线，纯函数）
     ai.js                    # 脚本敌军指令生成器（走统一命令接口）+ 战术层调度（engage）
     ai/                      # 战术层纯函数：tactics.js（效用打分）· squad.js（编队协同）
+                             #   front.js（战线薄弱点/接近轴）· presets.js（难度档）· perception.js（迷雾情报）
     systems/
       movement.js            # 移动、寻路、碰撞软排斥
       combat.js              # 目标选择、攻击冷却、伤害结算

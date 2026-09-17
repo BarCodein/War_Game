@@ -31,9 +31,33 @@ export function localPower(world, x, y, faction, radius = values.ai.localForceRa
 }
 
 // 局部兵力比：我方战力占比，0.5 = 势均力敌，> 0.5 我方占优（0~1）
-export function localBalance(world, unit, radius = values.ai.localForceRadius) {
-  const { friendly, enemy } = localPower(world, unit.x, unit.y, unit.faction, radius);
+// 公平模式传入 knowns 时，敌方一侧只用"看得见 + 记得住"的敌情估算（docs/ai-design.md 阶段三）
+export function localBalance(world, unit, radius = values.ai.localForceRadius, knowns = null) {
+  const { friendly, enemy: trueEnemy } = localPower(world, unit.x, unit.y, unit.faction, radius);
+  let enemy = trueEnemy;
+  if (knowns) {
+    enemy = 0;
+    for (const item of knowns) {
+      if (Math.hypot(item.x - unit.x, item.y - unit.y) > radius) continue;
+      enemy += estimatedPower(world, item);
+    }
+  }
   return friendly / Math.max(1e-6, friendly + enemy);
+}
+
+// 情报条目的战力估算：可见条目用真实单位，记忆条目按轻型基准 × 置信度折算（诚实近似）
+export function estimatedPower(world, item) {
+  if (item.unit) return combatPower(item.unit, world);
+  const reference = {
+    type: 'light',
+    hp: values.units.light.hp,
+    morale: values.morale.initial,
+    x: item.x,
+    y: item.y,
+    state: 'hold',
+    faction: item.faction,
+  };
+  return combatPower(reference, world) * (item.confidence ?? 1);
 }
 
 // 目标价值：指定歼灭单位 > 重型 > 据点守军 > 普通轻装（0~1）
@@ -62,10 +86,10 @@ export function scoreAttack(world, unit, enemy, ctx = {}) {
   const cap = values.ai.squad.maxAttackersPerTarget;
   if ((ctx.targetCounts?.get(enemy.id) ?? 0) >= cap) return null;
   const distance = Math.hypot(enemy.x - unit.x, enemy.y - unit.y);
-  const near = 1 - Math.min(1, distance / values.ai.engageRadius);
+  const near = 1 - Math.min(1, distance / (ctx.cfg?.engageRadius ?? values.ai.engageRadius));
   const vulnerable = isVulnerable(enemy);
   const terrainFactor = world.terrain.attackMultiplierAt(unit.x, unit.y); // 陆上 1 / 水里 0.5
-  const score = w.threat * localBalance(world, unit)
+  const score = w.threat * localBalance(world, unit, ctx.cfg?.localForceRadius ?? values.ai.localForceRadius, ctx.knowns ?? null)
     + w.kill * (1 - enemy.hp / Math.max(1, enemy.maxHp ?? values.units[enemy.type].hp))
     + w.distance * near
     + w.value * targetValue(world, enemy)

@@ -321,6 +321,9 @@
 | ai.reserve：commitMainRatio / commitWeaknessRatio / rallyBehind | 0.6 / 0.7 / 170 px |
 | ai.regroup：hpRatio / morale / recoverHpRatio / recoverMorale / cooldownSeconds | 0.45 / 40 / 0.75 / 60 / 12 s |
 | ai.march.minDistance | 650 px（超过才考虑急行军；档位允许时。急行军代价见 §4：士气 −10/s、掉血 1.5/s） |
+| ai.fog | false（迷雾公平模式默认关；关卡写 `"fog": true` 开启：AI 只看视野内 + lastSeen 记忆） |
+| ai.memory：fadeSeconds / staleConfidence | 25 s / 0.35（置信度 = 1 − 记忆年龄/fadeSeconds） |
+| ai.scout：enabled / perGroup / minSquadSize / maxExploreRadius | true / 1 / 3 / 900 px |
 
 ### 教学关卡数值
 

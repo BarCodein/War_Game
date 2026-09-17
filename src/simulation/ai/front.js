@@ -1,6 +1,6 @@
 import { values } from '../../config/index.js';
 import { facingTo } from './squad.js';
-import { localPower } from './tactics.js';
+import { combatPower, localPower } from './tactics.js';
 
 // 薄弱点进攻（docs/ai-design.md 阶段二 B）：**复用控制线的 0 等值线段定位战线**，
 // 再沿战线采样局部兵力比，选"离脚本目标近 + 我方相对优势大"的一段作为主攻方向；
@@ -30,24 +30,53 @@ export function frontPointsNear(world, objective, radius = values.ai.weakSpot.fr
 }
 
 // 某点的双方战力（复用 tactics.localPower，走空间网格）
-export function pointStrength(world, point, faction, radius = values.ai.weakSpot.sampleRadius) {
-  const { friendly, enemy } = localPower(world, point.x, point.y, faction, radius);
+// - 全知模式：敌方战力也来自真实单位
+// - 公平模式（给了 knowns）：敌方战力只由"看得见 + 记得住"的敌情估算，
+//   记忆条目没有实体，按轻型单位的基准战力 × 置信度折算（诚实近似，见 docs/ai-design.md §3.4）
+export function pointStrength(world, point, faction, radius = values.ai.weakSpot.sampleRadius, knowns = null) {
+  const { friendly, enemy: trueEnemy } = localPower(world, point.x, point.y, faction, radius);
+  let enemy = trueEnemy;
+  if (knowns) {
+    enemy = 0;
+    for (const item of knowns) {
+      if (Math.hypot(item.x - point.x, item.y - point.y) > radius) continue;
+      const unit = item.unit ?? { type: 'light', hp: values.units.light.hp, morale: values.morale.initial, x: item.x, y: item.y, state: 'hold', faction: item.faction };
+      enemy += combatPower(unit, world) * (item.ghost ? item.confidence : 1);
+    }
+  }
   const total = friendly + enemy;
   // 空点：没有任何部队 → 对"薄弱点"来说是最容易拿下的一段，占比记 1
   return { friendly, enemy, ratio: total <= 1e-6 ? 1 : friendly / total };
+}
+
+// 公平模式下的"自建战线"：只用已知敌情（可见 + 记忆）的位置当作战线采样点。
+// 不看全知的影响力场——那是双方全知算出来的，公平模式用它就等于作弊。
+export function frontFromKnowns(knowns, objective, radius = values.ai.weakSpot.frontSearchRadius) {
+  const limit = values.ai.weakSpot.pointLimit;
+  const found = [];
+  for (const item of knowns) {
+    if (Math.hypot(item.x - objective.x, item.y - objective.y) > radius) continue;
+    const key = `${Math.round(item.x / 40)},${Math.round(item.y / 40)}`;
+    if (found.some(point => point.key === key)) continue;
+    found.push({ key, x: item.x, y: item.y, confidence: item.confidence });
+    if (found.length >= limit) break;
+  }
+  return found;
 }
 
 /**
  * 选主攻段：在目标附近的战线点里，挑一个"我方相对优势大（敌方薄弱）且离目标近"的点。
  * 没有任何战线点（还没接触/没有城市据点影响力）时返回 null，调用方退回"直接接近目标"。
  */
-export function chooseWeakSpot(world, { objective, faction, cfg = values.ai }) {
-  const candidates = frontPointsNear(world, objective, cfg.weakSpot.frontSearchRadius);
+export function chooseWeakSpot(world, { objective, faction, cfg = values.ai, knowns = null, fogAware = false }) {
+  const candidates = fogAware
+    ? frontFromKnowns(knowns ?? [], objective, cfg.weakSpot.frontSearchRadius) // 公平：自建战线
+    : frontPointsNear(world, objective, cfg.weakSpot.frontSearchRadius);       // 全知：读控制线
   if (candidates.length === 0) return null;
   const radius = cfg.weakSpot.sampleRadius;
   let best = null;
   for (const point of candidates) {
-    const strength = pointStrength(world, point, faction, radius);
+    const strength = pointStrength(world, point, faction, radius, fogAware ? (knowns ?? []) : null);
     // 敌方越弱（ratio 越高）越好；离目标越近越好
     const proximity = 1 - Math.min(1, Math.hypot(point.x - objective.x, point.y - objective.y)
       / Math.max(1, cfg.weakSpot.frontSearchRadius));
@@ -89,13 +118,15 @@ export function terrainPreference(world, point, biasName = 'balanced') {
  * 给一个小队选接近轴：在若干轴线里挑"敌方最弱 + 地形合本档口味 + 离自己最近"的一条。
  * 返回值是 **停战线上的一个点**（不是脚本目标本身）——部队先推进到这里，再压向目标。
  */
-export function chooseApproach(world, { unit, objective, faction, cfg = values.ai, taken = new Set() }) {
+export function chooseApproach(world, { unit, objective, faction, cfg = values.ai, taken = new Set(), knowns = null, fogAware = false }) {
   const axes = approachAxes(objective, { x: unit.x, y: unit.y }, cfg);
   const biasName = cfg.terrainBias;
   let best = null;
   for (const axis of axes) {
     if (taken.has(axis.index)) continue;
-    const strength = pointStrength(world, axis, faction, cfg.weakSpot.sampleRadius);
+    const strength = fogAware
+      ? pointStrength(world, axis, faction, cfg.weakSpot.sampleRadius, knowns ?? [])
+      : pointStrength(world, axis, faction, cfg.weakSpot.sampleRadius);
     const travel = Math.hypot(axis.x - unit.x, axis.y - unit.y);
     const proximity = 1 - Math.min(1, travel / Math.max(1, cfg.weakSpot.standoff * 2));
     const terrain = terrainPreference(world, axis, biasName);
@@ -106,11 +137,13 @@ export function chooseApproach(world, { unit, objective, faction, cfg = values.a
 }
 
 // 佯动分队（sly 档）：给编队里最近的一小撮单位安排一条"侧翼接近轴"，只推进到停战线并牵制
-export function feintAxis(world, { mainAxis, objective, faction, cfg = values.ai }) {
+export function feintAxis(world, { mainAxis, objective, faction, cfg = values.ai, knowns = null, fogAware = false }) {
   const axes = approachAxes(objective, { x: objective.x, y: objective.y + 1 }, cfg);
   const mainIndex = mainAxis?.index ?? 0;
   const other = axes.find(axis => axis.index !== mainIndex) ?? axes[0];
-  const strength = pointStrength(world, other, faction, cfg.weakSpot.sampleRadius);
+  const strength = fogAware
+    ? pointStrength(world, other, faction, cfg.weakSpot.sampleRadius, knowns ?? [])
+    : pointStrength(world, other, faction, cfg.weakSpot.sampleRadius);
   return { ...other, ...strength };
 }
 

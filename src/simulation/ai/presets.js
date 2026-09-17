@@ -28,11 +28,15 @@ export function resolveAiConfig(preset, tuning) {
   return cfg;
 }
 
-// 关卡 JSON 里 ai.preset / ai.tuning 的校验（由 level.js 调用）
+// 关卡 JSON 里 ai.preset / ai.tuning / ai.fog 的校验（由 level.js 调用）
 export function validateAiTuning(ai, where = 'ai') {
   const errors = [];
   if (ai?.preset !== undefined && !AI_PRESET_NAMES.includes(ai.preset)) {
     errors.push(`${where}.preset must be one of ${AI_PRESET_NAMES.join(' | ')}`);
+  }
+  // 阶段三：迷雾公平开关（默认关，关卡显式开启）
+  if (ai?.fog !== undefined && typeof ai.fog !== 'boolean') {
+    errors.push(`${where}.fog must be a boolean`);
   }
   if (ai?.tuning !== undefined) {
     if (!ai.tuning || typeof ai.tuning !== 'object') {
