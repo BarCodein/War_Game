@@ -78,8 +78,6 @@ const MIRROR = {
   'simulation.speeds': [0.5, 1, 2],
   'prep.seconds': 5,
   'camera': { zoomMin: 1, zoomMax: 3, zoomStep: 1.1, zoomSmoothing: 1 },
-<<<<<<< HEAD
-=======
   'ai.preset': 'standard',
   'ai.presets': {
     cautious: { reserveRatio: 0.3, pursuitRadius: 180, useForcedMarch: false, terrainBias: 'defensive', feint: false },
@@ -110,14 +108,6 @@ const MIRROR = {
   'ai.fog': false,
   'ai.memory': { fadeSeconds: 25, staleConfidence: 0.35 },
   'ai.scout': { enabled: true, perGroup: 1, minSquadSize: 3, maxExploreRadius: 900 },
-  'tutorial.map': { width: 1280, height: 800, midlineX: 640 },
-  'tutorial.forces': { blue: { light: 6, heavy: 2 }, red: { light: 2, heavy: 2 } },
-  'tutorial.garrisonRadius': 80,
-  'tutorial.clearRadius': 200,
-  'tutorial.reinforcement': {
-    atSecond: 60, count: 2, unitType: 'light', spawn: { x: 1230, y: 400 }, moveTo: { x: 1080, y: 160 },
-  },
->>>>>>> 901499926356e795d4ff7a22d13ea9a6491fd034
 };
 
 function getByPath(root, path) {

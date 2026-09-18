@@ -264,7 +264,9 @@ describe('level：宿北战役（歼灭关卡 · 山地隘口）', () => {
     runSimulation(world, [redAi, blueCommander], 300);
 
     expect(world.winner).toBe('blue');
-  });
+    // 跑满 300 秒模拟在 CI/本机约 5～7 秒，超出 Vitest 默认 5 秒，显式给足超时预算
+    // （与其他重型关卡模拟用例一致）
+  }, 30000);
 });
 
 describe('level：双堆集战役（歼灭关卡 · 围攻黄维兵团）', () => {
