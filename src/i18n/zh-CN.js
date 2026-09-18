@@ -16,7 +16,12 @@ export default {
   'hud.city.title': '城市状态',
   'hud.city.capture': '占领进度',
   'hud.city.production': '生产倒计时',
-  'hud.city.supply': '补给占用',
+  'hud.city.supply': '已补给单位',
+  'hud.supply.capacity': '城市运力（点）',
+  // 补给线（选中单位时显示，gdd.md §7）
+  'hud.supply.cut': '补给被切断',
+  'hud.supply.short': '补给不足：城中运力不够',
+  'hud.supply.noPath': '无补给线可通',
   // 战场
   'hud.battlefield.eyebrow': 'TACTICAL VIEW / 断裂峡谷',
   'hud.battlefield.title': '前线态势',

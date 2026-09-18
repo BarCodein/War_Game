@@ -14,7 +14,9 @@ import { values } from '../config/index.js';
 
 // tick 内系统执行顺序固定，保证确定性（architecture.md §4）：
 // movement → combat → morale → supply → capture → fog → controlLine → victory
-// controlLine 只读前面的结果（位置 / 城市归属 / 占领进度）做纯视觉统计，不回头影响任何规则。
+// controlLine 汇总的是本 tick 之前的战况（位置 / 城市归属 / 占领进度）；supply 读的是
+// **上一 tick** 的控制线场（10 Hz 重算，最多陈旧 16 ms），用来判定补给线能不能穿过某格
+// —— 顺序不变，也不引入互相依赖（gdd.md §7、§9）。
 const TICK_ORDER = [updateMovement, updateCombat, updateMorale, updateSupply, updateCapture, updateFog, updateControlLine, updateVictory];
 
 // 世界状态容器：纯数据 + tick 编排 + 统一命令入口。
@@ -32,12 +34,24 @@ export class World {
     this.capturePoints = map.capturePoints.map(point => makeCapturePoint(point));
     this.units = [];
     this.fog = { blue: createFogGrid(map.terrain), red: createFogGrid(map.terrain) };
-    // 实际控制线（纯视觉，gdd.md §9）：影响力网格在上面第一次 tick 时按地图尺寸建立。
+    // 实际控制线（gdd.md §9）：影响力网格在上面第一次 tick 时按地图尺寸建立。
+    // 它同时是**补给线的屏障**（supply 系统读它判定"敌方实际控制区"，见 supplyPath.js）：
+    // 渲染与规则用同一份数据，屏幕上看到的控制线就是补给线的边界。
     this.controlLine = null;
     this.controlLineSegments = []; // 原始等值线线段
     this.controlLinePaths = [];    // 串联 + 平滑后的折线（渲染用）
     this.unitMarks = [];           // 存活单位的位置/阵营（单位所在格硬保证用，复用数组）
     this.controlLineTick = 0;
+    // 补给（gdd.md §7）：每个阵营一张「到最近己方城市的代价场」（多源 Dijkstra，地形加权、
+    // 不穿敌方控制区）。代价场每 values.supply.fieldRefreshSeconds 重算一次（只取决于城市与控制线），
+    // 分配每 refreshSeconds 重跑一次；渲染层复用同一份场，靠 supplyToken 判断路径缓存是否过期。
+    this.supplyFields = { blue: null, red: null };
+    this.supplyMasks = { blue: null, red: null }; // 敌方实际控制区掩码（重算代价场时同批更新）
+    this.supplyScratch = null;      // 剔除"点数用光的城"后重算代价场用的临时场（两阵营共用）
+    this.supplyToken = 0;           // 每次重算代价场 +1
+    this.supplyTimer = Infinity;    // 累加到 refreshSeconds 就重跑分配（初值 Infinity = 第一 tick 立刻算）
+    this.supplyFieldTimer = Infinity; // 累加到 fieldRefreshSeconds 就重算代价场
+    this.citySupplyLoad = new Map(); // cityId → 本轮已支出的吞吐点数（HUD / 生产暂停判定）
     this.events = [];   // 本 tick 产生的事件（morale 消费 unitDied 后于 tick 末清空）
     this.history = [];  // 事件日志（HUD 战场通讯用）
     // 伤亡统计（gdd.md §11）：按阵营累计**实际损失的血量**，1 点血 = 1 点伤亡。

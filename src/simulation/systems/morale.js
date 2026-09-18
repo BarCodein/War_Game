@@ -40,7 +40,10 @@ function applyModifiers(world, unit, dt) {
   if (nearOwnCity(world, unit, m.ranges.city)) {
     rate += m.perSecond.cityNearby + values.cities.recovery.moralePerSecond; // 城市士气修正 + 城市恢复（gdd.md §6、§7）
   }
-  rate += unit.supplied ? m.perSecond.supplied : m.perSecond.unsupplied;
+  // 补给：满额 +1/s；缺补给时按缺口比例缩放惩罚（实收 60% → 只吃 40% 的 -2/s，gdd.md §7）
+  rate += unit.supplied
+    ? m.perSecond.supplied
+    : m.perSecond.unsupplied * (1 - (unit.supplyRatio ?? 0));
   const mode = (unit.route.length === 0) ? 1 : m.perSecond.attack;  // 判别防守还是运动战
   if (unit.underFire) {
     rate += m.perSecond.inCombat * mode; // 正被敌方瞄准：全额交战消耗

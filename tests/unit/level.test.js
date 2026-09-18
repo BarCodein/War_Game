@@ -407,8 +407,9 @@ describe('level：双堆集战役（歼灭关卡 · 围攻黄维兵团）', () =
 
     // 结构：援军从东南角（eastSouth = s1）投入，且所有命令都限定在 relief 编队内
     // ——否则蓝方剧本会抢走玩家的指挥权
-    const actions = blueScript.triggers.flatMap(trigger => trigger.actions)
-      .concat(blueScript.rules.flatMap(rule => [...(rule.then ?? []), ...(rule.otherwise ?? [])]));
+    // 注：蓝方剧本可以只有 triggers（没有条件规则），rules 缺省时按空数组处理
+    const actions = (blueScript.triggers ?? []).flatMap(trigger => trigger.actions ?? [])
+      .concat((blueScript.rules ?? []).flatMap(rule => [...(rule.then ?? []), ...(rule.otherwise ?? [])]));
     const spawns = actions.filter(action => action.type === 'spawn');
     expect(spawns.length).toBeGreaterThan(0);
     expect(spawns.every(action => action.at?.anchor === 'eastSouth')).toBe(true);

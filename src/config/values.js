@@ -174,10 +174,56 @@ export const values = {
     capture: { radius: 60, perUnitPerSecond: 0.05, capPerSecond: 0.15, decayPerSecond: 0.03 }, // 沿用城市占领规则
   },
 
+  // 补给（gdd.md §7）：不再按直线就近分配，改成**沿最短路径的运力结算**。
+  //   1. 单位 → 己方城市的最短路径（地形加权，「等效像素」= 平原上走的距离），
+  //      路径**不可穿过敌方实际控制区**（读 world.controlLine 的带符号影响力）；
+  //   2. 城市有吞吐点数（capacityPerCity），按「路径代价最小的单位优先」分配
+  //      —— 也就是「城市优先补给离自己最近的单位」；某城点数用光就顺延到下一座城；
+  //   3. 城市为把补给送到单位手里要付 demand ÷ factor 点（factor 由路径代价决定），
+  //      单位实收 = 付出的点数 × factor；因此**近城一座就够，远城要好几座城合力**；
+  //   4. 实收 < 需求 = 缺补给：损耗与士气惩罚按缺口比例缩放（实收 60% 就只吃 40% 的惩罚）；
+  //      所有城都够不着 / 点数都用光 = 断补（实收 0）。
   supply: {
-    capacityPerCity: 5,
-    attritionHpPerSecond: 1,
-    attritionMoralePerSecond: 2,
+    demandPerUnit: 1,       // 每个单位的需求（点）
+    capacityPerCity: 5,     // 每座城的吞吐点数（5 点 = 5 个近城的满额单位，远城供不了这么多）
+    attritionHpPerSecond: 1,     // 完全断补（实收 0）时的血量损耗；按缺口比例缩放
+    attritionMoralePerSecond: 2, // 完全断补时的士气惩罚；按缺口比例缩放
+    refreshSeconds: 0.5,    // 分配重算间隔（单位位置一直在变，这步很便宜）
+    // 代价场（多源 Dijkstra）重算间隔。代价场只取决于城市 + 敌方控制区，与单位位置无关，
+    // 所以它比分配算得稀得多：500 单位的地图上，一次全图 Dijkstra 是这整套里最贵的一步。
+    fieldRefreshSeconds: 1,
+    enemyControlBlocks: true, // 补给线不可穿过敌方实际控制区（false = 只看地形，便于对比调试）
+    waterIsBarrier: false,  // 水域是否阻断补给线（默认否：水能蹚过去，只是代价很贵，见 moveMultiplier）
+
+    // 距离因子：factor = clamp(1 − (cost − fullCost) / (zeroCost − fullCost), min, 1)
+    //   cost ≤ 100  → 1.0（近城，一座城就能喂饱一个单位）
+    //   100 → 900   → 线性衰减
+    //   cost ≥ 900  → 0.2（远城仍能救急，只是要花 5 点运力才能送到 1 点，见 gdd.md §7）
+    factor: { fullCost: 100, zeroCost: 900, min: 0.2 },
+
+    path: {
+      // 寻路网格边长（px）：比 10 px 的地形格粗一档。补给线是战略级线条，不需要逐 10 px 精度，
+      // 粗一档让 500 单位场景的重算开销降到约 1/4（与控制线同一个思路，见 gdd.md §9）。
+      cellSize: 20,
+      // 搜索上界（等效像素）：代价超过它的城视为够不着 —— 也就是**补给线的最大长度**。
+      // 因子下限 0.2 落在 900，再远的城要掏 ≥ 1500/900×1 ≈ 1.7 点才送到 1 点（超过一座城的容量），
+      // 实战中没有意义；同时这也是主要的性能护栏：可搜索面积按它的平方缩小。
+      maxCost: 1500,
+      // 判定「敌方实际控制区」的影响力阈值：|影响力| 不超过它的格子不算被谁实际控制。
+      // 取 partitionFillValue(0.01) —— 控制线把**无人区域**按最近阵营铺满时赋的就是这个弱值，
+      // 那是画线用的归属，不是"敌人真的控制着这里"。不排除它的话，一个孤立的敌军单位
+      // 会凭一圈虚线归属把几百像素外的己方补给线整条掐断（"实际控制"变成了"名义归属"）。
+      controlBlockMin: 0.01,
+    },
+
+    // 补给线渲染（选中单位时显示）：线宽/不透明度随「实收 ÷ 需求」变化，
+    // 断补时改画红色虚线，并在切断处打叉。
+    style: {
+      color: 0x1f6fb2, cutColor: 0xc0392b, alpha: 0.9,
+      width: { min: 1.5, max: 5 },
+      dash: { length: 12, gap: 8 },
+      cutMarkSize: 7,
+    },
   },
 
   fog: {

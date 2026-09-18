@@ -13,7 +13,12 @@ export default {
   'hud.city.title': 'City Status',
   'hud.city.capture': 'Capture progress',
   'hud.city.production': 'Production in',
-  'hud.city.supply': 'Supply',
+  'hud.city.supply': 'Units supplied',
+  'hud.supply.capacity': 'City capacity (pts)',
+  // Supply lines (shown for selected units, gdd.md §7)
+  'hud.supply.cut': 'SUPPLY CUT',
+  'hud.supply.short': 'UNDER-SUPPLIED: CITY CAPACITY SHORT',
+  'hud.supply.noPath': 'NO SUPPLY ROUTE',
   'hud.battlefield.eyebrow': 'TACTICAL VIEW / FRACTURE CANYON',
   'hud.battlefield.title': 'Frontline',
   'hud.selection.none': 'No units selected',

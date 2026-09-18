@@ -147,7 +147,7 @@ export function createHud(scene, world, controller, selection, orders) {
       <div class="unit-card ${selection.isSelected(unit.id) ? 'active' : ''}" data-id="${unit.id}">
         <span class="unit-avatar blue-avatar">●</span>
         <span><b>${t('unit.fullname', { faction: t('faction.blue'), name: t(`unit.name.${unit.type}`), id: unit.id })}</b>
-          <small>${t(`unit.status.${statusLabel(unit)}`)} · 血量 ${Math.round(unit.hp)} · 士气 ${Math.round(unit.morale)}</small></span>
+          <small>${t(`unit.status.${statusLabel(unit)}`)} · 血量 ${Math.round(unit.hp)} · 士气 ${Math.round(unit.morale)} · 补给 ${Math.round((unit.supplyRatio ?? 1) * 100)}%</small></span>
         <span class="unit-hp"><i style="width:${unit.hp / unit.maxHp * 100}%"></i></span>
       </div>`).join('');
     els.unitCount.textContent = t('hud.units.count', { n: units.length.toString().padStart(2, '0') });
@@ -168,14 +168,21 @@ export function createHud(scene, world, controller, selection, orders) {
       return;
     }
     const redCity = world.cities.find(city => city.faction === 'red');
-    const supplied = world.units.filter(unit => unit.state !== 'dead' && unit.faction === 'blue' && unit.supplied).length;
+    // 补给读数（gdd.md §7）：按「已补给单位」与「城市运力点数」两个口径显示。
+    // 运力是吞吐点数：喂一个近城单位花 1 点，远城要花 1/因子 点，所以两栏各自说明一件事。
+    const blueUnits = world.units.filter(unit => unit.state !== 'dead' && unit.faction === 'blue');
+    const supplied = blueUnits.filter(unit => unit.supplied).length;
+    const blueCities = world.cities.filter(city => city.faction === 'blue');
+    const load = blueCities.reduce((sum, city) => sum + (world.citySupplyLoad.get(city.id) ?? 0), 0);
+    const capacity = blueCities.length * values.supply.capacityPerCity;
     // 生产已关闭时不显示倒计时（否则会显示一个永远不会归零的假倒计时）
     const productionRow = values.cities.production.enabled
       ? `<div class="status-row"><span>${t('hud.city.production')}</span><b>${Math.max(0, values.cities.production.interval - blueCity.productionTimer).toFixed(0)} s</b></div>`
       : '';
     els.cityCard.innerHTML = `
       ${productionRow}
-      <div class="status-row"><span>${t('hud.city.supply')}</span><b>${supplied} / ${values.supply.capacityPerCity}</b></div>
+      <div class="status-row"><span>${t('hud.city.supply')}</span><b>${supplied} / ${blueUnits.length}</b></div>
+      <div class="status-row"><span>${t('hud.supply.capacity')}</span><b>${load.toFixed(1)} / ${capacity}</b></div>
       ${redCity ? `
       <div class="status-row"><span>${t('hud.city.capture')} · ${t('city.label', { faction: t('faction.red') })}</span><b>${redCity.captureProgress.toFixed(0)}%</b></div>
       <div class="progress"><i style="width:${redCity.captureProgress}%"></i></div>` : ''}

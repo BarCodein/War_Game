@@ -7,6 +7,7 @@ import { createTerrainRenderer } from '../terrainRenderer.js';
 import { createFogRenderer } from '../fogRenderer.js';
 import { createUnitRenderer } from '../unitRenderer.js';
 import { createControlLineRenderer } from '../controlLineRenderer.js';
+import { createSupplyLines } from '../supplyLines.js';
 import { createMapCamera } from '../cameraView.js';
 import { createHud } from '../hud.js';
 import { createSelection } from '../../input/selection.js';
@@ -124,6 +125,7 @@ export class GameScene extends Phaser.Scene {
     this.fogRenderer = createFogRenderer(this, world);
     this.unitRenderer = createUnitRenderer(this, world, this.selection);
     this.controlLineRenderer = createControlLineRenderer(this, world);
+    this.supplyLines = createSupplyLines(this, world, this.selection);
     this.overlayGraphics = this.add.graphics().setDepth(30);
     this.createPrepCountdown();
     // 地图相机：滚轮以光标为焦点缩放（渲染层只读世界状态，相机不参与模拟）
@@ -182,6 +184,7 @@ export class GameScene extends Phaser.Scene {
     this.unitRenderer.draw(dt);
     this.fogRenderer.sync();
     this.controlLineRenderer.draw();
+    this.supplyLines.draw();
     this.drawOverlays();
     this.syncPrepCountdown();
     this.hud.update(delta);

@@ -36,13 +36,14 @@ war_game/
 │  │  ├─ commands.js           #    统一命令接口与校验
 │  │  ├─ spatial.js            #    均匀网格空间分区
 │  │  ├─ influence.js          #    影响力场 + 0 等值线（实际控制线，纯函数）
+│  │  ├─ supplyPath.js         #    补给线寻路（地形加权 / 敌方控制区阻断，纯函数）
 │  │  ├─ ai.js                 #    脚本敌军（解释关卡的事件→动作脚本）
 │  │  ├─ level.js              #    关卡标准格式：校验 / 兵力部署 / 锚点与目标解析
 │  │  └─ systems/              #    tick 内的规则系统
 │  │     ├─ movement.js        #      移动/寻路/软排斥/溃逃撤退
 │  │     ├─ combat.js          #      接触交战/伤害/目标选择
 │  │     ├─ morale.js          #      士气修正/阈值/溃逃
-│  │     ├─ supply.js          #      补给分配/恢复/生产/损耗
+│  │     ├─ supply.js          #      补给运力结算/恢复/生产/损耗
 │  │     ├─ capture.js         #      城市占领进度
 │  │     ├─ fog.js             #      战争迷雾三态/目视/最后已知位置
 │  │     ├─ controlLine.js     #      影响力场重算（10 Hz）+ 分界线线段
@@ -65,6 +66,7 @@ war_game/
 │  │  ├─ fogRenderer.js        #    迷雾罩层
 │  │  ├─ unitRenderer.js       #    单位/城市/血条/裂纹/虚影
 │  │  ├─ controlLineRenderer.js#    实际控制线
+│  │  ├─ supplyLines.js        #    选中单位的补给线（断补红色虚线 + 切断点）
 │  │  ├─ cameraView.js         #    地图缩放（滚轮以光标为焦点，纯函数 + Phaser 接线）
 │  │  └─ scenes/               #    Phaser 场景
 │  │     ├─ BootScene.js       #      游戏页启动/路由
@@ -123,13 +125,13 @@ war_game/
 - `terrain`：格子边长 `20`、四类地形 `codes`、`passable`、`moveMultiplier`、`defenseModifier`。
 - `morale`：初始/范围、每秒修正、阈值、削弱效果、溃逃恢复。
 - `cities`：占领半径/速率、生产、恢复、视野。
-- `supply`：每城容量、损耗速率。
+- `supply`：需求与每城吞吐（`demandPerUnit` / `capacityPerCity`）、完全断补时的损耗速率、结算节奏（`refreshSeconds` / `fieldRefreshSeconds`）、距离因子曲线 `factor`、寻路参数 `path`（网格边长 / 最大长度 / 控制区阈值）、补给线样式 `style`（`gdd.md §8`）。
 - `fog`：森林目视距离、最后已知位置虚影开关。
 - `spatial`：格子边长 `64`。
 - `performance`：目标帧率/单位、tick/渲染预算、HUD 节流。
 - `input`：点击半径、框选阈值、轨迹采样/偏移。
 - `prep`：开局准备阶段倒计时秒数（`gdd.md §11`）。
-- `ui`、`tutorial`：UI 节流、教学关兵力/增援等规则数值。
+- `ui`：UI 节流。`camera`：缩放范围与平滑。`controlLine`：影响力网格与控制线数值。
 
 ### `src/config/index.js`
 配置聚合导出：`export { default as values } from './values.js'`。新增配置域在此扩展。
@@ -146,7 +148,8 @@ war_game/
 - `spawnUnit` / `spawnInitial` / `killUnit` / `nearestOwnCity`。
 - `issueCommands(unitIds, command)`：**统一命令入口**，人类/脚本/AI 共用；溃逃与阵亡单位不受指挥。
 - `damageUnit(unit, amount)`：**扣血 + 记伤亡的唯一入口**（`gdd.md §11`）——返回本次实际损失的血量，并按 `values.stats.hpPerCasualty`（1 点血 = 1 点伤亡）累加到 `world.casualties[faction]`。战斗扣血（`combat.js`）与补给损耗（`supply.js`）都走它；**治疗直接改 hp、不走它**，所以恢复不会抵消伤亡；只剩 5 血时挨 100 伤害只记 5 点（超杀不算）。结算时由 hud 拼成 URL 参数交给 `result.html`。
-- `tick(dt)`：固定系统顺序执行 `movement → combat → morale → supply → capture → fog → controlLine → victory`，保证确定性；tick 未把事件推入 `history`。
+- `tick(dt)`：固定系统顺序执行 `movement → combat → morale → supply → capture → fog → controlLine → victory`，保证确定性；tick 末把事件推入 `history`。
+- **补给状态字段**（`gdd.md §8`）：`supplyFields`（每阵营一张代价场）· `supplyMasks`（敌方控制区掩码）· `supplyToken`（代价场版本号，渲染层据此失效路径缓存）· `supplyTimer` / `supplyFieldTimer`（两档节流）· `citySupplyLoad`（各城本轮运力支出）。
 - `applyCommand`：把命令写进单位并规划路径（`planRoute`，A* 绕行水域）；`move`/`attackMove` 都真实显示绕行路径。
 
 ### `src/simulation/map.js`
@@ -200,14 +203,15 @@ war_game/
 - `buildPaths(segments, iterations, out)`：串联 + 平滑，产出渲染用的折线数组。
 
 ### `src/simulation/systems/controlLine.js`
-实际控制线系统（`gdd.md §9`，**纯视觉**）：
+实际控制线系统（`gdd.md §9`）：
 - `updateControlLine(world)`：每 `refreshTicks`（默认 6 tick = 10 Hz）重算一次影响力场，写 `world.controlLine`（网格）、`world.controlLineSegments`（原始线段）与 `world.controlLinePaths`（串联 + 平滑后的折线）；非重算 tick 直接返回，保持上一次结果。
 - `collectSources(world)`：影响力源 = 存活单位 + 城市 + 占领点；蓝 `sign=+1`、红 `−1`，中立（`'neutral'` / 未占领）不产生影响力。**核心圈取绝对值**：单位用 `unit.radius`（碰撞体积），城市/占领点用 `cities.capture.radius` / `capturePoints.capture.radius`（占领半径 60）——所以核心圈只覆盖「脚下这块地」，单位始终在自己阵营的控制区内；城市不享受该保证（被占领时可以处在敌方控制区）。
 - **不读战争迷雾**：影响力源是双方全部存活单位（含迷雾里的敌军），战线反映的是真实分界、不受视野限制。
 - **铺满全图**（`partitionMap`）：无影响力的格子按最近阵营归属，控制线会延伸到地图边界，因此在迷雾/未探索区也能看到战线随战况更新。
 - **单位所在格的硬保证**（`guaranteeUnitCell`）：重算后对每个存活单位脚下那一格做最小幅度符号纠正，保证"自己的兵不会站在敌方控制区里"（攻城、被贴身都成立）。
 - 城市与占领点在争夺中（`captureProgress > 0`）按进度线性削弱现属方强度。
-- 放在 tick 顺序末尾（`victory` 之前）：它只读位置/归属/占领进度，任何规则系统都不读它。
+- 放在 tick 顺序末尾（`victory` 之前）：它只读位置/归属/占领进度。
+- **补给线的屏障**：`supply` 读**上一 tick** 的控制线场判定「敌方实际控制区」（10 Hz 重算，最多陈旧 16 ms），补给线不允许穿过它——屏幕上那条控制线就是补给能走到的边界（`gdd.md §8`）。除此之外不参与战斗 / 士气 / 视野 / 胜负判定。
 
 ### `src/simulation/level.js`
 关卡（Level）标准格式 v1——**"一局游戏"的完整规格**（`architecture.md` §7.1）：
@@ -258,15 +262,27 @@ war_game/
 
 ### `src/simulation/systems/morale.js`
 士气系统：
-- 每秒修正（友军/城市/补给/交战）；友军阵亡瞬间 −10。
+- 每秒修正（友军/城市/补给/交战）；友军阵亡瞬间 −10。补给项按缺口比例：满补给 +1/s，缺补给 `−2/s × (1 − supplyRatio)`。
 - 交战消耗分两档：**正被敌方瞄准**（`underFire`）吃全额 `inCombat`（−8/s）；**参战但没被瞄准**（`state = 'combat'` 且未被打，例如两个单位打同一个敌人时只有前排被还击）吃较少的 `inCombatSupport`（−3/s）——两者都乘进攻因子 `mode`。
 - 阈值效果（削弱/动摇 → 伤害与速度倍率 `effectsFor`）。
 - 归零即溃逃；溃逃恢复、无城可退立即投降、被困超时投降。
 
+### `src/simulation/supplyPath.js`
+**补给线寻路的纯计算**（`gdd.md §8`）：不依赖 Phaser/DOM，输入是 `World`（只读地形 / 城市 / 控制线），输出是代价场或折线，可 headless 单测。
+- `supplyGrid(world)`：补给网格（`supply.path.cellSize`，默认 20 px，比 10 px 地形格粗一档）。每格的进入代价 = `格边长 ÷ 通行倍率`（等效像素）；粗格取格内**可通行地形的平均倍率**，整格不可通行（或开 `waterIsBarrier` 且含水域）才是 `Infinity`。按地形缓存（`WeakMap`），避免每轮重算。
+- `buildBlockedMask(world, faction, out)`：把「敌方实际控制区」预计算成 `Uint8Array`（1 = 不可通行），判定读 `world.controlLine` 的带符号影响力，阈值取 `supply.path.controlBlockMin`（0.01）——**只认真实影响力**，控制线给无人区域铺的名义归属不算实际控制。
+- `buildSupplyField(world, faction, field, { cities, mask })`：从指定城市出发的**多源 Dijkstra**（8 邻域、对角 ×√2、禁止从两格障碍间斜穿、代价超过 `maxCost` 即停），产出 `cost`（到最近可用城市的代价）与 `owner`（是 `world.cities` 的哪一座）。`field` 的工作数组复用，支持 decrease-key。
+- `findSupplyPath(world, faction, from, to, { ignoreControl })`：单点到单点的 A*（octile 启发）。渲染层用它画补给线；`ignoreControl: true` 得到"本来该走的那条路"，用于断补时画红色虚线。
+- `supplyFactor(cost)`：`clamp(1 − (cost − 100) / 800, 0.2, 1)`。
+- `inEnemyControl(world, faction, gx, gy)`：单格判定（渲染层标切断点用）。
+
 ### `src/simulation/systems/supply.js`
-补给与城市维护：
-- 每单位就近分配到一座己方城市，每城容量 5，超出者补给不足。
-- 己方城市附近恢复生命 +3/s；城市生产当前**关闭**（`values.cities.production.enabled = false`；逻辑保留：12s/轻型，补给满或被围暂停）；补给不足损耗。
+补给运力结算与城市维护（`gdd.md §8`）：
+- **两档节流**：分配每 `refreshSeconds`（0.5 s）重跑；代价场每 `fieldRefreshSeconds`（1 s）重算一次并把 `world.supplyToken` +1（渲染层据此失效路径缓存）。
+- **分配**（`distribute`）：所有仍需补给的己方单位按「到最近可用城市的代价」升序排序，逐个支出城市点数；城市要付出 `需求 ÷ 因子` 点，单位实收 = 付出 × 因子；某城点数用光就把它剔出种子、用临时场重算一次（单位于是落到下一座最近的城）。全部城用光或够不着 = 断补。
+- 结果写进单位：`supplied`（实收 ≥ 需求）、`supplyRatio`（实收 ÷ 需求）、`supplyEdges`（本轮的每条补给边 `{ cityId, cost, factor, points, received }`，按代价升序）、`supplyCost`（到最近己方城市的代价）；城市侧记在 `world.citySupplyLoad`。
+- 己方城市附近恢复生命 +3/s；城市生产当前**关闭**（`values.cities.production.enabled = false`；逻辑保留：12s/轻型，本轮运力用光或被围暂停）。
+- **缺补给损耗**：按缺口比例，生命 `−attritionHpPerSecond × (1 − supplyRatio)`/s；士气由 `morale.js` 读 `supplyRatio` 同比例缩放。
 - **环境损耗**：身处水域的单位每秒掉 `terrain.waterHpPerSecond`（1）点血（走 `world.damageUnit`，计入伤亡），掉光即溺水阵亡（`cause = 'water'`）；桥梁是独立地形，不算水域。
 
 ### `src/simulation/systems/capture.js`
@@ -378,6 +394,12 @@ DOM 编辑器工具栏：
 - 每帧读 `world.controlLinePaths`（已串联 + Chaikin 平滑的折线），用 `values.controlLine.style`（4 px / `0x101414` / 0.82）每条折线一次 `moveTo` 起头再 `lineTo`，最后一次性 `strokePath`（Phaser 的 `MOVE_TO` 会开新子路径，多条战线不会连错）。
 - **永远可见**：底衬 / 主线两个图形 depth = 2、标签 depth = 3，都高于迷雾罩层的 depth = 1（`fogRenderer`）；且用 `style.haloWidth/haloColor/haloAlpha`（9 px 浅色）垫在 `style.lineWidth`（4 px 深色）之下做**双色描边**——深色线单独叠在迷雾/森林上对比度会归零，看起来像被迷雾盖住。
 - 可能在多段（包围、多个战场）时把「实际控制线」标签贴在**最靠上**的那条战线旁边。
+
+### `src/rendering/supplyLines.js`
+补给线渲染（`gdd.md §8`）：**只在选中单位时画**，所以不存在用画面泄露敌情的问题。
+- 每条补给边（城市 → 单位）一条线：折线由 `findSupplyPath`（A*，与分配用同一套代价与阻断规则）算出，线宽与不透明度随「实收 ÷ 需求」变化——一眼看出谁是主供城。
+- 缺补给时再画「本来该走的那条路」（`ignoreControl: true`）：路径穿过敌方实际控制区 → 按 `supply.style.dash` 切成**红色虚线**、在切断处打叉、标注「补给被切断」；路径是通的（纯粹城里运力不够）→ 只标注「补给不足：城中运力不够」。
+- 路径按 `world.supplyToken` 缓存（代价场每 1 s 才重算），敌方控制区掩码在同一轮里共用一份；单位那一端用实时坐标，所以线始终连在单位身上。depth = 7，压在单位 / 城市标签之上。
 
 ### `src/rendering/cameraView.js`
 游戏页的地图相机（`gdd.md §11`）：**滚轮以光标为焦点缩放**，视口夹在地图内。

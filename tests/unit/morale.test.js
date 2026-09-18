@@ -67,12 +67,27 @@ describe('morale', () => {
   });
 
   it('实战 2v1：两个参战单位都会掉士气，被瞄准的那个掉得更多（回归）', () => {
-    const world = makeWorld(cityMap());
+    // 战场在 (600,300)，离蓝城 (100,600) 的路径代价 600+ px → 因子 0.3 上下，
+    // 一座 5 点容量的城喂不满两个单位（新补给规则，gdd.md §7）。
+    // 这里只想验证士气修正，所以给蓝方加一座 160 px 外的前哨城，保证两人都满补给：
+    // 距离 > 城市士气加成范围 120，所以不会引入 cityNearby 的额外加成。
+    const world = makeWorld(makePlainMap({
+      cities: [
+        { id: 'c1', x: 100, y: 600, faction: 'blue' },
+        { id: 'c2', x: 1100, y: 100, faction: 'red' },
+        { id: 'c3', x: 760, y: 300, faction: 'blue' },
+      ],
+      spawns: [
+        { faction: 'blue', x: 100, y: 600 },
+        { faction: 'red', x: 1100, y: 100 },
+      ],
+    }));
     world.spawnUnit('red', 'light', 600, 300);
     const a = world.spawnUnit('blue', 'light', 600, 272); // 敌正上方 28（接触范围内）
     const b = world.spawnUnit('blue', 'light', 600, 328); // 敌正下方 28，两者相隔 56 不会互相挤开
 
     advance(world, 1);
+    expect(a.supplied && b.supplied).toBe(true); // 前哨城保证两人满补给（下方断言的 +1 前提）
 
     expect(a.state).toBe('combat');
     expect(b.state).toBe('combat');

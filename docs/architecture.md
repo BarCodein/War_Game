@@ -33,6 +33,7 @@ src/
     map.js                   # 地图 JSON 解析、结构校验、版本迁移
     spatial.js               # 均匀网格空间分区（邻居查询）
     influence.js             # 影响力场 + 0 等值线（实际控制线，纯函数）
+    supplyPath.js            # 补给线寻路（地形加权 + 敌方控制区阻断；多源 Dijkstra / A*，纯函数）
     ai.js                    # 脚本敌军指令生成器（走统一命令接口）+ 战术层调度（engage）
     ai/                      # 战术层纯函数：tactics.js（效用打分）· squad.js（编队协同）
                              #   front.js（战线薄弱点/接近轴）· presets.js（难度档）· perception.js（迷雾情报）
@@ -40,7 +41,7 @@ src/
       movement.js            # 移动、寻路、碰撞软排斥
       combat.js              # 目标选择、攻击冷却、伤害结算
       morale.js              # 士气修正、阈值效果、溃逃/投降
-      supply.js              # 补给分配与损耗
+      supply.js              # 补给：沿最短路径的城市运力结算 + 恢复 + 生产 + 损耗
       capture.js             # 城市占领进度
       fog.js                 # 战争迷雾三态与最后已知位置
       controlLine.js         # 双方影响力统计（10 Hz）→ 实际控制线线段
@@ -52,6 +53,8 @@ src/
     unitRenderer.js          # 单位/血条/士气条/选中圈/虚影
     terrainRenderer.js       # 地形与网格
     fogRenderer.js           # 迷雾三态罩层
+    controlLineRenderer.js   # 实际控制线
+    supplyLines.js           # 选中单位的补给线（线宽=实收占比；断补画红色虚线 + 切断点打叉）
     hud.js                   # 侧栏/顶栏/toast（DOM）
     editorToolbar.js         # 编辑器工具栏（DOM）：存储/导入导出/校验状态
   input/
@@ -91,7 +94,9 @@ tests/
 - **模拟步长 1/60 s**，与渲染帧率无关（`REQUIREMENTS.md` §5）。
 - 渲染用 `requestAnimationFrame`：每帧 `accumulator += dt`；`while (accumulator ≥ step)` 执行 tick；**每帧最多补 5 个 tick**（掉帧时降速而非螺旋追赶）。
 - tick 内系统执行顺序固定，保证确定性：`movement → combat → morale → supply → capture → fog → controlLine → victory`。
-  `controlLine` 是末尾的纯视觉统计（每 6 tick 重算影响力场，见 `gdd.md §9`），只读前面的结果，任何规则系统都不读它。
+  `controlLine` 在末尾汇总本 tick 之前的战况，它的影响力场**同时是补给线的屏障**：`supply` 读的是
+  **上一 tick** 的控制线场（10 Hz 重算，最多陈旧 16 ms）来判定「敌方实际控制区」，因此顺序不变、
+  也不引入互相依赖（`gdd.md` §7、§9）。
 - 暂停：不执行 tick；游戏速度：×0.5 / ×1 / ×2 通过每帧 tick 次数控制（暂定）。
 - **开局准备阶段**（`prep.seconds`，gdd.md §11）：倒计时期间**不调用 loop.advance**，只推进控制器的准备计时；输入层照常产出命令（`world.issueCommands` 不依赖 tick，路线在下令时就已规划）。倒计时结束后才进入正常 tick 循环，因此脚本敌军的 `{ time }` 触发器也从此刻开始计时。
 - 渲染层按世界状态绘制；HUD 更新节流（如 100 ms）避免每 tick 重建 DOM。

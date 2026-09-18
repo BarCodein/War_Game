@@ -21,19 +21,47 @@ function blueCityMap() {
 }
 
 describe('supply', () => {
-  it('每城容量 5：第 6 个单位补给不足并损耗 hp −1/s', () => {
+  it('每城容量 5：超出容量的单位补给不足并按缺口比例损耗 hp', () => {
     const world = makeWorld(blueCityMap());
     const units = [];
     for (let i = 0; i < 6; i += 1) units.push(world.spawnUnit('blue', 'light', 300 + i * 10, 600));
     advance(world, 1);
-    // 单位会被软排斥推开，因此"谁获得补给"取决于到城市的距离，而不是 spawn 顺序。
-    // 只断言容量规则本身：恰好 5 个被补给、1 个补给不足并受到损耗。
+    // 单位会被软排斥推开，因此"谁获得补给"取决于到城市的路径代价，而不是 spawn 顺序。
+    // 新规则下容量是**吞吐点数**：喂满一个单位要花 demand ÷ 因子 点，因子 ≤ 1，
+    // 所以一座 5 点的城最多喂满 5 个；这里单位离城 200~280 px（因子 0.95→0.80），
+    // 实测只有 4 个满额，剩下的拿部分补给或完全断补。断言规则本身而不是具体个数：
     const supplied = units.filter(u => u.supplied);
     const starving = units.filter(u => !u.supplied);
-    expect(supplied).toHaveLength(5);
-    expect(starving).toHaveLength(1);
-    expect(starving[0].hp).toBeCloseTo(59, 0);
+    expect(supplied.length).toBeLessThanOrEqual(values.supply.capacityPerCity);
+    expect(starving.length).toBeGreaterThan(0);
+    for (const unit of starving) {
+      expect(unit.supplyRatio).toBeLessThan(1);
+      expect(unit.hp).toBeLessThan(60); // 缺补给 → 按缺口比例掉血（完全断补 = 1/s）
+    }
+    // 城市这一轮支出的吞吐点数不超过容量（超出的单位会被顺延到其他城市 / 直接断补）
+    const load = [...world.citySupplyLoad.values()].reduce((sum, points) => sum + points, 0);
+    expect(load).toBeLessThanOrEqual(values.supply.capacityPerCity + 1e-9);
     expect(supplied[0].hp).toBe(60);
+  });
+
+  it('因子随距离衰减：远城的单位要好几座城合力才喂得饱', () => {
+    const world = makeWorld(blueCityMap());
+    // 城在 (100,600)，单位在 300 px 外 → 因子 < 1，一座城要掏 1/因子 点
+    const far = world.spawnUnit('blue', 'light', 400, 600);
+    advance(world, 1);
+    expect(far.supplyCost).toBeGreaterThan(100);       // 超过满额段
+    expect(far.supplyEdges[0].factor).toBeLessThan(1); // 到手打了折
+    expect(far.supplyEdges[0].points).toBeGreaterThan(1); // 城市掏的点数 > 需求
+    expect(far.supplied).toBe(true);                    // 近到一座城就够了
+
+    // 更远：路径代价接近因子下限，一座城（5 点）已经不够喂满一个单位
+    const world2 = makeWorld(blueCityMap());
+    const veryFar = world2.spawnUnit('blue', 'light', 1200, 500);
+    advance(world2, 1);
+    expect(veryFar.supplyCost).toBeGreaterThan(900);     // 落在因子下限段
+    expect(veryFar.supplyEdges[0].factor).toBe(0.2);     // 到手只有 20%
+    expect(veryFar.supplyEdges[0].points).toBe(5);       // 一座城的全部运力
+    expect(veryFar.supplyRatio).toBeCloseTo(1, 5);       // 刚好够（5 × 0.2 = 1）
   });
 
   it.runIf(!productionEnabled)('生产已关闭：城市不再自动产出单位，计时器保持为 0', () => {

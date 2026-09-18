@@ -27,7 +27,10 @@ export function makeUnit({ id, faction, type, x, y }) {
     targetId: null,
     cooldown: 0,         // 攻击冷却剩余（s）
     underFire: false,    // 本 tick 是否被攻击（combat 置位，morale 消费）
-    supplied: true,      // supply 系统每 tick 重算
+    supplied: true,      // supply 系统每 refreshSeconds 重算：实收 ≥ 需求（满补给）
+    supplyRatio: 1,      // 实收 ÷ 需求（0..1）：损耗与士气惩罚按缺口 (1 − ratio) 缩放
+    supplyEdges: [],     // 本轮的补给线 [{ cityId, cost, factor, points, received }]，按代价升序（渲染/HUD 用）
+    supplyCost: Infinity, // 到最近己方城市的路径代价（等效像素；无路可达 = Infinity）
     effects: { damageMultiplier: 1, speedMultiplier: 1 }, // morale 系统每 tick 重算
     stuckTime: 0,        // 溃逃被困累计（s）
     rerouteAttempts: 0,  // 当前路径连续重规划次数

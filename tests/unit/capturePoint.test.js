@@ -105,8 +105,22 @@ describe('占领点：不提供补给 / 士气 / 生产 / 恢复 / 胜负', () =
     for (let i = 0; i < 6; i += 1) world.spawnUnit('blue', 'light', 640 + i * 3, 360);
     advance(world, 1);
     const supplied = world.units.filter(unit => unit.supplied).length;
-    // 只有唯一的蓝城提供 5 个容量；占领点没有增加容量
-    expect(supplied).toBe(values.supply.capacityPerCity);
+    // 占领点不提供任何补给容量：喂满一个单位至少要花 1 点吞吐，唯一的蓝城（100,600）
+    // 离这里 600+ px、因子只有 0.3 上下，5 点容量喂不满这 6 个贴着占领点站的单位
+    expect(supplied).toBeGreaterThan(0);
+    expect(supplied).toBeLessThan(6);
+
+    // 对照：把占领点换成一座城市，同样 6 个单位就都能满额（容量确实只来自城市）
+    const withCity = makeWorld(pointMap([], {
+      cities: [
+        { id: 'c1', x: 100, y: 600, faction: 'blue' },
+        { id: 'c2', x: 1100, y: 100, faction: 'red' },
+        { id: 'c3', x: 640, y: 360, faction: 'blue' },
+      ],
+    }));
+    for (let i = 0; i < 6; i += 1) withCity.spawnUnit('blue', 'light', 640 + i * 3, 360);
+    advance(withCity, 1);
+    expect(withCity.units.filter(unit => unit.supplied).length).toBe(6);
   });
 
   it('不提供回血，也没有生产计时器', () => {
