@@ -47,6 +47,7 @@ export const values = {
       terrain: 0.15,           // 我方所在地形（水里输出减半）
       approach: 0.4,           // 接近轴的地形偏好权重（配合 presets[].terrainBias）
       supply: 0.25,            // 补给（存量是否够、战场是否在补给可达区内）——见 ai.supply 与 docs/ai-design.md §3.7
+      interdiction: 0.2,       // 断敌粮道（接近轴/薄弱点压住敌方补给走廊的偏好）——见 ai.interdiction 与 §3.8
     },
     // 补给视野（docs/ai-design.md §3.7）：硬约束阈值 + 由档位 supplyCaution 线性插值的软阈值。
     // 硬约束（与档位无关）：补给线断了（supplied=false）或存量比例 < lowRatio → 收紧
@@ -59,6 +60,32 @@ export const values = {
       forcedMarchStock: { min: 0.35, max: 0.7 },   // 急行军要求的最低存量比例
       regroupCautionRange: 0.2,   // 回城阈值 = regroup.supplyRatio + 该值 × (supplyCaution − 0.5)：标准档不漂移
       regroupRatioFallback: 0.5,  // cfg.regroup.supplyRatio 缺省时的兜底
+    },
+    // 断敌粮道（docs/ai-design.md §3.8）：敌方补给线 = 敌单位 → 它最近的敌城（两条都是公开信息），
+    // 而"一个单位脚下 140px 内的格子算我方实际控制"（controlLine.unit.influenceRadius）——
+    // 所以把部队插到那条走廊上，就能真的掐断它的补给。AI 只做两件事：
+    //   ① 软权重：接近轴 / 薄弱点打分里偏向"压得住敌走廊"的方向（weights.interdiction）；
+    //   ② 预备队任务：闲置的预备队去守那个点（不下正面攻击命令 = 不否决正面目标）。
+    // 公平：只用**可见**敌单位的位置（记忆里的 ghost 不参与）+ 敌城坐标，绝不读 supplyFields[敌]。
+    // 关闭方式：weights.interdiction = 0（打分项归零，预备队也不再领断粮任务）。
+    interdiction: {
+      minCuts: 2,          // 至少要能同时压住几条敌方补给线才值得为它调整方向（1 条 = 顺手刮一下）
+      corridorSamples: 3,  // 每条走廊采样几个点（按 0.3 / 0.5 / 0.7 均分：避开城下与单位脚下）
+      minCorridor: 240,    // 走廊短于这个长度就不算"粮道"（敌人就在城边，掐不断）
+      minDistance: 160,    // 断粮点离我方形心太近（已经在自己控制里）不算数
+      maxDistance: 900,    // 太远的断粮点不值得绕路（超出直接出局）
+      cutRadius: 140,      // 压制半径 = controlLine.unit.influenceRadius：一个单位能压住的地盘
+    },
+    // 护己方粮道（docs/ai-design.md §3.8）：解围 + 撤退选城避开被围的城。
+    // "被围"= 看得见的敌人在城周 threatRadius 内，或这城正在被夺（captureProgress > 0，公开信息）。
+    relief: {
+      threatRadius: 200,        // 己城周围这个半径内出现敌军 = 被围
+      standoff: 180,            // 解围分队停在城外多远（不直接撞进占领圈）
+      minUsers: 2,              // 这城至少是这么多己方单位的"最近己方城市"才值得解围
+      minLoadPoints: 1,         // 或本轮至少输出这么多运力点（城被切断时 load=0，改看 minUsers）
+      forceRatio: 0.5,          // 解围分队战力 ≥ 围城敌军战力 × 该值才去（否则等主力，不送人头）
+      maxDistance: 1200,        // 解围分队的有效驰援距离（再远就来不及，出局）
+      retreatThreatPenalty: 400, // 撤退选城时，被围的城按等效像素加罚（代价场单位：平地 px）
     },
     squad: {
       cohesionRadius: 170,       // 队形松散判定半径（px）

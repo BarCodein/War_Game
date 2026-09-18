@@ -6,9 +6,9 @@ import { chooseTarget, combatPower, enemiesWithin, scoreAttack } from './ai/tact
 import { approachWaypoint, chooseApproach, chooseWeakSpot, feintAxis } from './ai/front.js';
 import { perceive, unexploredFrontier, visibleEnemies } from './ai/perception.js';
 import { resolveAiConfig } from './ai/presets.js';
-import {
-  bestSupplyCity, clampToSupply, isLowSupply, squadLowSupply, supplyPolicy, withinSupply,
-} from './ai/supply.js';
+import { clampToSupply, isLowSupply, squadLowSupply, supplyPolicy, withinSupply } from './ai/supply.js';
+import { interdictionPlan } from './ai/interdiction.js';
+import { bestRetreatCity, reliefPlan } from './ai/relief.js';
 
 const isNonEmptyString = (v) => typeof v === 'string' && v.length > 0;
 const isFiniteNumber = (v) => typeof v === 'number' && Number.isFinite(v);
@@ -311,6 +311,8 @@ export class ScriptedAI {
     const cfg = this.cfg;
     // 情报：全知模式下就是全部敌军；公平模式下是"看得见 + 记得住"（阶段三）
     const knowns = perceive(this.world, this.faction, cfg, this.fogAware);
+    // 撤退选城（阶段五）要看"哪座城被围了"，用的是同一次情报（不额外再算一遍视野）
+    this.knowns = knowns;
     for (const [group, intent] of this.intents) {
       const units = this.ownUnits({ group });
       if (units.length === 0) continue;
@@ -331,7 +333,12 @@ export class ScriptedAI {
 
       // ② 主攻方向（阶段二 B）：复用战线的薄弱点 → 接近轴端点；没有战线时就是脚本目标
       //    然后再把目标点**夹进补给可达区**（行动边界，docs/ai-design.md §3.7）
-      const rawWaypoint = this.resolveWaypoint(state, group, units, centroid, objective, cfg, knowns);
+      //    ③d 断敌粮道（阶段五）：先算一个"值得压住的敌方补给走廊点"，接近轴/薄弱点打分会偏向它
+      //    （软权重，不否决正面目标；weights.interdiction = 0 时这一步完全不跑）
+      const interdiction = values.ai.weights.interdiction > 0
+        ? interdictionPlan(this.world, this.faction, { cfg, knowns, from: centroid })
+        : null;
+      const rawWaypoint = this.resolveWaypoint(state, group, units, centroid, objective, cfg, knowns, interdiction);
       const clamped = clampToSupply(this.world, this.faction, centroid, rawWaypoint, this.policy.hardReachCost);
       const waypoint = clamped.clamped ? clamped : rawWaypoint;
       const anchor = squadAnchor(units, waypoint);
@@ -344,6 +351,8 @@ export class ScriptedAI {
       const feintId = cfg.feint ? this.pickFeintUnit(state, group, units, waypoint, cfg) : null;
       const reserve = this.pickReserve(state, group, units, waypoint, cfg, feintId);
       const forced = this.shouldForceMarch(units, waypoint, cfg);
+      // ③e 预备队任务（阶段五）：解围 / 断敌粮道——预备队本来就在后方闲置，不占正面兵力
+      const mission = this.reserveMission(units, reserve, centroid, knowns, interdiction, cfg);
 
       // ③b 侦察兵（阶段三）：公平模式下抽人做前沿探索，暂时脱离队形
       const scouts = this.pickScouts(state, units, objective, feintId, cfg);
@@ -352,10 +361,9 @@ export class ScriptedAI {
         // ③c 个别单位自己断补/存量告急（小队整体还算健康）：先回补给区，不再往前顶
         //    —— 主动接战一律不下（contact 时 combat 系统仍会照常交战 = 只反击）
         if (isLowSupply(unit, this.policy)) {
-          const back = bestSupplyCity(this.world, this.faction, unit.x, unit.y);
+          const back = this.retreatCity({ x: unit.x, y: unit.y }); // 避开正被围住的城（§3.8）
           if (back) {
-            const label = back.cost === Infinity ? 'resupply-blind' : 'resupply';
-            this.issueOnce(unit, moveCommand([{ x: back.city.x, y: back.city.y }]), `${label}:${back.city.id}`);
+            this.issueOnce(unit, moveCommand([{ x: back.x, y: back.y }]), `resupply:${back.id}`);
             continue;
           }
         }
@@ -373,7 +381,11 @@ export class ScriptedAI {
           continue;
         }
         if (reserve.has(unit.id)) {
-          // 预备队：在主力后方待命（投入条件见 shouldCommitReserve）
+          // 预备队：优先执行解围/断粮任务（阶段五），没有任务时在主力后方待命
+          if (mission) {
+            this.issueOnce(unit, attackMoveCommand({ x: mission.x, y: mission.y }, { forced }), mission.label);
+            continue;
+          }
           const rally = {
             x: centroid.x - anchor.facing.x * cfg.reserve.rallyBehind,
             y: centroid.y - anchor.facing.y * cfg.reserve.rallyBehind,
@@ -465,11 +477,11 @@ export class ScriptedAI {
   }
 
   // 主攻方向：优先"战线上的薄弱点"（阶段二 B），否则退回脚本目标；sly 档额外算侧翼佯动点
-  resolveWaypoint(state, group, units, centroid, objective, cfg, knowns = null) {
+  resolveWaypoint(state, group, units, centroid, objective, cfg, knowns = null, interdiction = null) {
     const objectiveChanged = state.objective?.x !== objective.x || state.objective?.y !== objective.y;
     if (objectiveChanged || state.axis === undefined) {
       state.objective = { x: objective.x, y: objective.y };
-      const fogArgs = { knowns, fogAware: this.fogAware };
+      const fogArgs = { knowns, fogAware: this.fogAware, interdiction };
       // 权限边界：只选"从哪个方向接近"，脚本给的目标点不变
       state.axis = chooseApproach(this.world, { unit: units[0], objective, faction: this.faction, cfg, ...fogArgs }) ?? null;
       state.weakness = chooseWeakSpot(this.world, { objective, faction: this.faction, cfg, ...fogArgs });
@@ -562,13 +574,37 @@ export class ScriptedAI {
   }
 
   /**
-   * 撤退/休整该去哪座城：**补给代价最低**的那座（够不着任何城时才退回欧氏最近）。
-   * 代价来自 `world.supplyFields[faction]`——它已经含地形权重与敌方实际控制区阻断，
-   * 所以"能走到、且离补给最近"这件事不需要 AI 自己再寻路。
+   * 撤退/休整该去哪座城（阶段五）：**补给代价最低**的那座，但**避开正被围住的城**——
+   * 代价来自 `world.supplyFields[faction]`（已含地形权重与敌方实际控制区阻断），
+   * 被围判断来自已知敌情与 `captureProgress`（见 ai/relief.js 的 bestRetreatCity）。
    */
   retreatCity(point) {
-    return bestSupplyCity(this.world, this.faction, point.x, point.y)?.city
+    return bestRetreatCity(this.world, this.faction, point.x, point.y, { cfg: this.cfg, knowns: this.knowns })
       ?? this.nearestOwnCity(point);
+  }
+
+  /**
+   * 预备队任务（阶段五，docs/ai-design.md §3.8）：预备队本来就在主力后方闲置，于是让它去干
+   * "护粮道 / 断粮道"这两件不占正面兵力的事：
+   *   ① 解围优先：己城被围且它真的在养兵 → 压向围城的那几个敌人（`reliefPlan`）；
+   *   ② 否则去压敌方补给走廊（断敌粮道，interdiction 为 null 时跳过）；
+   *      断粮点还要夹进**己方**补给可达区——断人粮道不能先把自己断了。
+   * 没有任务返回 null，预备队照旧在主力后方待命（旧行为不变）。
+   */
+  reserveMission(units, reserve, centroid, knowns, interdiction, cfg) {
+    const pool = units.filter(unit => reserve.has(unit.id) && !isLowSupply(unit, this.policy));
+    if (pool.length === 0) return null;
+    const relief = reliefPlan(this.world, this.faction, { cfg, knowns, units: pool, from: centroid });
+    if (relief) return { x: relief.x, y: relief.y, label: `relief:${relief.city.id}` };
+    if (!interdiction) return null;
+    const reach = clampToSupply(this.world, this.faction, centroid, interdiction, this.policy.hardReachCost);
+    // 签名按 120px 粗格量化：断粮点会随敌人移动每 0.5s 漂几十像素，精确签名会导致
+    // "每半秒重发一次命令 → 行军路线被反复重置"（单位原地打转），粗格让漂移不触发重发。
+    return {
+      x: reach.x,
+      y: reach.y,
+      label: `interdict:${Math.round(reach.x / 120)},${Math.round(reach.y / 120)}`,
+    };
   }
 
   // 撤退/休整时不需要清意图表（意图是"打哪"，退是为了接着打），但要清掉旧命令签名

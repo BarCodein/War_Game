@@ -243,14 +243,17 @@ war_game/
 - **只指挥一部分部队**：每个动作可选 `units: { group: 'x' }`，由 `ownUnits(selector)` / `commandUnits()` 过滤 `unit.group`（标签来自 `forces[].group` / `spawn.group`）；省略 = 全军，选不到单位时静默跳过。
 - **`engage` 与战术层**（docs/ai-design.md 阶段一）：`doEngage` 把编队登记进 `intents`（编队 → 目标点），此后每 `values.ai.decisionIntervalSeconds` 由 `runTactics()` 决策：① 队形槽位推进 ② 脱离队形的先锋 `hold` 等主力 ③ 集中火力（同目标 ≤ `maxAttackersPerTarget`）④ 溃逃目标优先。脚本下 `hold` / `retreat` / `attackMove` 会 `clearIntents`（脚本意图优先）；命令签名去重避免重置行军路线。
 - **补给约束**（阶段四，docs/ai-design.md §3.7）：`runTactics` 先算 `squadLowSupply`（断补占比 ≥ 0.5 或平均存量 < 0.3）→ 视同"该回去补给了"，直接进 `regroup`（撤向**补给代价最低**的城）；目标点经 `clampToSupply` 夹进 `supply.path.maxCost` 边界内；个别低补给单位自己 `move` 回补给城、不再前顶（也不主动接战）；`shouldForceMarch` 额外要求"全队存量 ≥ 档位门槛 + 无人断补 + 目的地可达"；`pickScouts`/`scoutFrontier` 同样受补给约束。
+- **补给战术**（阶段五，docs/ai-design.md §3.8）：每轮决策先算 `interdictionPlan`（敌方走廊的压制点，仅公开信息）并作为软权重传给 `chooseApproach`/`chooseWeakSpot`；`reserveMission` 让**闲置的预备队**去执行解围（`reliefPlan`）或断粮（`interdictionPlan`）任务、目标点再经 `clampToSupply` 夹回己方补给可达区，没有任务时按旧行为在主力后方待命。
 - `nearestEnemy` 用空间区扩张半径查询，避免全图扫描。
-- `retreatCity(point)`：撤退目标 = `bestSupplyCity` 的城（够不着任何城时才退回 `nearestOwnCity` 的欧氏最近）。
+- `retreatCity(point)`：撤退目标 = `bestRetreatCity`（补给代价最低、但**避开被围的城**，见 `ai/relief.js`），没有城时才退回 `nearestOwnCity` 的欧氏最近。
 
 ### `src/simulation/ai/`（战术层纯函数，docs/ai-design.md）
 - `tactics.js`：`combatPower`（复用 `combat.calcDamageRatio` + 缺补倍率 + 地形防御）/ `localBalance`（半径内双方战力占比）/ `targetValue` / `scoreAttack`（含集火上限，达上限返回 null）/ `chooseTarget`（溃逃优先，再比分数）/ `enemiesWithin`（走空间网格）。
 - `squad.js`：`formationSlots`（line / column / wedge，按朝向旋转）/ `squadAnchor`（形心向目标推进 `advanceStep`，不越过目标）/ `needsColumn`（沿直线采样水域/不可通行）/ `cohesionRatio`·`isCohesive`·`isRushingAhead`（不添油）/ `assignSlots`（按距锚点距离 + id 的确定性分配）。
-- `front.js`（阶段二 B）：复用 `world.controlLineSegments`（控制线 0 等值线 = 实际战线）定位战线 → `pointStrength` 采样兵力比（空点记 1）→ `chooseWeakSpot` 选最弱段 / `approachAxes` 生成接近轴 → `chooseApproach` 按"敌弱 + 近 + 地形合口味 + **补给代价低**"挑轴 → `approachWaypoint` 两段式推进；`terrainPreference` / `feintAxis` 供档位使用。**脚本目标点不变，只选接近方向。**
+- `front.js`（阶段二 B）：复用 `world.controlLineSegments`（控制线 0 等值线 = 实际战线）定位战线 → `pointStrength` 采样兵力比（空点记 1）→ `chooseWeakSpot` 选最弱段 / `approachAxes` 生成接近轴 → `chooseApproach` 按"敌弱 + 近 + 地形合口味 + **补给代价低** + **压得住敌粮道**"挑轴 → `approachWaypoint` 两段式推进；`terrainPreference` / `feintAxis` 供档位使用。**脚本目标点不变，只选接近方向。**
 - `supply.js`（阶段四）：AI 的补给视野（`supplyPolicy` / `supplyCostOf` / `withinSupply` / `bestSupplyCity` / `clampToSupply` / `isLowSupply` / `squadLowSupply` / `supplyScore`），见上文。
+- `interdiction.js`（阶段五）：断敌粮道——`enemyCorridors`（看得见的敌单位 → 它最近的敌城，走廊太短/记忆条目不算）、`cutCountAt`（该点压住几条走廊，半径 = `controlLine.unit.influenceRadius`）、`corridorCandidates`（0.3/0.5/0.7 采样）、`interdictionPlan`（压制面 + 安全 + 距离打分，只出"值得为它改方向"的点）、`interdictionScore`（接近轴/战线点的压制打分）。**只用公开信息，绝不读 `supplyFields[敌]`。**
+- `relief.js`（阶段五）：护己方粮道——`supplyUserCounts` / `supplyUsers`（按欧氏最近己城统计每城养兵数）、`cityThreat`（看得见的围城敌军及其形心 + `captureProgress`）、`reliefPlan`（值得救 + 打得过 + 赶得上 → 压向围城敌军的形心；只看得到"城正在被夺"时改停在城外 `standoff`）、`bestRetreatCity`（首选补给代价最低的城，它被围时改挑"代价 + 被围罚分"最低的）。
 - `presets.js`（阶段二 F）：`AI_PRESET_NAMES`（cautious / standard / sly）、`AI_TUNING_KEYS`（reserveRatio / pursuitRadius / useForcedMarch / terrainBias / feint / **supplyCaution**）、`resolveAiConfig(preset, tuning)`（档位覆盖 values.ai，tuning 再覆盖，且 `pursuitRadius` 同步为 `engageRadius`）、`validateAiTuning`（关卡结构校验：档位 / tuning 键 / `ai.fog` 布尔 / `supplyCaution ∈ [0,1]`）。
 - `perception.js`（阶段三）：`visibleEnemies`（`isSpotted`，含森林隐蔽）/ `rememberedEnemies`（`lastSeen` + 年龄衰减，低于 `staleConfidence` 即遗忘，条目带 `ghost: true`）/ `knownEnemies`·`perceive`（可见 + 记忆，或全知）/ `unexploredFrontier`（fog 网格上有界 BFS 找最近未探索格，同深度优先靠近敌城）/ `awarenessSummary`（调试用情报摘要）。
 

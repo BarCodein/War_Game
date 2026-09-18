@@ -2,11 +2,14 @@
 import { facingTo } from './squad.js';
 import { combatPower, localPower } from './tactics.js';
 import { supplyPolicy, supplyCostOf } from './supply.js';
+import { interdictionScore } from './interdiction.js';
 
 // 薄弱点进攻（docs/ai-design.md 阶段二 B）：**复用控制线的 0 等值线段定位战线**，
 // 再沿战线采样局部兵力比，选"离脚本目标近 + 我方相对优势大"的一段作为主攻方向；
 // 并围绕目标生成若干接近轴（正面 + 左右侧翼），供多轴/佯动分兵使用。
 // 打分里带**补给代价**（docs/ai-design.md §3.7）：同样弱的一段，优先从补给线短的那侧打。
+// 打分里还带**断敌粮道**（§3.8）：同样弱的一段，优先从"压得住敌方补给走廊"的那侧打
+// （软权重 ai.weights.interdiction，不否决正面目标）。
 // 全部是纯函数（只读 world 与 values），可单测（tests/unit/ai-front.test.js）。
 //
 // 权限边界（本轮确认）：**脚本给的目标点不变**——这里只决定"从哪个方向、哪一段接近"。
@@ -81,9 +84,10 @@ export function frontFromKnowns(knowns, objective, radius = values.ai.weakSpot.f
 /**
  * 选主攻段：在目标附近的战线点里，挑一个"我方相对优势大（敌方薄弱）且离目标近"的点。
  * 补给项（docs/ai-design.md §3.7）：主攻段要打得到、也要喂得上——超出补给可达区的采样点扣分。
+ * 断粮项（§3.8）：这一段的阵地能不能顺手压住敌方补给走廊（软权重，不否决正面目标）。
  * 没有任何战线点（还没接触/没有城市据点影响力）时返回 null，调用方退回"直接接近目标"。
  */
-export function chooseWeakSpot(world, { objective, faction, cfg = values.ai, knowns = null, fogAware = false }) {
+export function chooseWeakSpot(world, { objective, faction, cfg = values.ai, knowns = null, fogAware = false, interdiction = null }) {
   const candidates = fogAware
     ? frontFromKnowns(knowns ?? [], objective, cfg.weakSpot.frontSearchRadius) // 公平：自建战线
     : frontPointsNear(world, objective, cfg.weakSpot.frontSearchRadius);       // 全知：读控制线
@@ -93,12 +97,14 @@ export function chooseWeakSpot(world, { objective, faction, cfg = values.ai, kno
   let best = null;
   for (const point of candidates) {
     const strength = pointStrength(world, point, faction, radius, fogAware ? (knowns ?? []) : null);
-    // 敌方越弱（ratio 越高）越好；离目标越近越好；补给代价越低越好
+    // 敌方越弱（ratio 越高）越好；离目标越近越好；补给代价越低越好；越压得住敌粮道越好
     const proximity = 1 - Math.min(1, Math.hypot(point.x - objective.x, point.y - objective.y)
       / Math.max(1, cfg.weakSpot.frontSearchRadius));
     const supply = reachScore(world, faction, point, policy);
-    const score = strength.ratio * 0.6 + proximity * 0.25 + supply * 0.15;
-    if (!best || score > best.score) best = { ...point, ...strength, score, proximity, supply };
+    const interdict = interdictionScore(point, interdiction);
+    const score = strength.ratio * 0.6 + proximity * 0.25 + supply * 0.15
+      + interdict * values.ai.weights.interdiction * policy.weightScale * 0.15;
+    if (!best || score > best.score) best = { ...point, ...strength, score, proximity, supply, interdict };
   }
   return best;
 }
@@ -135,8 +141,9 @@ export function terrainPreference(world, point, biasName = 'balanced') {
  * 给一个小队选接近轴：在若干轴线里挑"敌方最弱 + 地形合本档口味 + 离自己最近 + **补给代价低**"的一条。
  * 返回值是 **停战线上的一个点**（不是脚本目标本身）——部队先推进到这里，再压向目标。
  * 补给项很关键：从补给线拉得最长的那条轴推进，等于让全队在半路上断粮（docs/ai-design.md §3.7）。
+ * 断粮项（§3.8）：轴线端点若能压住敌方补给走廊，也加分（软权重，不影响脚本目标）。
  */
-export function chooseApproach(world, { unit, objective, faction, cfg = values.ai, taken = new Set(), knowns = null, fogAware = false }) {
+export function chooseApproach(world, { unit, objective, faction, cfg = values.ai, taken = new Set(), knowns = null, fogAware = false, interdiction = null }) {
   const axes = approachAxes(objective, { x: unit.x, y: unit.y }, cfg);
   const biasName = cfg.terrainBias;
   const policy = supplyPolicy(cfg);
@@ -150,10 +157,12 @@ export function chooseApproach(world, { unit, objective, faction, cfg = values.a
     const proximity = 1 - Math.min(1, travel / Math.max(1, cfg.weakSpot.standoff * 2));
     const terrain = terrainPreference(world, axis, biasName);
     const supply = reachScore(world, faction, axis, policy);
+    const interdict = interdictionScore(axis, interdiction);
     const score = strength.ratio * 0.4 + proximity * 0.2
       + terrain * values.ai.weights.approach * 0.25
-      + supply * values.ai.weights.approach * 0.25;
-    if (!best || score > best.score) best = { ...axis, ...strength, terrain, supply, score };
+      + supply * values.ai.weights.approach * 0.25
+      + interdict * values.ai.weights.interdiction * policy.weightScale * 0.25;
+    if (!best || score > best.score) best = { ...axis, ...strength, terrain, supply, interdict, score };
   }
   return best;
 }

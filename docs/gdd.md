@@ -176,6 +176,7 @@
 - 寻路跑在**补给网格**（`supply.path.cellSize` = 20 px，比 10 px 地形格粗一档）上，用 8 邻域；粗格的地形取格内可通行地形的**平均倍率**，整格都不可通行才算阻断（开 `waterIsBarrier` 时格内含水域即阻断；默认关闭——水能蹚，只是很贵）。
 - **敌方实际控制区不可通行**：判定读的就是屏幕上那条控制线（`world.controlLine` 的带符号影响力）。只认**真实影响力**，控制线给无人区域铺的名义归属（±0.01 填充值）不算「实际控制」，否则一个孤立敌军就能凭一圈虚线归属掐断几百像素外的补给线。
 - 路径代价超过 `supply.path.maxCost`（1500）视为够不着——这也是补给线的最大长度。
+- 由此产生一条**双向的战术手段**：只要把部队插到敌方「单位 ↔ 它的城」这条线路上（单位影响力 140px 内即可形成实际控制），对方的补给线就断了；反过来，自己被围到没有一格可走也是断补。AI 在阶段五开始主动用这一手段（断敌粮道 / 解围，见 `ai-design.md §3.8`），玩家侧的判定与阶段四完全一致。
 
 **2. 城市运力（吞吐点数）与「按缺口申领」**
 
@@ -406,10 +407,14 @@
 | camera：zoomMin / zoomMax / zoomStep / zoomSmoothing | 1 / 3 / 1.1（每格滑轮）/ 1（向目标缩放逼近系数，1 = 直接到位） |
 | ai：decisionIntervalSeconds / hysteresis / engageRadius / localForceRadius | 0.5 s / 0.15 / 320 px / 180 px |
 | ai.presets：cautious / standard / sly（reserveRatio·追击半径·急行军·地形偏好·佯动·**supplyCaution**） | 0.30·180·否·防守·否·**0.8** / 0.15·320·是·均衡·否·**0.5** / 0·520·是·机动·是·**0.2** |
-| ai.weights：threat / kill / distance / value / vulnerability / chase / terrain / approach / **supply** | 0.30 / 0.15 / 0.15 / 0.15 / 0.10 / 0.15 / 0.15 / 0.40 / **0.25** |
+| ai.weights：threat / kill / distance / value / vulnerability / chase / terrain / approach / **supply** / **interdiction** | 0.30 / 0.15 / 0.15 / 0.15 / 0.10 / 0.15 / 0.15 / 0.40 / **0.25** / **0.20** |
 | ai.supply：lowRatio / squadCutFraction | 0.3（**硬约束**：存量比例低于它就算低补给）/ 0.5（小队里断补人数占比过半 → 整队转入低补给姿态） |
 | ai.supply：reachRatio / weightScale / forcedMarchStock（min→max，按 supplyCaution 插值） | 0.95→0.65（活动软范围）/ 0.7→1.4（补给项倍率）/ 0.35→0.7（急行军门槛） |
 | ai.supply：regroupCautionRange / regroupRatioFallback | 0.2（回城阈值 = regroup.supplyRatio + 该值 × (supplyCaution − 0.5)，标准档正好是 0.5）/ 0.5 |
+| ai.interdiction：minCuts / corridorSamples / minCorridor | 2 条（同时压住这么多条敌补给线才值得改方向）/ 3 点（按 0.3·0.5·0.7 采样走廊）/ 240 px（短于它不算粮道：敌人就在自家城边） |
+| ai.interdiction：minDistance / maxDistance / cutRadius | 160 px（贴着自己不算断粮）/ 900 px（太远的断粮点不值得绕）/ 140 px（= controlLine.unit.influenceRadius：一个单位能压住的地盘半径） |
+| ai.relief：threatRadius / standoff / maxDistance | 200 px（敌军进这个圈就算围城）/ 180 px（解围分队停在城外多远）/ 1200 px（有效驰援距离，再远就来不及） |
+| ai.relief：minUsers / minLoadPoints / forceRatio / retreatThreatPenalty | 2 个单位（这城至少是这么多单位的最近己城才值得救）/ 1 点运力（或本轮至少输出这么多点）/ 0.5（解围分队战力 ≥ 围城敌军 × 该值才去）/ 400（撤退选城时被围的城按等效像素加罚） |
 | ai.squad：cohesionRadius / cohesionRatio / slotSpacing / maxAttackersPerTarget / columnSampleStep / advanceStep | 170 px / 0.7 / 34 px / 2 人 / 20 px / 60 px |
 | ai.weakSpot：frontSearchRadius / sampleRadius / pointLimit / axisCount / axisSpread / standoff | 460 px / 170 px / 24 / 3 / 0.6 rad / 220 px |
 | ai.reserve：commitMainRatio / commitWeaknessRatio / rallyBehind | 0.6 / 0.7 / 170 px |

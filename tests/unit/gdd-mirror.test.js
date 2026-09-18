@@ -95,12 +95,19 @@ const MIRROR = {
   'ai.localForceRadius': 180,
   'ai.weights': {
     threat: 0.3, kill: 0.15, distance: 0.15, value: 0.15, vulnerability: 0.1, chase: 0.15, terrain: 0.15,
-    approach: 0.4, supply: 0.25,
+    approach: 0.4, supply: 0.25, interdiction: 0.2,
   },
   'ai.supply': {
     lowRatio: 0.3, squadCutFraction: 0.5,
     reachRatio: { min: 0.95, max: 0.65 }, weightScale: { min: 0.7, max: 1.4 },
     forcedMarchStock: { min: 0.35, max: 0.7 }, regroupCautionRange: 0.2, regroupRatioFallback: 0.5,
+  },
+  'ai.interdiction': {
+    minCuts: 2, corridorSamples: 3, minCorridor: 240, minDistance: 160, maxDistance: 900, cutRadius: 140,
+  },
+  'ai.relief': {
+    threatRadius: 200, standoff: 180, minUsers: 2, minLoadPoints: 1, forceRatio: 0.5,
+    maxDistance: 1200, retreatThreatPenalty: 400,
   },
   'ai.squad': {
     cohesionRadius: 170, cohesionRatio: 0.7, slotSpacing: 34, maxAttackersPerTarget: 2,
