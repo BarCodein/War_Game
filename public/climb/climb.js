@@ -559,7 +559,13 @@ const CLIMB_ACHIEVEMENTS = [
   { id: 'climb-speedster', name: '极速攀登', stars: 3, desc: '60秒内登顶，风一般的男子。', hint: '60秒内登顶' },
   { id: 'climb-barehand', name: '赤手空拳', stars: 2, desc: '不射击也不挥刀，仅凭拳脚登顶。', hint: '不射击也不使用大刀通关' },
   { id: 'climb-lucky', name: '幸运儿', stars: 1, desc: '全程未受任何伤害就登顶，运气也是实力的一部分。', hint: '单局不被任何伤害通关' },
-  { id: 'climb-persistent', name: '越挫越勇', stars: 2, desc: '单局死亡3次以上仍登顶，不屈不挠。', hint: '单局死亡3次以上仍登顶' },
+  { id: 'climb-comeback', name: '越挫越勇', stars: 2, desc: '单局死亡3次以上仍登顶，不屈不挠。', hint: '单局死亡3次以上仍登顶' },
+  { id: 'climb-rock-kill', name: '大石碎胸口', stars: 1, desc: '引导敌人被天降巨石砸死，借刀杀人。', hint: '引导敌人被落石砸死' },
+  { id: 'climb-peaceful', name: '和平解决', stars: 2, desc: '不杀一个敌人就登顶，以和为贵。', hint: '不击杀任何敌人通关' },
+  { id: 'climb-sword-only', name: '大刀进行曲', stars: 2, desc: '仅用大刀通关，子弹一颗不发。', hint: '仅用大刀通关（不射击）' },
+  { id: 'climb-sharpshooter', name: '神射手', stars: 2, desc: '每一发子弹都命中敌人，弹无虚发。', hint: '射击命中率100%通关' },
+  { id: 'climb-collector', name: '收藏家', stars: 1, desc: '到达全部检查点，一个不落。', hint: '到达所有检查点' },
+  { id: 'climb-expert-killer', name: '歼敌专家', stars: 2, desc: '单局击杀10个以上敌人，战功赫赫。', hint: '单局击杀10个以上' },
   { id: 'climb-champion', name: '睡衣登山大赛冠军', stars: 3, desc: '在西安事变的登山小游戏里登顶成功。', hint: '登顶成功' },
   { id: 'climb-speedrun', name: '神兵天降', stars: 2, desc: '90秒内快速登顶，兵贵神速。', hint: '90秒内登顶' },
   { id: 'climb-flawless', name: '毫发无伤', stars: 3, desc: '全程零死亡登顶，身法如仙。', hint: '零死亡登顶' },
@@ -576,10 +582,15 @@ let climbStats = {
   rocked: false, shotDeath: false, fell: false, earlyDeath: false,
   failedBefore: false, bestTime: null, reachedFirstCheckpoint: false,
   totalWins: 0, noWeapon: false, noDamage: false, maxDeathsInRun: 0,
+  enemyRockedKill: false, peaceful: false, onlyMelee: false,
+  sharpshooter: false, collector: false, maxKillsInRun: 0,
 }
 let deathCause = null // 'rock' | 'shot' | 'fell' | null
 let usedWeapon = false // 本局是否使用过武器（射击或大刀）
+let usedSlash = false // 本局是否使用过大刀
 let tookDamage = false // 本局是否受过任何伤害
+let enemyKilledByRock = 0 // 本局敌人被落石砸死数
+let shotsHit = 0 // 本局子弹命中数
 const unlockedThisRun = new Set()
 
 function loadClimbStats() {
@@ -805,6 +816,7 @@ function trySlash() {
   player.slashCd = 22
   sfx('slash')
   usedWeapon = true
+  usedSlash = true
 }
 
 function damagePlayer(dmg) {
@@ -840,17 +852,42 @@ function onPlayerWin() {
   if (climbStats.bestTime === null || usedTime < climbStats.bestTime) {
     climbStats.bestTime = usedTime
   }
+  // 累计登顶次数
+  climbStats.totalWins = (climbStats.totalWins || 0) + 1
   // 永久标记
   if (climbStats.deaths === 0) climbStats.flawless = true
   if (climbStats.kills >= ENEMY_SPAWNS.length) climbStats.slaughter = true
   if (climbStats.shots === 0) climbStats.melee = true
+  if (!usedWeapon) climbStats.noWeapon = true
+  if (!tookDamage) climbStats.noDamage = true
+  if (climbStats.deaths >= 3 && climbStats.deaths > (climbStats.maxDeathsInRun || 0)) {
+    climbStats.maxDeathsInRun = climbStats.deaths
+  }
+  if (enemyKilledByRock > 0) climbStats.enemyRockedKill = true
+  if (climbStats.kills === 0) climbStats.peaceful = true
+  if (climbStats.shots === 0 && usedSlash) climbStats.onlyMelee = true
+  if (climbStats.shots > 0 && shotsHit === climbStats.shots) climbStats.sharpshooter = true
+  if (climbStats.kills >= 10 && climbStats.kills > (climbStats.maxKillsInRun || 0)) {
+    climbStats.maxKillsInRun = climbStats.kills
+  }
   // 正面成就
   unlockAchievement('climb-champion')
   if (usedTime <= 90) unlockAchievement('climb-speedrun')
+  if (usedTime <= 60) unlockAchievement('climb-speedster')
   if (climbStats.flawless) unlockAchievement('climb-flawless')
   if (climbStats.slaughter) unlockAchievement('climb-slaughter')
   if (climbStats.melee) unlockAchievement('climb-melee')
+  if (climbStats.noWeapon) unlockAchievement('climb-barehand')
+  if (climbStats.noDamage) unlockAchievement('climb-lucky')
   if (climbStats.failedBefore) unlockAchievement('climb-persistent')
+  if ((climbStats.maxDeathsInRun || 0) >= 3) unlockAchievement('climb-comeback')
+  if ((climbStats.totalWins || 0) >= 3) unlockAchievement('climb-veteran')
+  if (climbStats.enemyRockedKill) unlockAchievement('climb-rock-kill')
+  if (climbStats.peaceful) unlockAchievement('climb-peaceful')
+  if (climbStats.onlyMelee) unlockAchievement('climb-sword-only')
+  if (climbStats.sharpshooter) unlockAchievement('climb-sharpshooter')
+  if (climbStats.collector) unlockAchievement('climb-collector')
+  if ((climbStats.maxKillsInRun || 0) >= 10) unlockAchievement('climb-expert-killer')
   // 兼容旧成就系统的 climb-cleared 标记
   try { localStorage.setItem('war-of-dots.climb-cleared', '1') } catch (e) {}
   saveClimbStats()
@@ -1000,7 +1037,10 @@ function resetGame() {
   climbStats.shots = 0
   deathCause = null
   usedWeapon = false
+  usedSlash = false
   tookDamage = false
+  enemyKilledByRock = 0
+  shotsHit = 0
   unlockedThisRun.clear()
 }
 
@@ -1392,6 +1432,12 @@ function updatePlayer() {
       saveClimbStats()
       unlockAchievement('climb-first-checkpoint')
     }
+    // 到达所有检查点成就
+    if (cpIndex >= CHECKPOINTS.length && !climbStats.collector) {
+      climbStats.collector = true
+      saveClimbStats()
+      unlockAchievement('climb-collector')
+    }
   }
 }
 
@@ -1513,6 +1559,8 @@ function checkCollisions() {
         e.hp = 0
         spawnBurst(e.x + e.w / 2, e.y + e.h / 2, '#6a6f74', 14)
         sfx('edie')
+        climbStats.kills++
+        enemyKilledByRock++
         break
       }
     }
@@ -1525,6 +1573,7 @@ function checkCollisions() {
       if (e.hp <= 0) continue
       if (overlap(b, e)) {
         b.life = 0
+        shotsHit++
         e.hp -= 1
         e.flash = 8
         sfx('ehit')

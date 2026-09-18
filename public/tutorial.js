@@ -215,13 +215,17 @@ const STORY2_INTRO = {
   scenes: [
     { talker: "纵队司令部", text: "基础操作训练，考核通过！但这只是入门——战场上，决定生死的是地形和士气！", bg: "images/bg-command.jpg", audio: "drum", alert: false, portrait: "images/port-hq.png" },
     { talker: "纵队司令部", text: "据前线战报，塔山、宿北方向连日激战。不少新指挥员因不熟悉地形、不掌握士气，吃了大亏，甚至全军覆没！", bg: "images/bg-command.jpg", audio: "drum", alert: false, portrait: "images/port-hq.png" },
-    { talker: "纵队司令员", text: "先讲地形！道路——移动速度最快，行军士气消耗减半，是调兵命脉；平原——无加成无惩罚，最基础的战场。", bg: "images/bg-command.jpg", audio: "drum", alert: false, portrait: "images/port-hq.png" },
-    { talker: "纵队司令员", text: "森林——移动慢但隐蔽性好，适合设伏；山地——移动慢但防御强，易守难攻；城镇——防御最强，受到伤害仅六成，是据守要点！", bg: "images/bg-command.jpg", audio: "drum", alert: false, portrait: "images/port-hq.png" },
-    { talker: "纵队司令员", text: "水域——最危险！移动最慢，攻击力减半，还每秒掉血！非万不得已，绝不涉水！高山——不可通行，是天然屏障！", bg: "images/bg-command.jpg", audio: "", alert: false, portrait: "images/port-hq.png" },
+    { talker: "纵队司令员", text: "先讲地形！战场有六种地形，每一种都关乎生死。随我逐一看来——", bg: "images/bg-command.jpg", audio: "drum", alert: false, portrait: "images/port-hq.png" },
+    { talker: "纵队司令员", text: "【平原】一马平川，最基础的战场。大兵团在此展开，正面交锋，拼的是兵力和火力，没有取巧的余地。", bg: "images/bg-plain.jpg", audio: "drum", alert: false, portrait: "images/port-hq.png" },
+    { talker: "纵队司令员", text: "【道路】机动的命脉！部队转移、驰援友军，走道路最快，行军也最省力。兵贵神速——谁掌握了道路，谁就掌握了战场主动权！", bg: "images/bg-road.jpg", audio: "drum", alert: false, portrait: "images/port-hq.png" },
+    { talker: "纵队司令员", text: "【森林】林木茂密，隐蔽性极佳！适合设伏、隐蔽集结，敌人难以发现。游击战、伏击战的天然掩护——藏得住，才能打得狠！", bg: "images/bg-forest.jpg", audio: "drum", alert: false, portrait: "images/port-hq.png" },
+    { talker: "纵队司令员", text: "【山地】易守难攻！占领高地据守，敌人仰攻困难，我军以逸待劳。塔山阻击战的核心，就是守住每一处高地，让敌人寸步难进！", bg: "images/bg-mountain.jpg", audio: "drum", alert: false, portrait: "images/port-hq.png" },
+    { talker: "纵队司令员", text: "【城镇】防御最强的地方！房屋街巷都是掩体，巷战歼敌，据守城镇，是以弱胜强的最佳依托。守住一座城，就能挡住一路敌！", bg: "images/bg-town.jpg", audio: "drum", alert: false, portrait: "images/port-hq.png" },
+    { talker: "纵队司令员", text: "【水域】最危险的地形！涉水作战，行动迟缓、火力削弱，还会持续伤亡——等于自杀！非万不得已，绝不涉水！", bg: "images/bg-water.jpg", audio: "", alert: false, portrait: "images/port-hq.png" },
     { talker: "纵队司令员", text: "再说士气！部队打光了可以再建，士气垮了就一溃千里！士气低于六十，战斗力削弱；低于三十，军心动摇；归零且受攻击，当场溃逃！", bg: "images/bg-command.jpg", audio: "", alert: false, portrait: "images/port-hq.png" },
     { talker: "纵队司令员", text: "友军在身边、靠近己方城市、有补给，士气会回升；孤军深入、长时间交战、急行军，士气会暴跌！善用士气者，以弱胜强！", bg: "images/bg-command.jpg", audio: "", alert: false, portrait: "images/port-hq.png" },
     { talker: "纵队司令员", text: "现在，进入战术演训场！那里有道路、城镇、山地、森林、水域——每一种地形，每一种士气变化，都要亲手体会！", bg: "images/bg-command.jpg", audio: "", alert: false, portrait: "images/port-hq.png" },
-    { talker: "前线指挥员", text: "明白！请司令员放心！我一定把地形和士气的要领刻在脑子里，随时准备投入真正的战斗！", bg: "images/bg-command.jpg", audio: "", alert: false, portrait: "images/port-commander.png" }
+    { talker: "前线指挥员", text: "明白！六种地形、士气要领，我已牢记在心！请司令员放心，我一定在演训场亲手体会每一种变化，随时准备投入真正的战斗！", bg: "images/bg-command.jpg", audio: "", alert: false, portrait: "images/port-commander.png" }
   ],
   buttonText: "进入战术演训场"
 };
