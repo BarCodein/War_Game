@@ -175,7 +175,7 @@ export class GameScene extends Phaser.Scene {
       }
     }
     // 渲染（每帧，只读状态；暂停时保持静态画面）
-    this.unitRenderer.draw();
+    this.unitRenderer.draw(dt);
     this.fogRenderer.sync();
     this.controlLineRenderer.draw();
     this.drawOverlays();

@@ -36,6 +36,10 @@ const POINT_COLORS = { neutral: 0x9aa7a7, blue: 0x1911ce, red: 0xe93227 };
 // 贴图旋转基准：立绘「正上方」朝向目标方向（+90°）。
 const SPRITE_FACING_OFFSET = Math.PI / 2;
 
+// 转身角速度（rad/s，纯显示层）：朝向不再瞬时跳变，而是按此速度平滑转向，
+// 180° 掉头约 0.63s。只影响贴图旋转，不改任何模拟状态 / 路径 / 方向判定。
+const TURN_RATE = 5;
+
 // 贴图对角线相对碰撞半径的倍数：2 = 对角线正好等于碰撞直径（贴图内切于碰撞圆）。
 // 当前取 3 让方块更醒目；调整大小只需改这一个数。
 const SPRITE_DIAGONAL_FACTOR = 3;
@@ -178,7 +182,7 @@ export function createUnitRenderer(scene, world, selection) {
     }
   }
 
-  function draw() {
+  function draw(dt = 1 / 60) {
     graphics.clear();
     cityGraphics.clear();
     stats.ghostCount = 0;
@@ -198,7 +202,7 @@ export function createUnitRenderer(scene, world, selection) {
         }
         continue;
       }
-      drawUnit(unit);
+      drawUnit(unit, dt);
     }
     drawStatusBadges();
   }
@@ -220,7 +224,7 @@ export function createUnitRenderer(scene, world, selection) {
     if (sprite) sprite.setVisible(false);
   }
 
-  function drawUnit(unit) {
+  function drawUnit(unit, dt) {
     const { x, y, radius } = unit;
     const isSelected = selection.isSelected(unit.id);
     // 交战：沿「自身→敌人」连线方向的低频率小幅度抖动（仅渲染层，不影响模拟坐标）
@@ -242,22 +246,33 @@ export function createUnitRenderer(scene, world, selection) {
       graphics.strokeCircle(dx, dy, radius + 8);
     }
     const texture = unitTexture(unit);
-    if (textured.get(texture.key)) drawTexturedUnit(unit, texture.key, dx, dy, isSelected);
+    if (textured.get(texture.key)) drawTexturedUnit(unit, texture.key, dx, dy, isSelected, dt);
     else drawCircleUnit(unit, dx, dy, isSelected);
     drawCracks(unit, dx, dy); // 血量<50% 轻破碎、<20% 重破碎（跟随单位震动）
     drawBars(unit, x, y); // 仅己方显示血条/士气条；固定于单位真实位置，不跟随震动
   }
 
   // 贴图单位：等比缩放到「对角线 = 半径 × SPRITE_DIAGONAL_FACTOR」，保持贴图原始长宽比；
-  // 随目标方向旋转、选中着色加深。普通/精英各用其贴图。
-  function drawTexturedUnit(unit, textureKey, dx, dy, isSelected) {
+  // 按目标方向**平滑转向**（每帧朝目标角以 TURN_RATE 逼近，不瞬时跳变）；选中着色加深。
+  // 普通/精英各用其贴图。
+  function drawTexturedUnit(unit, textureKey, dx, dy, isSelected, dt) {
     const sprite = spriteFor(unit, textureKey);
     sprite.setVisible(true);
     // 等比缩放（scaleX === scaleY）→ 长宽比不变
     sprite.setScale((unit.radius * SPRITE_DIAGONAL_FACTOR) / diagonalOf(textureKey));
     sprite.setPosition(dx, dy);
     const facing = facingAngle(unit);
-    if (facing !== null) sprite.setRotation(facing + SPRITE_FACING_OFFSET);
+    // 显示朝向持久化在精灵上：首次出现直接落位（避免开局统一从 0 旋转）；
+    // 之后每帧朝目标角转 TURN_RATE × dt，facing 为 null（无目标）时保持当前朝向。
+    let displayAngle = sprite._displayAngle;
+    if (displayAngle === undefined) {
+      displayAngle = facing ?? 0;
+      sprite._displayAngle = displayAngle;
+    } else if (facing !== null) {
+      displayAngle = approachAngle(displayAngle, facing, TURN_RATE * dt);
+      sprite._displayAngle = displayAngle;
+    }
+    sprite.setRotation(displayAngle + SPRITE_FACING_OFFSET);
     if (isSelected) sprite.setTint(SELECTED_TINT);
     else sprite.clearTint();
   }
@@ -452,4 +467,14 @@ export function createUnitRenderer(scene, world, selection) {
   }
 
   return { draw, stats };
+}
+
+// 显示层的角度逼近（纯函数，供单测）：从 current 朝 target 最多转 maxStep（弧度），
+// 走最短弧（跨 ±π 边界正确换向），不超过目标角、不产生过冲。
+export function approachAngle(current, target, maxStep) {
+  let delta = target - current;
+  while (delta > Math.PI) delta -= Math.PI * 2;
+  while (delta < -Math.PI) delta += Math.PI * 2;
+  const step = Math.min(Math.abs(delta), Math.max(0, maxStep));
+  return current + Math.sign(delta) * step;
 }
