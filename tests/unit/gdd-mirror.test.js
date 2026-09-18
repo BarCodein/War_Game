@@ -85,9 +85,9 @@ const MIRROR = {
   'camera': { zoomMin: 1, zoomMax: 3, zoomStep: 1.1, zoomSmoothing: 1 },
   'ai.preset': 'standard',
   'ai.presets': {
-    cautious: { reserveRatio: 0.3, pursuitRadius: 180, useForcedMarch: false, terrainBias: 'defensive', feint: false },
-    standard: { reserveRatio: 0.15, pursuitRadius: 320, useForcedMarch: true, terrainBias: 'balanced', feint: false },
-    sly: { reserveRatio: 0, pursuitRadius: 520, useForcedMarch: true, terrainBias: 'mobility', feint: true },
+    cautious: { reserveRatio: 0.3, pursuitRadius: 180, useForcedMarch: false, terrainBias: 'defensive', feint: false, supplyCaution: 0.8 },
+    standard: { reserveRatio: 0.15, pursuitRadius: 320, useForcedMarch: true, terrainBias: 'balanced', feint: false, supplyCaution: 0.5 },
+    sly: { reserveRatio: 0, pursuitRadius: 520, useForcedMarch: true, terrainBias: 'mobility', feint: true, supplyCaution: 0.2 },
   },
   'ai.decisionIntervalSeconds': 0.5,
   'ai.hysteresis': 0.15,
@@ -95,7 +95,12 @@ const MIRROR = {
   'ai.localForceRadius': 180,
   'ai.weights': {
     threat: 0.3, kill: 0.15, distance: 0.15, value: 0.15, vulnerability: 0.1, chase: 0.15, terrain: 0.15,
-    approach: 0.4,
+    approach: 0.4, supply: 0.25,
+  },
+  'ai.supply': {
+    lowRatio: 0.3, squadCutFraction: 0.5,
+    reachRatio: { min: 0.95, max: 0.65 }, weightScale: { min: 0.7, max: 1.4 },
+    forcedMarchStock: { min: 0.35, max: 0.7 }, regroupCautionRange: 0.2, regroupRatioFallback: 0.5,
   },
   'ai.squad': {
     cohesionRadius: 170, cohesionRatio: 0.7, slotSpacing: 34, maxAttackersPerTarget: 2,

@@ -6,7 +6,7 @@ import { values } from '../../config/index.js';
 export const AI_PRESET_NAMES = Object.keys(values.ai.presets);
 
 // 允许被 ai.tuning 覆盖的键（避免关卡写出拼错的键却静默无效）
-export const AI_TUNING_KEYS = ['reserveRatio', 'pursuitRadius', 'useForcedMarch', 'terrainBias', 'feint'];
+export const AI_TUNING_KEYS = ['reserveRatio', 'pursuitRadius', 'useForcedMarch', 'terrainBias', 'feint', 'supplyCaution'];
 
 /**
  * 解析本次对局的 AI 配置：`presets[preset]` 覆盖 `values.ai` 的同名项，`tuning` 再覆盖一层。
@@ -60,6 +60,10 @@ export function validateAiTuning(ai, where = 'ai') {
       }
       if (t.terrainBias !== undefined && !values.ai.terrainBias[t.terrainBias]) {
         errors.push(`${where}.tuning.terrainBias must be one of ${Object.keys(values.ai.terrainBias).join(' | ')}`);
+      }
+      if (t.supplyCaution !== undefined
+        && !(typeof t.supplyCaution === 'number' && t.supplyCaution >= 0 && t.supplyCaution <= 1)) {
+        errors.push(`${where}.tuning.supplyCaution must be in [0, 1]`);
       }
     }
   }

@@ -1,4 +1,4 @@
-﻿# War of Dots 技术架构文档
+# War of Dots 技术架构文档
 
 > 定义从浏览器原型演进到 MVP 的技术方案。原则来源：`REQUIREMENTS.md` §3/§5、`AGENTS.md`（模拟/渲染/输入/控制器分离、配置化、i18n）。与 `gdd.md` 中数值的一致性由 `src/config/` 与 Vitest 保障。
 
@@ -37,6 +37,7 @@ src/
     ai.js                    # 脚本敌军指令生成器（走统一命令接口）+ 战术层调度（engage）
     ai/                      # 战术层纯函数：tactics.js（效用打分）· squad.js（编队协同）
                              #   front.js（战线薄弱点/接近轴）· presets.js（难度档）· perception.js（迷雾情报）
+                             #   supply.js（补给视野：代价查询 / 行动边界 / 硬约束判定）
     systems/
       movement.js            # 移动、寻路、碰撞软排斥
       combat.js              # 目标选择、攻击冷却、伤害结算

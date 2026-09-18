@@ -27,9 +27,11 @@ export const values = {
     preset: 'standard',            // 全局默认档位；关卡可写 ai.preset 覆盖
     // 三档性格：只有这几项随档位变化（决策节奏与休整阈值是全局的）
     presets: {
-      cautious: { reserveRatio: 0.3, pursuitRadius: 180, useForcedMarch: false, terrainBias: 'defensive', feint: false },
-      standard: { reserveRatio: 0.15, pursuitRadius: 320, useForcedMarch: true, terrainBias: 'balanced', feint: false },
-      sly: { reserveRatio: 0, pursuitRadius: 520, useForcedMarch: true, terrainBias: 'mobility', feint: true },
+      // supplyCaution：补给敏感度，0 = 激进（敢短时脱离补给线换机会），1 = 保守（贴着补给线打）。
+      // 它插值出 ai.supply 里的四组阈值（活动范围 / 打分倍率 / 急行军门槛 / 回城阈值）。
+      cautious: { reserveRatio: 0.3, pursuitRadius: 180, useForcedMarch: false, terrainBias: 'defensive', feint: false, supplyCaution: 0.8 },
+      standard: { reserveRatio: 0.15, pursuitRadius: 320, useForcedMarch: true, terrainBias: 'balanced', feint: false, supplyCaution: 0.5 },
+      sly: { reserveRatio: 0, pursuitRadius: 520, useForcedMarch: true, terrainBias: 'mobility', feint: true, supplyCaution: 0.2 },
     },
     decisionIntervalSeconds: 0.5,  // 战术层决策节奏（模拟时间，秒）
     hysteresis: 0.15,              // 换目标所需的分数优势（防止每半秒反复横跳）
@@ -44,6 +46,19 @@ export const values = {
       chase: 0.15,             // 追击溃逃目标的额外权重
       terrain: 0.15,           // 我方所在地形（水里输出减半）
       approach: 0.4,           // 接近轴的地形偏好权重（配合 presets[].terrainBias）
+      supply: 0.25,            // 补给（存量是否够、战场是否在补给可达区内）——见 ai.supply 与 docs/ai-design.md §3.7
+    },
+    // 补给视野（docs/ai-design.md §3.7）：硬约束阈值 + 由档位 supplyCaution 线性插值的软阈值。
+    // 硬约束（与档位无关）：补给线断了（supplied=false）或存量比例 < lowRatio → 收紧
+    //   （不急行军、不主动接战、向补给区内回撤）。
+    supply: {
+      lowRatio: 0.3,              // 硬约束：存量比例低于此值视为"低补给"
+      squadCutFraction: 0.5,      // 小队里断补人数占比达到此值 → 整队转入低补给姿态
+      reachRatio: { min: 0.95, max: 0.65 },        // 允许活动范围 = supply.path.maxCost × 该值
+      weightScale: { min: 0.7, max: 1.4 },         // 效用打分里补给项的倍率
+      forcedMarchStock: { min: 0.35, max: 0.7 },   // 急行军要求的最低存量比例
+      regroupCautionRange: 0.2,   // 回城阈值 = regroup.supplyRatio + 该值 × (supplyCaution − 0.5)：标准档不漂移
+      regroupRatioFallback: 0.5,  // cfg.regroup.supplyRatio 缺省时的兜底
     },
     squad: {
       cohesionRadius: 170,       // 队形松散判定半径（px）

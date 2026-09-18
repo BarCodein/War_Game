@@ -224,6 +224,15 @@ war_game/
 - `buildMission(level, world)` 把 `victory` 解析成运行时任务规则（`world.mess`）：`{ mode, faction, time, points }`；`captureAll` / 未声明 → `null`。
 - 常量：`LEVEL_VERSION`、`LEVEL_TYPES`、`VICTORY_MODES`、`OBJECTIVE_ANNIHILATE`、`FORCE_OBJECTIVES`、`AI_ACTION_TYPES`、`FACTIONS`、`LEVELS_INDEX_PATH`、`levelPath(id)`。
 
+### `src/simulation/ai/supply.js`
+**AI 的补给视野**（`docs/ai-design.md` §3.7）：纯函数，只读 `world` 与 `values`，可单测。
+- `supplyPolicy(cfg)`：把档位 `supplyCaution`（0 激进 ~ 1 保守）插值成 AI 用的阈值——`hardReachCost`（行动边界 = `supply.path.maxCost`，与档位无关）、`reachCost`（软范围，仅用于打分）、`weightScale`（补给项倍率）、`forcedMarchStock`（急行军门槛）、`regroupRatio`（回城阈值，标准档正好等于 `ai.regroup.supplyRatio`）。
+- `supplyCostOf` / `withinSupply`：查`world.supplyFields[faction]` 的代价场（O(1)）；**没有场时视为"未知 → 不限制"**（首帧、该阵营无城）。
+- `bestSupplyCity`：撤退目标 = 补给代价最低（代价场的 `owner`）的那座城；断补时退回欧氏最近。
+- `clampToSupply`：把目标点夹进行动边界内（沿"自身 → 目标"二分 12 次）。
+- `isLowSupply` / `squadLowSupply`：硬约束判定（断补 或 存量比例 < `lowRatio`；小队看断补占比与平均比例）。
+- `supplyScore`：补给打分项（存量 0.5 + 战场是否在可达区内 0.3 + 是否断补 0.2），供 `tactics.js` 与 `front.js` 使用。
+
 ### `src/simulation/ai.js`
 脚本敌军（`ScriptedAI`）：**解释关卡 JSON 里的「事件 → 动作」脚本**，引擎不含关卡特例：
 - 只读世界状态，通过 `world.issueCommands` 下发（与人类共用统一命令接口）。
@@ -233,13 +242,16 @@ war_game/
 - 动作：`spawn`（可按 `order` 逐单位下令，可用 `group` 给增援打标签）、`attackNearest`（各打最近敌军，无敌人时转向 `fallback`）、`attackMove`（可带 `forced: true` → 急行军）、`engage`（**战术层**：队形推进 + 不添油 + 集中火力 + 追击溃逃，见下）、`hold`、`retreat`（`to` 省略时撤向最近的己方城市，无城可退则驻守）；所有点位经 `resolvePoint(ref, world, this.anchors)` 解析，构造时传入关卡 `anchors`。
 - **只指挥一部分部队**：每个动作可选 `units: { group: 'x' }`，由 `ownUnits(selector)` / `commandUnits()` 过滤 `unit.group`（标签来自 `forces[].group` / `spawn.group`）；省略 = 全军，选不到单位时静默跳过。
 - **`engage` 与战术层**（docs/ai-design.md 阶段一）：`doEngage` 把编队登记进 `intents`（编队 → 目标点），此后每 `values.ai.decisionIntervalSeconds` 由 `runTactics()` 决策：① 队形槽位推进 ② 脱离队形的先锋 `hold` 等主力 ③ 集中火力（同目标 ≤ `maxAttackersPerTarget`）④ 溃逃目标优先。脚本下 `hold` / `retreat` / `attackMove` 会 `clearIntents`（脚本意图优先）；命令签名去重避免重置行军路线。
+- **补给约束**（阶段四，docs/ai-design.md §3.7）：`runTactics` 先算 `squadLowSupply`（断补占比 ≥ 0.5 或平均存量 < 0.3）→ 视同"该回去补给了"，直接进 `regroup`（撤向**补给代价最低**的城）；目标点经 `clampToSupply` 夹进 `supply.path.maxCost` 边界内；个别低补给单位自己 `move` 回补给城、不再前顶（也不主动接战）；`shouldForceMarch` 额外要求"全队存量 ≥ 档位门槛 + 无人断补 + 目的地可达"；`pickScouts`/`scoutFrontier` 同样受补给约束。
 - `nearestEnemy` 用空间区扩张半径查询，避免全图扫描。
+- `retreatCity(point)`：撤退目标 = `bestSupplyCity` 的城（够不着任何城时才退回 `nearestOwnCity` 的欧氏最近）。
 
 ### `src/simulation/ai/`（战术层纯函数，docs/ai-design.md）
 - `tactics.js`：`combatPower`（复用 `combat.calcDamageRatio` + 缺补倍率 + 地形防御）/ `localBalance`（半径内双方战力占比）/ `targetValue` / `scoreAttack`（含集火上限，达上限返回 null）/ `chooseTarget`（溃逃优先，再比分数）/ `enemiesWithin`（走空间网格）。
 - `squad.js`：`formationSlots`（line / column / wedge，按朝向旋转）/ `squadAnchor`（形心向目标推进 `advanceStep`，不越过目标）/ `needsColumn`（沿直线采样水域/不可通行）/ `cohesionRatio`·`isCohesive`·`isRushingAhead`（不添油）/ `assignSlots`（按距锚点距离 + id 的确定性分配）。
-- `front.js`（阶段二 B）：复用 `world.controlLineSegments`（控制线 0 等值线 = 实际战线）定位战线 → `pointStrength` 采样兵力比（空点记 1）→ `chooseWeakSpot` 选最弱段 / `approachAxes` 生成接近轴 → `chooseApproach` 按"敌弱 + 近 + 地形合口味"挑轴 → `approachWaypoint` 两段式推进；`terrainPreference` / `feintAxis` 供档位使用。**脚本目标点不变，只选接近方向。**
-- `presets.js`（阶段二 F）：`AI_PRESET_NAMES`（cautious / standard / sly）、`AI_TUNING_KEYS`（reserveRatio / pursuitRadius / useForcedMarch / terrainBias / feint）、`resolveAiConfig(preset, tuning)`（档位覆盖 values.ai，tuning 再覆盖，且 `pursuitRadius` 同步为 `engageRadius`）、`validateAiTuning`（关卡结构校验：档位 / tuning 键 / `ai.fog` 布尔）。
+- `front.js`（阶段二 B）：复用 `world.controlLineSegments`（控制线 0 等值线 = 实际战线）定位战线 → `pointStrength` 采样兵力比（空点记 1）→ `chooseWeakSpot` 选最弱段 / `approachAxes` 生成接近轴 → `chooseApproach` 按"敌弱 + 近 + 地形合口味 + **补给代价低**"挑轴 → `approachWaypoint` 两段式推进；`terrainPreference` / `feintAxis` 供档位使用。**脚本目标点不变，只选接近方向。**
+- `supply.js`（阶段四）：AI 的补给视野（`supplyPolicy` / `supplyCostOf` / `withinSupply` / `bestSupplyCity` / `clampToSupply` / `isLowSupply` / `squadLowSupply` / `supplyScore`），见上文。
+- `presets.js`（阶段二 F）：`AI_PRESET_NAMES`（cautious / standard / sly）、`AI_TUNING_KEYS`（reserveRatio / pursuitRadius / useForcedMarch / terrainBias / feint / **supplyCaution**）、`resolveAiConfig(preset, tuning)`（档位覆盖 values.ai，tuning 再覆盖，且 `pursuitRadius` 同步为 `engageRadius`）、`validateAiTuning`（关卡结构校验：档位 / tuning 键 / `ai.fog` 布尔 / `supplyCaution ∈ [0,1]`）。
 - `perception.js`（阶段三）：`visibleEnemies`（`isSpotted`，含森林隐蔽）/ `rememberedEnemies`（`lastSeen` + 年龄衰减，低于 `staleConfidence` 即遗忘，条目带 `ghost: true`）/ `knownEnemies`·`perceive`（可见 + 记忆，或全知）/ `unexploredFrontier`（fog 网格上有界 BFS 找最近未探索格，同深度优先靠近敌城）/ `awarenessSummary`（调试用情报摘要）。
 
 ### `src/simulation/systems/movement.js`

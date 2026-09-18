@@ -405,8 +405,11 @@
 | prep.seconds | 5（开局准备阶段倒计时；期间可下达预先指令，部队与 AI 都不行动。编辑器试玩跳过） |
 | camera：zoomMin / zoomMax / zoomStep / zoomSmoothing | 1 / 3 / 1.1（每格滑轮）/ 1（向目标缩放逼近系数，1 = 直接到位） |
 | ai：decisionIntervalSeconds / hysteresis / engageRadius / localForceRadius | 0.5 s / 0.15 / 320 px / 180 px |
-| ai.presets：cautious / standard / sly（reserveRatio·追击半径·急行军·地形偏好·佯动） | 0.30·180·否·防守·否 / 0.15·320·是·均衡·否 / 0·520·是·机动·是 |
-| ai.weights：threat / kill / distance / value / vulnerability / chase / terrain / approach | 0.30 / 0.15 / 0.15 / 0.15 / 0.10 / 0.15 / 0.15 / 0.40 |
+| ai.presets：cautious / standard / sly（reserveRatio·追击半径·急行军·地形偏好·佯动·**supplyCaution**） | 0.30·180·否·防守·否·**0.8** / 0.15·320·是·均衡·否·**0.5** / 0·520·是·机动·是·**0.2** |
+| ai.weights：threat / kill / distance / value / vulnerability / chase / terrain / approach / **supply** | 0.30 / 0.15 / 0.15 / 0.15 / 0.10 / 0.15 / 0.15 / 0.40 / **0.25** |
+| ai.supply：lowRatio / squadCutFraction | 0.3（**硬约束**：存量比例低于它就算低补给）/ 0.5（小队里断补人数占比过半 → 整队转入低补给姿态） |
+| ai.supply：reachRatio / weightScale / forcedMarchStock（min→max，按 supplyCaution 插值） | 0.95→0.65（活动软范围）/ 0.7→1.4（补给项倍率）/ 0.35→0.7（急行军门槛） |
+| ai.supply：regroupCautionRange / regroupRatioFallback | 0.2（回城阈值 = regroup.supplyRatio + 该值 × (supplyCaution − 0.5)，标准档正好是 0.5）/ 0.5 |
 | ai.squad：cohesionRadius / cohesionRatio / slotSpacing / maxAttackersPerTarget / columnSampleStep / advanceStep | 170 px / 0.7 / 34 px / 2 人 / 20 px / 60 px |
 | ai.weakSpot：frontSearchRadius / sampleRadius / pointLimit / axisCount / axisSpread / standoff | 460 px / 170 px / 24 / 3 / 0.6 rad / 220 px |
 | ai.reserve：commitMainRatio / commitWeaknessRatio / rallyBehind | 0.6 / 0.7 / 170 px |
