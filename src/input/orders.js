@@ -90,6 +90,7 @@ export function createOrders(scene, world, selection) {
     // 拖动阈值与框选一致（dragBoxThreshold），避免手抖变成一个小距离移动指令。
     const drawn = currentRoute.length > 1 && routeLength(currentRoute) >= values.input.dragBoxThreshold;
     if (drawn) {
+      const offset = values.input.routeUnitOffset;
       const append = pointer.event?.shiftKey || pointer.shiftKey;
       const commandFactory = append ? appendRouteCommand : moveCommand;
 
@@ -100,15 +101,16 @@ export function createOrders(scene, world, selection) {
         y: point.y - startPoint.y,
       }));
 
-      [...selection.selected].forEach((id) => {
+      [...selection.selected].forEach((id, index) => {
+        const shift = index * offset;
         const unit = world.units.find(candidate => candidate.id === id);
         if (!unit || unit.state === 'dead' || unit.state === 'rout') return;
         const anchor = getRouteAnchor(unit);
         // 将相对位移叠加到单位自身的当前位置（或锚点，用于追加路径）
         const basePos = append ? anchor : { x: unit.x, y: unit.y };
         const drawnRoute = relativeRoute.map(delta => ({
-          x: basePos.x + delta.x,
-          y: basePos.y + delta.y,
+          x: basePos.x + delta.x + shift,
+          y: basePos.y + delta.y + shift,
         }));
         const path = append
           ? [anchor, ...drawnRoute.slice(1)] // 第一个点是 anchor 自身，去重

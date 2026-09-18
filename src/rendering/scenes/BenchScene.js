@@ -72,7 +72,7 @@ export class BenchScene extends Phaser.Scene {
   update(time, delta) {
     const start = performance.now();
     const ticks = this.loop.advance(delta / 1000);
-    this.unitRenderer.draw(delta / 1000);
+    this.unitRenderer.draw();
     this.fogRenderer.sync();
     const frameCost = performance.now() - start;
 
