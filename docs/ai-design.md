@@ -1,4 +1,4 @@
-# 敌军 AI 设计（战术层）
+﻿# 敌军 AI 设计（战术层）
 
 > 本文是 AI 扩展的设计与实施记录。战略层（关卡 JSON 脚本）见 `architecture.md §7.1`；
 > 数值全部在 `src/config/values.js` 的 `ai` 域（gdd.md §12 镜像表同步）。
@@ -12,7 +12,7 @@
 战术层 ai.js + ai/tactics.js + ai/squad.js（阶段一新增）  队形、节奏、选谁打、追击
       │ 逐单位命令（统一命令接口 world.issueCommands）
       ▼
-simulation（movement / combat / morale / supply…）        完全未改动
+simulation（movement / combat / supply / supplyStock…）        完全未改动
 ```
 
 **铁律**
@@ -44,7 +44,7 @@ score = threat      × 局部兵力比 P(me)/(P(me)+P(enemy))     // 0.30
       + vulnerability × (目标 rout/unordered ? 1 : 0)        // 0.10  承受伤害 ×1.5
       + chase       × (溃逃 ? 距离项 : 0)                    // 0.15  追击收益
       + terrain     × attackMultiplierAt(自己)               // 0.15  在水里输出减半
-P(unit) = dps × effectsFor(morale).damageMultiplier × calcDamageRatio(unit) × (hp / 地形防御修正)
+P(unit) = dps × effectsFor(stockRatio).damageMultiplier × calcDamageRatio(unit) × (hp / 地形防御修正)
 ```
 
 - **战力估算刻意复用真实伤害公式的成分**（`calcDamageRatio` 由 `combat.js` 导出），避免 AI 与战斗两套数值打架。
@@ -95,15 +95,15 @@ approachWaypoint：先到轴线端点集结，越过停战线后压向脚本目�
 - **预备队**：按比例把离推进点最远的那几名留在主力后方 `rallyBehind` 处；投入条件 = 主力战力掉到开战基线
   `commitMainRatio` 以下，或目标方向我方相对优势已达 `commitWeaknessRatio`（扩大战果）。
 - **佯动分兵（sly）**：派 1 个单位走相邻的侧翼轴，作为牵制（接触后按 attack-forward 自动交火）。
-- **急行军**：档位允许且距推进点 ≥ `march.minDistance` 才下令（代价是士气 −10/s、掉血 1.5/s）。
+- **急行军**：档位允许且距推进点 ≥ `march.minDistance` 才下令（代价是补给 −10/s、掉血 1.5/s）。
   实测发现 400px 就触发太浪费（见 §5），已调到 650px。
 
 ### 3.3 回城休整
 
 ```
-engage --(小队平均血量 < hpRatio 或士气 < morale)--> regroup（逐单位 move 到最近己城）
-regroup --(进入己城恢复半径 100px)--> recover（原地 hold，靠 +3hp/s、+5 士气/s 恢复）
-recover --(血量 ≥ recoverHpRatio 且士气 ≥ recoverMorale)--> engage（带 cooldownSeconds 冷却）
+engage --(小队平均血量 < hpRatio 或补给存量比例 < supplyRatio)--> regroup（逐单位 move 到最近己城）
+regroup --(进入己城恢复半径 100px)--> recover（原地 hold：+3hp/s 由 supply 结算，补给存量靠城里的补给线进货）
+recover --(血量 ≥ recoverHpRatio 且补给存量比例 ≥ recoverSupplyRatio)--> engage（带 cooldownSeconds 冷却）
 ```
 无己方城市时不撤退（继续打），避免"无城可退却站着不动"。
 

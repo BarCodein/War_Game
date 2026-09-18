@@ -67,7 +67,8 @@ export function createSupplyLines(scene, world, selection) {
       const cities = world.cities.filter(city => city.faction === unit.faction);
       if (cities.length === 0) continue;
 
-      // ① 正在供给的每条边：线宽/浓度 = 实收占比
+      // ① 每条补给边画一条线：线宽/浓度 = 实收占比。
+      // 满额部队没有缺口 → 那条边是 0 流量的"待机"边（最细最淡），玩家仍能看出路线走向。
       for (const edge of unit.supplyEdges ?? []) {
         const city = cities.find(item => item.id === edge.cityId);
         if (!city) continue;
@@ -80,7 +81,9 @@ export function createSupplyLines(scene, world, selection) {
         lineCount += 1;
       }
 
-      if ((unit.supplyRatio ?? 0) >= 1 - 1e-6) continue; // 满补给：不用提示
+      // ② 只有**补给线断了**（supplied=false：被敌方控制区切断 / 够不着 / 没有城市）才提示。
+      // 注意用 supplied 而不是 supplyRatio：满额部队 ratio=1，但路断了照样要画出那条红色虚线。
+      if (unit.supplied) continue;
 
       // ② 缺补给：找出"本来该走的那条路"，判断是被敌方控制区切断，还是城里运力不够
       const nearest = nearestCity(unit, cities);

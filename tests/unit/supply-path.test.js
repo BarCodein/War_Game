@@ -106,6 +106,7 @@ describe('补给：敌方实际控制区阻断', () => {
     // 红方在 x=400 拉一道竖墙：影响力半径 140、间隔 100 → 整张地图的南北通道全被盖住
     for (let y = 100; y <= 700; y += 100) world.spawnUnit('red', 'light', 400, y);
     const unit = world.spawnUnit('blue', 'light', 500, 600);
+    unit.supplyStock = 0; // 有缺口才会申领（满额单位不申领，见"多城协同"里的用例）
     advance(world, 2); // 代价场每 1 s 重算一次（首次在 t=0、那时还没有控制线），2 s 足以生效
 
     expect(unit.supplied).toBe(false);
@@ -145,16 +146,75 @@ describe('补给：容量与多城协同', () => {
         { id: 'c2', x: 1100, y: 100, faction: 'red' },
       ],
     }));
-    // 5 个贴城单位（因子 1，各花 1 点）吃掉 c1 的全部 5 点吞吐
-    for (let i = 0; i < 5; i += 1) world.spawnUnit('blue', 'light', 110 + i * 10, 600);
+    // 5 个贴城单位（因子 1，各花 1 点）吃掉 c1 的全部 5 点吞吐。
+    // ⚠️ 只有**有缺口**的单位才申领运力：先把它们的存量清空，否则满额部队会让出运力（见下一个用例）
+    for (let i = 0; i < 5; i += 1) world.spawnUnit('blue', 'light', 110 + i * 10, 600).supplyStock = 0;
     const far = world.spawnUnit('blue', 'light', 300, 600); // 离 c1 200、离 c3 260 → 首选 c1
+    far.supplyStock = 0;
     advance(world, 1);
 
     expect(far.supplied).toBe(true);
+    expect(far.supplyRatio).toBe(1); // 申领被满足
     expect(far.supplyEdges).toHaveLength(1);
     expect(far.supplyEdges[0].cityId).toBe('c3'); // c1 满了 → 顺延到 c3
     expect(far.supplyEdges[0].factor).toBeLessThan(1); // 远城要打折
     expect(world.citySupplyLoad.get('c1')).toBeCloseTo(values.supply.capacityPerCity, 5); // 容量用满
+  });
+
+  it('存量已满的单位几乎不申领运力：多余运力会流向缺补的部队（不再溢出浪费）', () => {
+    const world = makeWorld(blueMap());
+    // 5 个贴城单位**存量已满**（出击即满）+ 1 个远处的空存量单位
+    const full = [];
+    for (let i = 0; i < 5; i += 1) full.push(world.spawnUnit('blue', 'light', 130 + i * 10, 600));
+    const needy = world.spawnUnit('blue', 'light', 700, 600);
+    needy.supplyStock = 0;
+    advance(world, 1);
+
+    const fullRate = values.supply.stockPerPoint * values.supply.demandPerUnit / values.supply.refreshSeconds;
+    // 满额单位：只申领"抵掉基础口粮"的那一点点（≈1/s，而不是满额 20/s 再被 clamp 丢掉）
+    for (const unit of full) {
+      expect(unit.supplyIntake).toBeLessThan(fullRate * 0.1);
+      expect(unit.supplyStock).toBeGreaterThan(unit.maxSupplyStock - 1);
+      expect(unit.supplyEdges).toHaveLength(1);
+      expect(unit.supplyEdges[0].received).toBeLessThan(0.1); // 流量极小
+    }
+    // 缺补单位：运力没有被满额部队占住 → 正常进货、补上存量、不掉血
+    expect(needy.supplied).toBe(true);
+    expect(needy.supplyIntake).toBeGreaterThan(fullRate * 0.5);
+    expect(needy.supplyStock).toBeGreaterThan(0);
+    expect(needy.hp).toBe(needy.maxHp);
+    // 城市运力几乎都给了真正有缺口的部队
+    const fullLoad = full.reduce((sum, unit) => sum
+      + unit.supplyEdges.reduce((s, edge) => s + edge.points, 0), 0);
+    expect(fullLoad).toBeLessThan(0.5);
+    expect(world.citySupplyLoad.get('c1')).toBeGreaterThan(1);
+  });
+
+  it('刚出击（缺口正好为 0）的单位记一条 0 流量的待机边', () => {
+    const world = makeWorld(blueMap());
+    const unit = world.spawnUnit('blue', 'light', 150, 600); // 出击即满存量
+    world.tick(values.simulation.fixedStep); // 第一 tick：supply 先跑，此时缺口为 0
+    expect(unit.supplyEdges).toHaveLength(1);
+    expect(unit.supplyEdges[0].standby).toBe(true);
+    expect(unit.supplyEdges[0].points).toBe(0);
+    expect(unit.supplyIntake).toBe(0);
+  });
+
+  it('快满的单位按缺口精确申领：不超额、不浪费', () => {
+    const world = makeWorld(blueMap());
+    const unit = world.spawnUnit('blue', 'light', 150, 600); // 贴城 → 因子 1
+    unit.supplyStock = unit.maxSupplyStock - 4; // 缺口 4 存量 = 0.4 点
+    world.supplyTimer = 999; // 强制立刻结算一轮
+    advance(world, values.supply.refreshSeconds);
+
+    expect(unit.supplyEdges).toHaveLength(1);
+    expect(unit.supplyEdges[0].points).toBeCloseTo(0.4, 6); // 正好是缺口换算出来的点数
+    // 这一轮里基础口粮吃掉 0.5 存量，所以结算后仍差一点点（不会超额发放）
+    expect(unit.supplyStock).toBeGreaterThan(unit.maxSupplyStock - 1);
+    expect(unit.supplyStock).toBeLessThanOrEqual(unit.maxSupplyStock);
+    expect(unit.supplyIntake).toBeLessThanOrEqual(
+      values.supply.stockPerPoint * values.supply.demandPerUnit / values.supply.refreshSeconds,
+    );
   });
 
   it('一座城不够时，多座城同时给同一个单位补给（部分 + 补齐）', () => {
@@ -165,9 +225,10 @@ describe('补给：容量与多城协同', () => {
         { id: 'c2', x: 1100, y: 100, faction: 'red' },
       ],
     }));
-    // 4 个贴城单位吃掉 c3 的 4 点，只给它留下 1 点
-    for (let i = 0; i < 4; i += 1) world.spawnUnit('blue', 'light', 560 + i * 30, 600);
+    // 4 个贴城单位吃掉 c3 的 4 点，只给它留下 1 点（同样要先清空存量，否则它们不申领）
+    for (let i = 0; i < 4; i += 1) world.spawnUnit('blue', 'light', 560 + i * 30, 600).supplyStock = 0;
     const far = world.spawnUnit('blue', 'light', 1200, 600); // 到 c3 约 600（因子 0.375）、到 c1 约 1100（因子 0.2）
+    far.supplyStock = 0;
     advance(world, 1);
 
     expect(far.supplied).toBe(true); // 两座城合力凑满
@@ -180,29 +241,36 @@ describe('补给：容量与多城协同', () => {
     expect(received).toBeCloseTo(values.supply.demandPerUnit, 5);
   });
 
-  it('所有城市都满了 → 断补（损耗按缺口比例：完全断补 = 1 hp/s）', () => {
+  it('城市运力被占满 → 缺补单位拿不到运力（申领满足度 0），但补给线本身仍是通的', () => {
     const world = makeWorld(blueMap());
-    for (let i = 0; i < 5; i += 1) world.spawnUnit('blue', 'light', 110 + i * 10, 600); // 吃掉全部 5 点
+    // 5 个空存量贴城单位吃掉全部 5 点（有缺口的单位才申领）
+    for (let i = 0; i < 5; i += 1) world.spawnUnit('blue', 'light', 110 + i * 10, 600).supplyStock = 0;
     const extra = world.spawnUnit('blue', 'light', 300, 600); // 唯一的另一座城是敌方的
+    extra.supplyStock = extra.maxSupplyStock * 0.5; // 还有存量 → 掉血只看存量，不看路通不通
     advance(world, 1);
-    expect(extra.supplied).toBe(false);
-    expect(extra.supplyRatio).toBe(0);
+    expect(extra.supplied).toBe(true);    // 路是通的（有己方城市、够得着）
+    expect(extra.supplyRatio).toBe(0);    // 但运力被占满 → 一点都没申领到
+    expect(extra.supplyIntake).toBe(0);   // 完全不进货
     expect(extra.supplyEdges).toHaveLength(0);
-    expect(extra.hp).toBeCloseTo(59, 1); // 1 hp/s × 1 s
+    expect(extra.hp).toBe(60);            // 存量还有 → 不掉血（掉血只在存量归零之后，见 supplyStock 系统）
   });
 
-  it('部分补给按缺口比例减轻损耗（实收 73% → 损耗 27%）', () => {
+  it('部分补给：申领满足度决定进货速率（不足额就进得慢，但不直接掉血）', () => {
     const world = makeWorld(blueMap());
     const near = world.spawnUnit('blue', 'light', 400, 600);  // 代价 ~300 → 因子 0.75 → 要 1.33 点
     const far = world.spawnUnit('blue', 'light', 1000, 600);  // 代价 ~900 → 因子 0.2 → 要 5 点
+    near.supplyStock = 0; // 有缺口才申领
+    far.supplyStock = 0;
     advance(world, 1);
-    expect(near.supplied).toBe(true); // 便宜的先用（城市优先补最近的）
-    expect(far.supplied).toBe(false);
+    expect(near.supplyRatio).toBe(1); // 便宜的先用（城市优先补最近的）
     // c1 的 5 点：先给 near 1.33，剩下 3.67 给 far → 实收 3.67 × 0.2 = 0.734
     expect(far.supplyRatio).toBeGreaterThan(0.6);
     expect(far.supplyRatio).toBeLessThan(0.8);
-    const deficit = 1 - far.supplyRatio;
-    expect(far.hp).toBeCloseTo(60 - values.supply.attritionHpPerSecond * deficit, 1);
+    // 进货速率按申领满足度打折（满额申领 = 20/s）
+    const full = values.supply.stockPerPoint * values.supply.demandPerUnit / values.supply.refreshSeconds;
+    expect(far.supplyIntake / full).toBeCloseTo(far.supplyRatio, 5);
+    expect(far.supplyIntake).toBeLessThan(full);
+    expect(near.supplyStock).toBeGreaterThan(0);
   });
 });
 

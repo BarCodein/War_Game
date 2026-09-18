@@ -1,8 +1,8 @@
-// 统一命令接口：人类输入、脚本敌军（ai.js）与未来 AI 共用（REQUIREMENTS.md §4.5）。
+﻿// 统一命令接口：人类输入、脚本敌军（ai.js）与未来 AI 共用（REQUIREMENTS.md §4.5）。
 // 命令经 world.issueCommands 下发并附带校验；格式见 architecture.md §5。
 //
 // `forced: true` = **急行军**（gdd.md §4）：除了水域之外的地形提速 1.5×，
-// 代价是行军士气 -12/s 且每秒掉 0.5 血。move / attackMove / appendRoute / enqueueRoute 都支持。
+// 代价是行军补给 -10/s 且每秒掉 1.5 血。move / attackMove / appendRoute / enqueueRoute 都支持。
 export const commandTypes = ['move', 'attackMove', 'attack', 'hold', 'appendRoute', 'enqueueRoute', 'lock'];
 
 export function moveCommand(path, { forced = false } = {}) {

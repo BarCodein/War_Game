@@ -1,4 +1,4 @@
-# War of Dots 技术架构文档
+﻿# War of Dots 技术架构文档
 
 > 定义从浏览器原型演进到 MVP 的技术方案。原则来源：`REQUIREMENTS.md` §3/§5、`AGENTS.md`（模拟/渲染/输入/控制器分离、配置化、i18n）。与 `gdd.md` 中数值的一致性由 `src/config/` 与 Vitest 保障。
 
@@ -40,7 +40,7 @@ src/
     systems/
       movement.js            # 移动、寻路、碰撞软排斥
       combat.js              # 目标选择、攻击冷却、伤害结算
-      morale.js              # 士气修正、阈值效果、溃逃/投降
+      supplyStock.js         # 补给存量：消耗/进货、阈值效果、溃逃/投降
       supply.js              # 补给：沿最短路径的城市运力结算 + 恢复 + 生产 + 损耗
       capture.js             # 城市占领进度
       fog.js                 # 战争迷雾三态与最后已知位置
@@ -50,7 +50,7 @@ src/
     scenes/BootScene.js      # 资源加载、配置装配
     scenes/GameScene.js      # 游戏主场景：组装 sim + input + HUD
     scenes/EditorScene.js    # 地图编辑器（阶段 5）
-    unitRenderer.js          # 单位/血条/士气条/选中圈/虚影
+    unitRenderer.js          # 单位/血条/补给存量条/选中圈/虚影
     terrainRenderer.js       # 地形与网格
     fogRenderer.js           # 迷雾三态罩层
     controlLineRenderer.js   # 实际控制线
@@ -65,7 +65,7 @@ src/
     gameController.js        # 暂停/游戏速度、任务链、场景切换
 public/assets/               # 图片/音频（经 Vite 处理，Phaser 加载）
 tests/
-  unit/                      # Vitest：combat/morale/capture/supply/fog/map-json/
+  unit/                      # Vitest：combat/supply/supplyStock/capture/supplyPath/fog/map-json/
                              # victory/commands/loop/spatial/ai.test.js
   e2e/                       # Playwright：selection/orders/tutorial/editor.spec.js
 ```
@@ -93,7 +93,7 @@ tests/
 
 - **模拟步长 1/60 s**，与渲染帧率无关（`REQUIREMENTS.md` §5）。
 - 渲染用 `requestAnimationFrame`：每帧 `accumulator += dt`；`while (accumulator ≥ step)` 执行 tick；**每帧最多补 5 个 tick**（掉帧时降速而非螺旋追赶）。
-- tick 内系统执行顺序固定，保证确定性：`movement → combat → morale → supply → capture → fog → controlLine → victory`。
+- tick 内系统执行顺序固定，保证确定性：`movement → combat → supply → supplyStock → capture → fog → controlLine → victory`。
   `controlLine` 在末尾汇总本 tick 之前的战况，它的影响力场**同时是补给线的屏障**：`supply` 读的是
   **上一 tick** 的控制线场（10 Hz 重算，最多陈旧 16 ms）来判定「敌方实际控制区」，因此顺序不变、
   也不引入互相依赖（`gdd.md` §7、§9）。
@@ -120,7 +120,7 @@ world.issueCommands(unitIds, command)           // 唯一入口，附带校验
 ## 6. 实体与状态
 
 - 状态为**纯数据对象**（可序列化），渲染层不持有实体类。
-- `unit`：`{ id, faction, type, x, y, hp, morale, state, command, cooldown, vision, … }`
+- `unit`：`{ id, faction, type, x, y, hp, supplyStock, maxSupplyStock, state, command, cooldown, vision, … }`
 - `city`：`{ id, faction, x, y, captureProgress, productionTimer, … }`
 - `world`：`{ time, units, cities, terrainGrid, fogGrid, winner, … }`
 - 类型参数（hp/伤害/速度…）一律从 `config` 取，实体只存实例值。
@@ -148,7 +148,7 @@ world.issueCommands(unitIds, command)           // 唯一入口，附带校验
   - 大于画布的地图在游戏里只能看到左上 1280×800（编辑器状态栏会提示）；
   - 模拟层另有兜底：`movement.js` 的 `clampToMap()` 把命令目标夹进地图矩形，所以即使地图与画布不一致，单位也不会走进地图外那片区域。
 - `cities[].id` / `capturePoints[].id` 必填且**全局唯一**（重复会被校验拦截）；`spawns[].id` 可选——缺省时 `parseMap()` 自动补 `s1`、`s2`…（跳过已占用的名字），因此旧地图无需改动即可被关卡用 `{ spawnId }` 精确引用（编辑器新增的出生点也遵循同一命名）。
-- `capturePoints`（可选）：占领点数组，`faction` 为 `neutral` | `blue` | `red`；被占领后**仅提供视野**，不提供补给/士气/生产/恢复，也不计入胜负（`gdd.md` §7.1）。缺省为空数组。
+- `capturePoints`（可选）：占领点数组，`faction` 为 `neutral` | `blue` | `red`；被占领后**仅提供视野**，不提供补给/补给存量/生产/恢复，也不计入胜负（`gdd.md` §7.1）。缺省为空数组。
 - 读取流程：**结构校验（schema）→ 可玩性校验（双方至少 1 出生点与 1 城市、尺寸/格子一致）→ 版本迁移链（version < 当前版本时逐级升级）**，失败即拒绝载入并报错。
 - 编辑器与运行时共享同一地图模型与校验代码（`REQUIREMENTS.md` §4.6）。
 - 存档：`localStorage` 存设置/进度/自定义地图，文件 API 导入导出。
@@ -257,13 +257,13 @@ world.issueCommands(unitIds, command)           // 唯一入口，附带校验
 
 ## 8. 空间分区（性能）
 
-- **均匀网格**：格子 64 px（≥ 最大攻击距离 55），`spatial.js` 每 tick 重建（O(n)），战斗/迷雾/士气/补给的邻居查询 O(1)/单位。
+- **均匀网格**：格子 64 px（≥ 最大攻击距离 55），`spatial.js` 每 tick 重建（O(n)），战斗/迷雾/补给存量/补给的邻居查询 O(1)/单位。
 - 禁止全单位两两检测（`REQUIREMENTS.md` §5）；`spatial.test.js` 用 500 单位断言查询复杂度与正确性。
 - 性能预算（500 活动单位、60 FPS）：模拟 tick ≤ 8 ms，渲染 ≤ 8 ms；`tests/e2e` 提供带性能标记的基准页，建立可测量基线。
 
 ## 9. 配置与 i18n
 
-- `config/values.js`：**全部数值的唯一权威来源**——深度冻结的嵌套对象，覆盖规则（单位/战斗/地形/士气/城市/补给/迷雾）、交互与 UI、教学关卡、性能预算四类数值，与 `gdd.md` §12 镜像表一一对应。任何模块禁止硬编码数值，新增数值先入 config。
+- `config/values.js`：**全部数值的唯一权威来源**——深度冻结的嵌套对象，覆盖规则（单位/战斗/地形/补给存量/城市/补给/迷雾）、交互与 UI、教学关卡、性能预算四类数值，与 `gdd.md` §12 镜像表一一对应。任何模块禁止硬编码数值，新增数值先入 config。
 - 同步测试：Vitest 断言 `config/values.js` 与 `gdd.md` §12 镜像表一致（防文档漂移）。
 - `i18n/index.js`：`t('hud.pause')` 查表，缺键在开发模式报 warning；中文默认，`en.js` 预留。原型 `index.html`/`game.js` 中的硬编码文案在阶段 3 全部迁入。
 
@@ -277,7 +277,7 @@ world.issueCommands(unitIds, command)           // 唯一入口，附带校验
 
 | 层级 | 内容 | 工具 |
 |---|---|---|
-| 单元 | 战斗结算、士气、占领、补给、迷雾三态、胜负、地图 JSON 校验/迁移、命令分发、固定步长确定性、脚本敌军 | Vitest |
+| 单元 | 战斗结算、补给存量、占领、补给、迷雾三态、胜负、地图 JSON 校验/迁移、命令分发、固定步长确定性、脚本敌军 | Vitest |
 | 端到端 | 选择/框选/Shift、右键指挥、教学关完整闭环、暂停与速度、编辑器闭环 | Playwright（Chrome/Firefox/Edge 工程，1280×720 与 1920×1080） |
 | 性能 | 500 单位 tick/渲染耗时基线，两两检测禁令 | 基准页 + 手动三浏览器 |
 

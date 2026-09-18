@@ -1,4 +1,4 @@
-// 中文文案（默认语言）。新增用户可见文本一律经 t() 查表，禁止在模块中硬编码。
+﻿// 中文文案（默认语言）。新增用户可见文本一律经 t() 查表，禁止在模块中硬编码。
 export default {
   'boot.loading': '加载中…',
   // 顶栏
@@ -16,7 +16,7 @@ export default {
   'hud.city.title': '城市状态',
   'hud.city.capture': '占领进度',
   'hud.city.production': '生产倒计时',
-  'hud.city.supply': '已补给单位',
+  'hud.city.supply': '补给线通畅',
   'hud.supply.capacity': '城市运力（点）',
   // 补给线（选中单位时显示，gdd.md §7）
   'hud.supply.cut': '补给被切断',
@@ -55,8 +55,8 @@ export default {
   'unit.name.heavy': '装甲师',
   'unit.fullname': '{faction}{name}-{id}',
   'unit.status.normal': '正常',
-  'unit.status.weakened': '削弱',
-  'unit.status.shaken': '动摇',
+  'unit.status.weakened': '缺补',
+  'unit.status.shaken': '补给将尽',
   'unit.status.rout': '溃逃',
   // 事件与提示
   'event.cityCaptured': '{faction} 占领了城市 {city}',
@@ -64,8 +64,8 @@ export default {
   'event.timeWarning': '注意：剩余时间不足 {time} 秒！',
   'event.timeWarning.critical': '紧急：仅剩 {time} 秒，任务即将失败！',
   'toast.orderMove': '部队向目标推进。',
-  'toast.orderForcedMove': '急行军命令已下达：速度提升，但士气与体力消耗更快。',
-  'toast.routeForced': '急行军轨迹已记录：速度提升，但士气与体力消耗更快。',
+  'toast.orderForcedMove': '急行军命令已下达：速度提升，但补给与体力消耗更快。',
+  'toast.routeForced': '急行军轨迹已记录：速度提升，但补给与体力消耗更快。',
   'toast.orderAttack': '部队锁定敌军目标。',
   'toast.route': '行军轨迹已记录，单位将以有限速度前进。',
   'toast.paused': '战场已暂停。',

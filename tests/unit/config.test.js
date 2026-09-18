@@ -11,10 +11,10 @@ describe('config values', () => {
   });
 
   it('与 docs/gdd.md §12 镜像表中的关键数值一致', () => {
-    expect(values.units.light).toEqual({ hp: 60, damage: 0.8, attackInterval: 0.2, range: 40, speed: 40, radius: 14, vision: 140 });
-    expect(values.units.heavy).toEqual({ hp: 80, damage: 1, attackInterval: 0.2, range: 40, speed: 40, radius: 14, vision: 160 });
-    expect(values.morale.initial).toBe(80);
-    expect(values.morale.rout.stopAt).toBe(20);
+    expect(values.units.light).toEqual({ hp: 60, damage: 0.8, attackInterval: 0.2, range: 40, speed: 40, radius: 14, vision: 140, supplyStock: 80 });
+    expect(values.units.heavy).toEqual({ hp: 80, damage: 1, attackInterval: 0.2, range: 40, speed: 40, radius: 14, vision: 160, supplyStock: 120 });
+    expect(values.supplyStock.rout.stopAt).toBe(20);
+    expect(values.supply.stockPerPoint).toBe(10);
     expect(values.movement.routSpeedMultiplier).toBe(0.6);
     expect(values.cities.production.interval).toBe(12);
     expect(values.supply.capacityPerCity).toBe(5);

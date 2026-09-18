@@ -77,12 +77,12 @@ export const values = {
     // 回城休整（全局阈值，不随档位变化）
     regroup: {
       hpRatio: 0.45,            // 小队平均血量低于此值 → 撤退休整
-      morale: 40,               // 或平均士气低于此值
+      supplyRatio: 0.5,         // 或平均补给存量低于上限的这个比例（去城里重新进货）
       recoverHpRatio: 0.75,     // 恢复到该血量比例 → 回归脚本目标
-      recoverMorale: 60,        // 且士气达到该值
+      recoverSupplyRatio: 0.75, // 且补给存量恢复到这个比例
       cooldownSeconds: 12,      // 休整完的冷却，避免来回抖动
     },
-    march: { minDistance: 650 }, // 距目标超过这个距离且档位允许时才走急行军（代价：士气 -10/s、掉血 1.5/s）
+    march: { minDistance: 650 }, // 距目标超过这个距离且档位允许时才走急行军（代价：补给 -10/s、掉血 1.5/s）
 
     // ---- 阶段三：迷雾公平 + 侦察（docs/ai-design.md §3.4）----
     // 默认关闭：旧的关卡（塔山/宿北）行为与平衡完全不变；想公平的关卡写 "ai": { "fog": true }。
@@ -106,8 +106,10 @@ export const values = {
   prep: { seconds: 5 },
 
   units: {
-    light: { hp: 60, damage: 0.8, attackInterval: 0.2, range: 40, speed: 40, radius: 14, vision: 140 },
-    heavy: { hp: 80, damage: 1, attackInterval: 0.2, range: 40, speed: 40, radius: 14, vision: 160 },
+    // supplyStock = 补给存量上限（gdd.md §6）：出击时带满，战斗中/行军中消耗，回补给线内进货。
+    // 存量归零 = 完全断补（掉血 + 归零溃逃），所以上限 ≈ 断补后还能撑多久 × 消耗速率。
+    light: { hp: 60, damage: 0.8, attackInterval: 0.2, range: 40, speed: 40, radius: 14, vision: 140, supplyStock: 80 },
+    heavy: { hp: 80, damage: 1, attackInterval: 0.2, range: 40, speed: 40, radius: 14, vision: 160, supplyStock: 120 },
   },
 
   combat: {
@@ -125,34 +127,40 @@ export const values = {
     passable: { plain: true, forest: true, water: true, bridge: true, mountain: true, highMountain: false, road: true, town: true },
     moveMultiplier: { plain: 1.0, forest: 0.6, water: 0.4, bridge: 1.0, mountain: 0.65, highMountain: 0, road: 1.25, town: 1.0 },
     defenseModifier: { plain: 1.0, forest: 0.85, bridge: 0.9, mountain: 0.75, road: 1.0, town: 0.6 }, // 防御者地形修正（town 0.6 = 防御大幅提升）
-    moraleMoveMultiplier: { plain: 1.0, forest: 1.0, water: 1.0, bridge: 1.0, mountain: 1.0, highMountain: 1.0, road: 0.5, town: 1.0 },
+    // 行军消耗的**地形系数**（gdd.md §4）：沿道路行军补给消耗减半，其余地形照常
+    marchSupplyMultiplier: { plain: 1.0, forest: 1.0, water: 1.0, bridge: 1.0, mountain: 1.0, highMountain: 1.0, road: 0.5, town: 1.0 },
     // 攻方所在位置的地形对输出的影响（gdd.md §5）：水里站不稳，攻击力打对折。
     // 注意是**攻方所在地形**，与 defenseModifier（守方所在地形）不是一回事。
     attackMultiplier: { plain: 1.0, forest: 1.0, water: 0.5, bridge: 1.0, mountain: 1.0, highMountain: 0, road: 1.0, town: 1.0 },
     waterHpPerSecond: 1, // 身处水域每秒损失的血量（走 World.damageUnit，计入伤亡；可溺水阵亡）
   },
 
-  morale: {
-    initial: 80, min: 0, max: 100,
+  // 补给存量系统（gdd.md §6）：这套机制原本是士气，**现在数值的含义是「单位剩余的补给存量」**
+  // ——战斗消耗补给、行军消耗补给、急行军消耗更多；唯一的进货渠道是补给系统
+  // （城市运力 × 距离因子算出的实收点数，见 supply.stockPerPoint 与 §8）。
+  // 机制（阈值削弱 / 归零溃逃投降 / 溃逃撤退）都保留，只是含义变了：
+  //   存量 ≥ 60% 上限 → 正常；< 60% → 缺补（削弱）；< 30% → 将尽（动摇）；= 0 → 耗尽（溃逃/失序）。
+  supplyStock: {
+    min: 0,
+    // 存量上限按兵种分开（见 units.*.supplyStock）：出击时带满，归零即完全断补
     perSecond: {
-      friendlyNearby: 2,  // 附近友军（≤ ranges.friendly）
-      cityNearby: 5,      // 附近己方城市（≤ ranges.city）
-      supplied: 1,
-      unsupplied: -2,
-      inCombat: -8, // 持续交战的士气损耗（过低会使围攻不可行，见 gdd.md §6）
+      // 只保留「消耗」类修正。友军密度（+2）、城市范围（+5）、友军阵亡（−10）都已删除：
+      // 补给只能沿补给线从城市运来，不能凭空产生、也不会因为战友阵亡而减少。
+      idle: -1,     // **驻军基础口粮**：站着不动也要吃。与交战/行军消耗**叠加**。
+                    // 断补的驻军因此会缓慢耗尽（轻 80 → 80 s）→ 存量归零后周期性失序（原地停摆 + 易伤 ×1.5）。
+      inCombat: -8, // 交战中（正被敌方瞄准）的补给消耗
       // 参战但当前**没有**被敌方瞄准（state=combat 且 !underFire，例如两个单位打同一个敌人时
-      // 只有前排被还击）：同样消耗士气，但比面对面的单位少
+      // 只有前排被还击）：同样消耗补给，但比面对面的单位少
       inCombatSupport: -3,
-      moving: -5,
-      attack: 1.3, // 进攻 士气消耗放大因子
+      moving: -5,   // 行军消耗
+      attack: 1.3,  // 进攻（有路线）时的消耗放大因子
     },
-    ranges: { friendly: 60, city: 120, allyDeath: 100 },
-    onAllyDeath: -10,     // 附近友军阵亡瞬间
-    thresholds: { weakenedBelow: 60, shakenBelow: 30, routAt: 0 },
+    thresholds: { weakenedBelow: 0.6, shakenBelow: 0.3, routAt: 0 }, // 按**存量比例**（各兵种上限不同）
     effects: {
       weakened: { damageMultiplier: 0.75, speedMultiplier: 0.85 },
       shaken: { damageMultiplier: 0.5, speedMultiplier: 0.7 },
     },
+    // 溃逃/失序时的补给恢复（无条件下就地搜集，gdd.md §6）
     rout: { recoverPerSecond: 8, stopAt: 20, stuckSeconds: 5 },
     unordered: { recoverPerSecond: 10, stopAt: 20, stuckSeconds: 5 }
   },
@@ -163,12 +171,12 @@ export const values = {
     // 不再随时间自动涨兵（避免拖时间自动获得单位，破坏关卡设计的兵力配比）。
     // 逻辑仍保留在 supply.js，改回 true 即恢复「每 interval 秒产 1 个 unitType」的旧行为。
     production: { enabled: false, interval: 12, unitType: 'light', pauseWhenSupplyFull: true },
-    recovery: { radius: 100, hpPerSecond: 3, moralePerSecond: 5 },
+    recovery: { radius: 100, hpPerSecond: 3 }, // 只回血：补给走补给系统（gdd.md §7、§8）
     vision: 180,
   },
 
   // 占领点：可被占领的中立/阵营目标，被占领后**仅提供视野**；
-  // 不提供补给容量、不提供士气加成、不生产、不恢复、不计入胜负（gdd.md §7.1）。
+  // 不提供补给容量、不提供补给存量加成、不生产、不恢复、不计入胜负（gdd.md §7.1）。
   capturePoints: {
     vision: 180, // 被己方占领后提供的视野半径（独立数值，可单独调）
     capture: { radius: 60, perUnitPerSecond: 0.05, capPerSecond: 0.15, decayPerSecond: 0.03 }, // 沿用城市占领规则
@@ -181,13 +189,18 @@ export const values = {
   //      —— 也就是「城市优先补给离自己最近的单位」；某城点数用光就顺延到下一座城；
   //   3. 城市为把补给送到单位手里要付 demand ÷ factor 点（factor 由路径代价决定），
   //      单位实收 = 付出的点数 × factor；因此**近城一座就够，远城要好几座城合力**；
-  //   4. 实收 < 需求 = 缺补给：损耗与士气惩罚按缺口比例缩放（实收 60% 就只吃 40% 的惩罚）；
-  //      所有城都够不着 / 点数都用光 = 断补（实收 0）。
+  //   4. 实收 < 需求 = 进货不足（补给线被切断就完全不进货）；
+  //      所有城都够不着 / 点数都用光 = 断补（实收 0）；
+  //   5. 实收点数按 stockPerPoint 换算成**补给存量**加进单位（gdd.md §6），
+  //      存量耗尽才开始掉血（attritionHpPerSecond）。
   supply: {
     demandPerUnit: 1,       // 每个单位的需求（点）
     capacityPerCity: 5,     // 每座城的吞吐点数（5 点 = 5 个近城的满额单位，远城供不了这么多）
-    attritionHpPerSecond: 1,     // 完全断补（实收 0）时的血量损耗；按缺口比例缩放
-    attritionMoralePerSecond: 2, // 完全断补时的士气惩罚；按缺口比例缩放
+    // 1 点实收 = 10 点补给存量。满补给时每秒实收 2 点（每 0.5s 结算 1 点）→ 进货 +20/s：
+    // 比战斗消耗（−8/s）、行军（−5/s）都快，所以**补给线通畅的部队不会掉存量**；
+    // 远城因子 0.33 时只有 +6.6/s，战斗中就会慢慢入不敷出。断开供给（断补）= 只出不进。
+    stockPerPoint: 10,
+    attritionHpPerSecond: 1,     // 补给存量归零（完全断补）时的血量损耗
     refreshSeconds: 0.5,    // 分配重算间隔（单位位置一直在变，这步很便宜）
     // 代价场（多源 Dijkstra）重算间隔。代价场只取决于城市 + 敌方控制区，与单位位置无关，
     // 所以它比分配算得稀得多：500 单位的地图上，一次全图 Dijkstra 是这整套里最贵的一步。
@@ -242,7 +255,7 @@ export const values = {
   // （影响力源 = 存活单位 + 城市 + 占领点），按**带符号代数和**判定该格归属：
   // sum > 0 → 蓝方控制，sum < 0 → 红方控制，sum === 0 → 中立。
   // 相邻格归属不同处即为实际控制线，取 0 等值线（marching squares）绘制。
-  // 纯视觉：不参与战斗 / 补给 / 士气 / 胜负判定。
+  // 纯视觉：不参与战斗 / 补给 / 补给存量 / 胜负判定（补给线**读**它判定敌方控制区，见 §8）。
   controlLine: {
     cellSize: 20,            // 影响力网格边长（px）。地形格是 10 px，这里刻意粗一档以控开销
     refreshTicks: 6,         // 每 N 个 tick 重算一次（60 Hz / 6 = 10 Hz）
@@ -344,10 +357,10 @@ export const values = {
   movement: {
     routSpeedMultiplier: 0.6,
     // 急行军（gdd.md §4）：E + 右键 / E + 左键拖轨迹下达，命令带 forced: true。
-    // 除了水域之外的地形都提速（水面上照常按 0.4 走，不给加成），代价是士气掉得更快 + 缓慢掉血。
+    // 除了水域之外的地形都提速（水面上照常按 0.4 走，不给加成），代价是**补给消耗快得多** + 缓慢掉血。
     forcedMarch: {
-      speedMultiplier: 1.5, // 与地形、士气速度倍率**叠乘**（例：路上 40 × 1.25 × 1.5 = 75 px/s）
-      moralePerSecond: -10, // 取代普通行军的 morale.perSecond.moving(-5)；仍乘地形士气系数与进攻因子
+      speedMultiplier: 1.5, // 与地形、缺补速度倍率**叠乘**（例：路上 40 × 1.25 × 1.5 = 75 px/s）
+      supplyPerSecond: -10, // 取代普通行军的 supplyStock.perSecond.moving(-5)；仍乘地形系数与进攻因子
       hpPerSecond: 1.5,     // 每秒损失的血量（走 World.damageUnit，计入结算伤亡；可以力竭阵亡）
     },
     stuckThresholdSeconds: 0.35,

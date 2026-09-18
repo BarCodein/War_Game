@@ -6,8 +6,8 @@ import { createField, rebuildField, contour, buildPaths, guaranteeUnitCells } fr
 // 结果写进 world.controlLine（网格）、world.controlLineSegments（原始线段）、
 // world.controlLinePaths（串联并平滑后的折线），供渲染层读取。
 //
-// 纯视觉系统：战斗 / 补给 / 士气 / 视野 / 胜负都不读它，
-// 因此放在 tick 顺序的末尾（victory 之前），不影响任何规则判定。
+// 影响力场供渲染与补给线读取（补给线不允许穿过敌方实际控制区，见 supplyPath.js），
+// 放在 tick 顺序的末尾（victory 之前），战斗 / 补给存量 / 视野 / 胜负都不直接读它。
 // **也不读战争迷雾**：影响力源包含双方全部存活单位（含迷雾里的敌军），
 // 所以控制线画出来的是真实分界，不受视野限制（渲染层同样画在迷雾之上）。
 export function updateControlLine(world) {

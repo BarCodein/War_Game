@@ -1,4 +1,4 @@
-import { values } from '../config/index.js';
+﻿import { values } from '../config/index.js';
 
 // 地图 JSON：版本化、读取时结构校验 + 可玩性校验、版本迁移链（architecture.md §7）。
 // 编辑器与运行时共享本模块（REQUIREMENTS.md §4.6）。
@@ -131,8 +131,9 @@ export function makeTerrain(mapData) {
     isWaterAt(x, y) {
       return this.terrainAt(x, y) === values.terrain.codes.water;
     },
-    moraleMoveMultiplierAt(x, y) {
-      return values.terrain.moraleMoveMultiplier[nameByCode[this.terrainAt(x, y)]] ?? 1;
+    // 行军消耗的补给地形系数（gdd.md §4：沿道路行军消耗减半）
+    marchSupplyMultiplierAt(x, y) {
+      return values.terrain.marchSupplyMultiplier[nameByCode[this.terrainAt(x, y)]] ?? 1;
     },
   };
 }
@@ -172,7 +173,7 @@ export function parseMap(data) {
     cities: migrated.cities,
     // 出生点 id 归一化：保证每个出生点都有 id，供关卡 { spawnId } 精确引用
     spawns: normalizeSpawns(migrated.spawns),
-    // 占领点：被占领后仅提供视野（不提供补给/士气/生产/恢复，也不计入胜负）
+    // 占领点：被占领后仅提供视野（不提供补给/生产/恢复，也不计入胜负）
     capturePoints: migrated.capturePoints ?? [],
     objectives: migrated.objectives ?? [],
   };

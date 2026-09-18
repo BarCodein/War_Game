@@ -65,12 +65,15 @@ test.describe('补给线', () => {
 
     const unit = await page.evaluate((id) => {
       const u = window.__game.world.units.find(x => x.id === id);
-      return { supplied: u.supplied, ratio: u.supplyRatio };
+      return { supplied: u.supplied, ratio: u.supplyRatio, stock: u.supplyStock, max: u.maxSupplyStock };
     }, demo.id);
     const drawn = await page.evaluate(() => window.__game.scene.supplyLines.state);
 
+    // 被围住的是**补给线**：supplied=false（路断了）。
+    // 存量此时还接近满额（出击带满、只被基础口粮吃掉一点），所以这个单位"暂时还能打"——
+    // 这正是新口径想表达的：先断你的路，存量还够撑一阵，耗光之后才会崩。
     expect(unit.supplied).toBe(false);
-    expect(unit.ratio).toBeLessThan(1);
+    expect(unit.stock).toBeGreaterThan(unit.max - 5);
     expect(drawn.cuts).toBeGreaterThan(0);      // 画了红色虚线 + 切断点
     expect(drawn.note).toBe('补给被切断');
     await page.screenshot({ path: 'test-results/supply-lines-cut.png' });

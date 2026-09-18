@@ -1,10 +1,10 @@
 import { values } from '../../config/index.js';
-import { effectsFor } from '../systems/morale.js';
+import { effectsFor, stockRatio } from '../systems/supplyStock.js';
 import { calcDamageRatio } from '../systems/combat.js';
 
 // 战术效用打分（docs/ai-design.md 阶段一 A）：把"该打谁"变成可解释的加权分数。
 // 纯函数、不依赖 Phaser/DOM，可单测（tests/unit/ai-tactics.test.js）。
-// 战力估算刻意复用真实伤害公式的成分（士气倍率、血量衰减、地形修正），避免两套数值打架。
+// 战力估算刻意复用真实伤害公式的成分（缺补倍率、血量衰减、地形修正），避免两套数值打架。
 
 // 单位的基础战力：dps × 有效血量（有效血量按己方所在地形防御修正放大）
 export function combatPower(unit, world) {
@@ -12,7 +12,7 @@ export function combatPower(unit, world) {
   const stats = values.units[unit.type];
   const defense = world?.terrain?.defenseModifierAt(unit.x, unit.y) ?? 1;
   const dps = (stats.damage / stats.attackInterval)
-    * effectsFor(unit.morale).damageMultiplier
+    * effectsFor(stockRatio(unit)).damageMultiplier
     * calcDamageRatio(unit);
   return Math.max(0.01, dps * (unit.hp / Math.max(0.01, defense)));
 }
@@ -51,7 +51,8 @@ export function estimatedPower(world, item) {
   const reference = {
     type: 'light',
     hp: values.units.light.hp,
-    morale: values.morale.initial,
+    supplyStock: values.units.light.supplyStock,
+    maxSupplyStock: values.units.light.supplyStock,
     x: item.x,
     y: item.y,
     state: 'hold',

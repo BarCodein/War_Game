@@ -7,7 +7,7 @@ import { values } from '../../src/config/index.js';
 function snapshot(world) {
   return JSON.stringify({
     time: world.time,
-    units: world.units.map(u => ({ id: u.id, x: u.x, y: u.y, hp: u.hp, morale: u.morale, state: u.state })),
+    units: world.units.map(u => ({ id: u.id, x: u.x, y: u.y, hp: u.hp, supplyStock: u.supplyStock, state: u.state })),
     cities: world.cities.map(c => ({ id: c.id, faction: c.faction, captureProgress: c.captureProgress })),
   });
 }

@@ -1,4 +1,4 @@
-import { values } from '../config/index.js';
+﻿import { values } from '../config/index.js';
 import { attackCommand, attackMoveCommand, holdCommand, moveCommand } from './commands.js';
 import { resolvePoint } from './level.js';
 import { assignSlots, cohesionRatio, facingTo, formationSlots, isRushingAhead, needsColumn, squadAnchor, squadCentroid } from './ai/squad.js';
@@ -314,10 +314,12 @@ export class ScriptedAI {
       const centroid = squadCentroid(units);
       const avgHp = units.reduce((sum, unit) => sum
         + unit.hp / values.units[unit.type].hp, 0) / units.length;
-      const avgMorale = units.reduce((sum, unit) => sum + unit.morale, 0) / units.length;
+      // 补给存量也按**比例**取平均：各兵种存量上限不同（values.units.*.supplyStock）
+      const avgStock = units.reduce((sum, unit) => sum
+        + (unit.maxSupplyStock > 0 ? unit.supplyStock / unit.maxSupplyStock : 0), 0) / units.length;
 
-      // ① 休整状态机（阶段二）：打残/打散 → 撤回最近己城恢复半径，恢复够了再回归
-      if (this.updateRegroupState(state, group, units, centroid, avgHp, avgMorale, cfg)) continue;
+      // ① 休整状态机（阶段二）：打残/缺补 → 撤回最近己城恢复半径，恢复够了再回归
+      if (this.updateRegroupState(state, group, units, centroid, avgHp, avgStock, cfg)) continue;
 
       // ② 主攻方向（阶段二 B）：复用战线的薄弱点 → 接近轴端点；没有战线时就是脚本目标
       const waypoint = this.resolveWaypoint(state, group, units, centroid, objective, cfg, knowns);
@@ -397,15 +399,15 @@ export class ScriptedAI {
 
   /**
    * 回城休整状态机（阶段二）：
-   *   engage --(平均血量/士气低于阈值)--> regroup --(进入己城恢复半径)--> recover
+   *   engage --(平均血量/补给存量比例低于阈值)--> regroup --(进入己城恢复半径)--> recover
    *   recover --(恢复到阈值)--> engage（带冷却，防止来回抖动）
    * 返回 true 表示本轮已经处理（调用方跳过队形/选目标逻辑）。
    */
-  updateRegroupState(state, group, units, centroid, avgHp, avgMorale, cfg) {
+  updateRegroupState(state, group, units, centroid, avgHp, avgStock, cfg) {
     const city = this.nearestOwnCity(centroid);
     const inRecovery = city && Math.hypot(centroid.x - city.x, centroid.y - city.y) <= values.cities.recovery.radius;
     if (state.mode === 'engage') {
-      const tired = avgHp < cfg.regroup.hpRatio || avgMorale < cfg.regroup.morale;
+      const tired = avgHp < cfg.regroup.hpRatio || avgStock < cfg.regroup.supplyRatio;
       if (!tired || state.cooldown > 0 || !city) return false;
       state.mode = 'regroup';
     }
@@ -424,8 +426,8 @@ export class ScriptedAI {
         return true;
       }
     }
-    // recover：在恢复半径内原地待命（+3hp/s、+5 士气/s 由补给系统结算）
-    if (avgHp >= cfg.regroup.recoverHpRatio && avgMorale >= cfg.regroup.recoverMorale) {
+    // recover：在恢复半径内原地待命（+3hp/s 由 supply 结算；补给存量靠城里的补给线进货）
+    if (avgHp >= cfg.regroup.recoverHpRatio && avgStock >= cfg.regroup.recoverSupplyRatio) {
       state.mode = 'engage';
       state.cooldown = cfg.regroup.cooldownSeconds;
       state.mainPower = null; // 重新集结后重新记基线
@@ -500,7 +502,7 @@ export class ScriptedAI {
     return candidates[0].id;
   }
 
-  // 急行军：档位允许 + 距推进点足够远（代价是士气与掉血，见 gdd §4）
+  // 急行军：档位允许 + 距推进点足够远（代价是补给与掉血，见 gdd §4）
   shouldForceMarch(units, waypoint, cfg) {
     if (!cfg.useForcedMarch) return false;
     const centroid = squadCentroid(units);

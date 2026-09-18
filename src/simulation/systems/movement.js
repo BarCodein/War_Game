@@ -1,5 +1,5 @@
 import { values } from '../../config/index.js';
-import { effectsFor } from './morale.js';
+import { effectsFor, stockRatio } from './supplyStock.js';
 import { isSpotted } from './fog.js';
 
 // 移动系统：沿命令路径点行进；直行遇不可通行地形时在逻辑网格上 A* 绕行（路径缓存共享）；
@@ -98,7 +98,7 @@ function updateBlockedUnits(world, previousPositions, dt) {
     if (unit.stuckTime < values.movement.stuckThresholdSeconds) continue;
     unit.stuckTime = 0;
     if (world.terrain.terrainAt(unit.x, unit.y) === values.terrain.codes.water) {
-      // Water speed and low morale can make a tick's displacement small;
+      // Water speed and low supply stock can make a tick's displacement small;
       // water is passable, so do not replace the route with a side detour.
       unit.rerouteAttempts = 0;
       continue;
@@ -296,8 +296,8 @@ function forcedMarchMultiplier(world, unit) {
   return values.movement.forcedMarch.speedMultiplier;
 }
 
-// 向路径点行进；ignoreMoraleEffects 用于溃逃（不受士气削弱）。
-function moveAlongRoute(world, unit, dt, ignoreMoraleEffects = false, speedMultiplier = 1) {
+// 向路径点行进；ignoreStockEffects 用于溃逃（不受缺补削弱）。
+function moveAlongRoute(world, unit, dt, ignoreStockEffects = false, speedMultiplier = 1) {
   skipImpassableWaypoints(world, unit);
   if (unit.routeIndex >= unit.route.length) return;
 
@@ -305,12 +305,12 @@ function moveAlongRoute(world, unit, dt, ignoreMoraleEffects = false, speedMulti
   const distance = Math.hypot(target.x - unit.x, target.y - unit.y);
   const stats = unitStats(unit);
   const terrainMult = world.terrain.moveMultiplierAt(unit.x, unit.y);
-  const moraleMult = ignoreMoraleEffects ? 1 : effectsFor(unit.morale).speedMultiplier;
+  const stockMult = ignoreStockEffects ? 1 : effectsFor(stockRatio(unit)).speedMultiplier;
   const forcedMult = forcedMarchMultiplier(world, unit);
-  const travel = stats.speed * terrainMult * moraleMult * speedMultiplier * forcedMult * dt;
+  const travel = stats.speed * terrainMult * stockMult * speedMultiplier * forcedMult * dt;
 
   // 急行军代价：缓慢掉血（走 damageUnit，计入结算伤亡）；掉光即力竭阵亡。
-  if (unit.forcedMarch && !ignoreMoraleEffects) {
+  if (unit.forcedMarch && !ignoreStockEffects) {
     world.damageUnit(unit, values.movement.forcedMarch.hpPerSecond * dt);
     if (unit.hp <= 0) {
       world.killUnit(unit, 'forcedMarch');
@@ -487,7 +487,7 @@ function routMovement(world, unit, dt) {
   // 被困判定：位移极小则累计，超过时限投降（gdd.md §6）
   if (Math.hypot(unit.x - beforeX, unit.y - beforeY) < 0.5) unit.stuckTime += dt;
   else unit.stuckTime = 0;
-  if (unit.stuckTime >= values.morale.rout.stuckSeconds) world.killUnit(unit, 'surrender');
+  if (unit.stuckTime >= values.supplyStock.rout.stuckSeconds) world.killUnit(unit, 'surrender');
 }
 
 /**

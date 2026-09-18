@@ -1,4 +1,4 @@
-// 英文文案预留（REQUIREMENTS.md §5：中文优先并预留英文支持），语言切换机制后续接入。
+﻿// 英文文案预留（REQUIREMENTS.md §5：中文优先并预留英文支持），语言切换机制后续接入。
 export default {
   'boot.loading': 'Loading…',
   'hud.brand.title': '沙盘战争',
@@ -13,7 +13,7 @@ export default {
   'hud.city.title': 'City Status',
   'hud.city.capture': 'Capture progress',
   'hud.city.production': 'Production in',
-  'hud.city.supply': 'Units supplied',
+  'hud.city.supply': 'Supply routes',
   'hud.supply.capacity': 'City capacity (pts)',
   // Supply lines (shown for selected units, gdd.md §7)
   'hud.supply.cut': 'SUPPLY CUT',
@@ -49,16 +49,16 @@ export default {
   'unit.name.heavy': 'Armor',
   'unit.fullname': '{faction} {name}-{id}',
   'unit.status.normal': 'Normal',
-  'unit.status.weakened': 'Weakened',
-  'unit.status.shaken': 'Shaken',
+  'unit.status.weakened': 'Low supply',
+  'unit.status.shaken': 'Supply critical',
   'unit.status.rout': 'Routing',
   'event.cityCaptured': '{faction} captured city {city}',
   'event.surrender': 'Enemy surrendered',
   'event.timeWarning': 'Warning: less than {time}s remaining!',
   'event.timeWarning.critical': 'CRITICAL: only {time}s left — mission about to fail!',
   'toast.orderMove': 'Units advancing to the objective.',
-  'toast.orderForcedMove': 'Forced march ordered: faster, but morale and stamina drain quicker.',
-  'toast.routeForced': 'Forced march route recorded: faster, but morale and stamina drain quicker.',
+  'toast.orderForcedMove': 'Forced march ordered: faster, but supply and stamina drain quicker.',
+  'toast.routeForced': 'Forced march route recorded: faster, but supply and stamina drain quicker.',
   'toast.orderAttack': 'Units engaging the target.',
   'toast.route': 'Route recorded. Units will advance at limited speed.',
   'toast.paused': 'Battlefield paused.',

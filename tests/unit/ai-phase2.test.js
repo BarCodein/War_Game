@@ -123,7 +123,7 @@ describe('回城休整状态机', () => {
     const city = world.cities.find(item => item.faction === 'blue');
     for (const unit of squad) {
       unit.hp = values.units.light.hp * 0.2;   // 平均血量 20% < regroup.hpRatio
-      unit.morale = 20;
+      unit.supplyStock = unit.maxSupplyStock * 0.25; // 平均存量 25% < regroup.supplyRatio
     }
     ai.update(DECISION);
     const state = ai.squadStates.get('north');
@@ -147,7 +147,7 @@ describe('回城休整状态机', () => {
     // 恢复到位 → 回到 engage，并进入冷却
     for (const unit of squad) {
       unit.hp = values.units.light.hp;
-      unit.morale = 100;
+      unit.supplyStock = unit.maxSupplyStock;
     }
     ai.update(DECISION);
     expect(state.mode).toBe('engage');

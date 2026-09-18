@@ -20,11 +20,12 @@ describe('战力估算', () => {
     expect(combatPower(full, world)).toBeGreaterThan(combatPower(wounded, world));
   });
 
-  it('死亡单位战力为 0；士气削弱会降低战力', () => {
+  it('死亡单位战力为 0；补给将尽会降低战力', () => {
     const world = setup();
     const unit = world.spawnUnit('blue', 'light', 100, 100);
     const before = combatPower(unit, world);
-    unit.morale = values.morale.effects.shaken ? 20 : 20; // 低于 weakenedBelow(60) → 士气削弱
+    // 存量 < 30% 上限 → 将尽（伤害 ×0.5）→ 战力下降
+    unit.supplyStock = unit.maxSupplyStock * 0.2;
     expect(combatPower(unit, world)).toBeLessThan(before);
     unit.state = 'dead';
     expect(combatPower(unit, world)).toBe(0);

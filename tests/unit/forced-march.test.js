@@ -4,11 +4,11 @@ import { makePlainMap, makeWorld, advance } from './helpers.js';
 import {
   attackMoveCommand, enqueueRouteCommand, appendRouteCommand, moveCommand, validateCommand,
 } from '../../src/simulation/commands.js';
-import { updateMorale } from '../../src/simulation/systems/morale.js';
+import { updateSupplyStock } from '../../src/simulation/systems/supplyStock.js';
 import { updateMovement } from '../../src/simulation/systems/movement.js';
 
 // 急行军（gdd.md §4）：命令带 forced: true。
-// 除了水域之外的地形提速 1.5×；代价是行军士气 -12/s（取代普通行军的 -5/s）与每秒 0.5 点掉血。
+// 除了水域之外的地形提速 1.5×；代价是行军补给 -10/s（取代普通行军的 -5/s）与每秒 1.5 点掉血。
 const CFG = values.movement.forcedMarch;
 const STEP = values.simulation.fixedStep;
 
@@ -91,8 +91,8 @@ describe('急行军：速度', () => {
   });
 });
 
-describe('急行军：士气与血量代价', () => {
-  it('行军士气从 -5/s 换成 -12/s（单独急行军约 7 s 就会力竭失序）', () => {
+describe('急行军：补给与血量代价', () => {
+  it('行军补给从 -5/s 换成 -10/s（单独急行军约 8 s 就会耗尽失序）', () => {
     const world = makeWorld(makePlainMap({ width: 800, height: 480 }));
     const normal = world.spawnUnit('blue', 'light', 100, 120);
     const forced = world.spawnUnit('blue', 'light', 100, 360);
@@ -100,22 +100,24 @@ describe('急行军：士气与血量代价', () => {
       unit.route = [{ x: 700, y: unit.y }];
       unit.routeIndex = 0;
       unit.state = 'moving';
+      unit.supplyIntake = 0; // 只看消耗：关掉进货
     }
     forced.forcedMarch = true;
 
-    const before = { normal: normal.morale, forced: forced.morale };
-    updateMorale(world, 1); // 平地地形士气系数 1.0，补给正常 → 差值就是行军惩罚之差
-    const normalDrop = before.normal - normal.morale;
-    const forcedDrop = before.forced - forced.morale;
-    expect(forcedDrop - normalDrop).toBeCloseTo(Math.abs(CFG.moralePerSecond) - Math.abs(values.morale.perSecond.moving), 6);
+    const before = { normal: normal.supplyStock, forced: forced.supplyStock };
+    updateSupplyStock(world, 1); // 平地地形系数 1.0 → 差值就是行军消耗之差
+    const normalDrop = before.normal - normal.supplyStock;
+    const forcedDrop = before.forced - forced.supplyStock;
+    expect(forcedDrop - normalDrop).toBeCloseTo(Math.abs(CFG.supplyPerSecond) - Math.abs(values.supplyStock.perSecond.moving), 6);
 
-    // 代价的后果：单独一支急行军（无城市/友军加成，仅补给 +1/s）士气掉得比普通行军快得多，
-    // 中途就会力竭"失序"原地停下（gdd.md §6）——这就是急行军不能无脑常开的原因。
+    // 代价的后果：单独一支急行军（没有补给线进货）存量掉得比普通行军快得多，
+    // 中途就会耗尽"失序"原地停下（gdd.md §6）——这就是急行军不能无脑常开的原因。
     const lone = makeWorld(makePlainMap({ width: 800, height: 480 }));
     const runner = lone.spawnUnit('blue', 'light', 100, 240);
     lone.issueCommands([runner.id], moveCommand([{ x: 700, y: 240 }], { forced: true }));
     let everUnordered = false;
-    for (let i = 0; i < 60 * 10 && !everUnordered; i += 1) {
+    for (let i = 0; i < 60 * 20 && !everUnordered; i += 1) {
+      runner.supplyIntake = 0; // 断补：只出不进
       lone.tick(STEP);
       if (runner.state === 'unordered') everUnordered = true;
     }
@@ -127,7 +129,7 @@ describe('急行军：士气与血量代价', () => {
     const unit = world.spawnUnit('blue', 'light', 100, 240);
     world.issueCommands([unit.id], moveCommand([{ x: 700, y: 240 }], { forced: true }));
 
-    // 只跑移动系统：排除"士气见底 → 失序停下"的干扰（那是另一层代价，上面单独测）
+    // 只跑移动系统：排除"补给耗尽 → 失序停下"的干扰（那是另一层代价，上面单独测）
     for (let i = 0; i < 600; i += 1) updateMovement(world, STEP); // 60 px/s × 10 s = 600 px，正好走完
     expect(unit.state).not.toBe('dead');
     expect(unit.maxHp - unit.hp).toBeCloseTo(CFG.hpPerSecond * 10, 1);

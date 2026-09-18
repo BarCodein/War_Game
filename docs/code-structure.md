@@ -42,7 +42,7 @@ war_game/
 │  │  └─ systems/              #    tick 内的规则系统
 │  │     ├─ movement.js        #      移动/寻路/软排斥/溃逃撤退
 │  │     ├─ combat.js          #      接触交战/伤害/目标选择
-│  │     ├─ morale.js          #      士气修正/阈值/溃逃
+│  │     ├─ supplyStock.js     #      补给存量：消耗/阈值/溃逃
 │  │     ├─ supply.js          #      补给运力结算/恢复/生产/损耗
 │  │     ├─ capture.js         #      城市占领进度
 │  │     ├─ fog.js             #      战争迷雾三态/目视/最后已知位置
@@ -123,7 +123,7 @@ war_game/
 - `units`：轻/重型的 `hp/damage/attackInterval/range/speed/radius/vision`。
 - `combat`：`firstStrikeImmediate`、`targetPriority`、`contactTolerance`（接触交战容忍 px）。
 - `terrain`：格子边长 `20`、四类地形 `codes`、`passable`、`moveMultiplier`、`defenseModifier`。
-- `morale`：初始/范围、每秒修正、阈值、削弱效果、溃逃恢复。
+- `supplyStock`：存量下限、每秒消耗（交战/行军/急行军）、比例阈值、缺补效果、溃逃/失序搜集速率。`units.*.supplyStock` 是各兵种的存量上限。
 - `cities`：占领半径/速率、生产、恢复、视野。
 - `supply`：需求与每城吞吐（`demandPerUnit` / `capacityPerCity`）、完全断补时的损耗速率、结算节奏（`refreshSeconds` / `fieldRefreshSeconds`）、距离因子曲线 `factor`、寻路参数 `path`（网格边长 / 最大长度 / 控制区阈值）、补给线样式 `style`（`gdd.md §8`）。
 - `fog`：森林目视距离、最后已知位置虚影开关。
@@ -148,7 +148,7 @@ war_game/
 - `spawnUnit` / `spawnInitial` / `killUnit` / `nearestOwnCity`。
 - `issueCommands(unitIds, command)`：**统一命令入口**，人类/脚本/AI 共用；溃逃与阵亡单位不受指挥。
 - `damageUnit(unit, amount)`：**扣血 + 记伤亡的唯一入口**（`gdd.md §11`）——返回本次实际损失的血量，并按 `values.stats.hpPerCasualty`（1 点血 = 1 点伤亡）累加到 `world.casualties[faction]`。战斗扣血（`combat.js`）与补给损耗（`supply.js`）都走它；**治疗直接改 hp、不走它**，所以恢复不会抵消伤亡；只剩 5 血时挨 100 伤害只记 5 点（超杀不算）。结算时由 hud 拼成 URL 参数交给 `result.html`。
-- `tick(dt)`：固定系统顺序执行 `movement → combat → morale → supply → capture → fog → controlLine → victory`，保证确定性；tick 末把事件推入 `history`。
+- `tick(dt)`：固定系统顺序执行 `movement → combat → supply → supplyStock → capture → fog → controlLine → victory`，保证确定性；tick 末把事件推入 `history`。
 - **补给状态字段**（`gdd.md §8`）：`supplyFields`（每阵营一张代价场）· `supplyMasks`（敌方控制区掩码）· `supplyToken`（代价场版本号，渲染层据此失效路径缓存）· `supplyTimer` / `supplyFieldTimer`（两档节流）· `citySupplyLoad`（各城本轮运力支出）。
 - `applyCommand`：把命令写进单位并规划路径（`planRoute`，A* 绕行水域）；`move`/`attackMove` 都真实显示绕行路径。
 
@@ -161,7 +161,7 @@ war_game/
 
 ### `src/simulation/entities.js`
 实体工厂，返回**纯数据对象**：
-- `makeUnit({id, faction, type, x, y})`：从 `values.units` 取类型属性，初始化 hp/morale/状态/路径/目标/冷却/补给/士气效果/最后目视等。
+- `makeUnit({id, faction, type, x, y})`：从 `values.units` 取类型属性，初始化 hp/补给存量/状态/路径/目标/冷却/补给/效果倍率/最后目视等。
 - `makeCity({id, x, y, faction})`：城市 + 占领进度 + 生产计时。
 
 ### `src/simulation/loop.js`
@@ -211,7 +211,7 @@ war_game/
 - **单位所在格的硬保证**（`guaranteeUnitCell`）：重算后对每个存活单位脚下那一格做最小幅度符号纠正，保证"自己的兵不会站在敌方控制区里"（攻城、被贴身都成立）。
 - 城市与占领点在争夺中（`captureProgress > 0`）按进度线性削弱现属方强度。
 - 放在 tick 顺序末尾（`victory` 之前）：它只读位置/归属/占领进度。
-- **补给线的屏障**：`supply` 读**上一 tick** 的控制线场判定「敌方实际控制区」（10 Hz 重算，最多陈旧 16 ms），补给线不允许穿过它——屏幕上那条控制线就是补给能走到的边界（`gdd.md §8`）。除此之外不参与战斗 / 士气 / 视野 / 胜负判定。
+- **补给线的屏障**：`supply` 读**上一 tick** 的控制线场判定「敌方实际控制区」（10 Hz 重算，最多陈旧 16 ms），补给线不允许穿过它——屏幕上那条控制线就是补给能走到的边界（`gdd.md §8`）。除此之外不参与战斗 / 补给存量 / 视野 / 胜负判定。
 
 ### `src/simulation/level.js`
 关卡（Level）标准格式 v1——**"一局游戏"的完整规格**（`architecture.md` §7.1）：
@@ -236,7 +236,7 @@ war_game/
 - `nearestEnemy` 用空间区扩张半径查询，避免全图扫描。
 
 ### `src/simulation/ai/`（战术层纯函数，docs/ai-design.md）
-- `tactics.js`：`combatPower`（复用 `combat.calcDamageRatio` + 士气倍率 + 地形防御）/ `localBalance`（半径内双方战力占比）/ `targetValue` / `scoreAttack`（含集火上限，达上限返回 null）/ `chooseTarget`（溃逃优先，再比分数）/ `enemiesWithin`（走空间网格）。
+- `tactics.js`：`combatPower`（复用 `combat.calcDamageRatio` + 缺补倍率 + 地形防御）/ `localBalance`（半径内双方战力占比）/ `targetValue` / `scoreAttack`（含集火上限，达上限返回 null）/ `chooseTarget`（溃逃优先，再比分数）/ `enemiesWithin`（走空间网格）。
 - `squad.js`：`formationSlots`（line / column / wedge，按朝向旋转）/ `squadAnchor`（形心向目标推进 `advanceStep`，不越过目标）/ `needsColumn`（沿直线采样水域/不可通行）/ `cohesionRatio`·`isCohesive`·`isRushingAhead`（不添油）/ `assignSlots`（按距锚点距离 + id 的确定性分配）。
 - `front.js`（阶段二 B）：复用 `world.controlLineSegments`（控制线 0 等值线 = 实际战线）定位战线 → `pointStrength` 采样兵力比（空点记 1）→ `chooseWeakSpot` 选最弱段 / `approachAxes` 生成接近轴 → `chooseApproach` 按"敌弱 + 近 + 地形合口味"挑轴 → `approachWaypoint` 两段式推进；`terrainPreference` / `feintAxis` 供档位使用。**脚本目标点不变，只选接近方向。**
 - `presets.js`（阶段二 F）：`AI_PRESET_NAMES`（cautious / standard / sly）、`AI_TUNING_KEYS`（reserveRatio / pursuitRadius / useForcedMarch / terrainBias / feint）、`resolveAiConfig(preset, tuning)`（档位覆盖 values.ai，tuning 再覆盖，且 `pursuitRadius` 同步为 `engageRadius`）、`validateAiTuning`（关卡结构校验：档位 / tuning 键 / `ai.fog` 布尔）。
@@ -248,8 +248,8 @@ war_game/
 - `findPath`：A*（4 方向，水域不可通行，森林代价更高；终点不可通行就近取格），含模块级 `pathCache` 确定性共享。
 - `planRoute`：下达命令时对每个途经点逐段 A*，返回去掉共线点的真实路径（`move`/`attackMove` 共用）。
 - 导出 `transitionToNewRoute`（新命令与当前路线合并，避免原地掉头）。
-- `forcedMarchMultiplier(world, unit)`：急行军速度倍率——除水域之外的地形 `values.movement.forcedMarch.speedMultiplier`（1.5，与地形/士气倍率叠乘），水面上返回 1（不给加成）。
-- 急行军代价在 `moveAlongRoute` 里结算：每秒 `hpPerSecond` 掉血（走 `world.damageUnit`，计入伤亡），掉光即 `killUnit(unit, 'forcedMarch')`。溃逃（`ignoreMoraleEffects`）不参与。
+- `forcedMarchMultiplier(world, unit)`：急行军速度倍率——除水域之外的地形 `values.movement.forcedMarch.speedMultiplier`（1.5，与地形/缺补速度倍率叠乘），水面上返回 1（不给加成）。
+- 急行军代价在 `moveAlongRoute` 里结算：每秒 `hpPerSecond` 掉血（走 `world.damageUnit`，计入伤亡），掉光即 `killUnit(unit, 'forcedMarch')`。溃逃（`ignoreStockEffects`）不参与。
 - `clampToMap`：把目标点夹进地图矩形——`terrain.passableAt()` 会把格子索引夹到边缘格，因此**地图外的坐标看起来也可通行**，不夹取的话单位会走出地图、进入画布上未渲染的区域。
 - `segmentBlocked`、`simplify`、`separateOverlaps`（软排斥）。
 
@@ -257,15 +257,17 @@ war_game/
 战斗系统：
 - 交战判定：距离 ≤ 双方半径和 + `contactTolerance`（**接触才开打**，比按攻击距离更严格）。
 - 目标选择：优先当前目标直至死亡，否则取接触范围内最近（`config.combat.targetPriority`）。
-- 伤害 = 基础 × 士气削弱 × 防御者地形修正 × 血量比例 × **攻方地形修正**（`values.terrain.attackMultiplier`，站在水里 ×0.5）× 防御姿态（`combat.defend`，防御者原地不动时 ×0.75）× **溃逃/失序易伤**（`combat.disorderedDamageTaken`，目标处于 `rout`/`unordered` 时 ×1.5）；每单位独立攻击冷却，首次接触立即攻击。
+- 伤害 = 基础 × 缺补削弱 × 防御者地形修正 × 血量比例 × **攻方地形修正**（`values.terrain.attackMultiplier`，站在水里 ×0.5）× 防御姿态（`combat.defend`，防御者原地不动时 ×0.75）× **溃逃/失序易伤**（`combat.disorderedDamageTaken`，目标处于 `rout`/`unordered` 时 ×1.5）；每单位独立攻击冷却，首次接触立即攻击。
 - **attack-forward**：`move` 与 `attackMove` 都沿路线行军，接敌停下交战，敌军清空后恢复行军。
 
-### `src/simulation/systems/morale.js`
-士气系统：
-- 每秒修正（友军/城市/补给/交战）；友军阵亡瞬间 −10。补给项按缺口比例：满补给 +1/s，缺补给 `−2/s × (1 − supplyRatio)`。
-- 交战消耗分两档：**正被敌方瞄准**（`underFire`）吃全额 `inCombat`（−8/s）；**参战但没被瞄准**（`state = 'combat'` 且未被打，例如两个单位打同一个敌人时只有前排被还击）吃较少的 `inCombatSupport`（−3/s）——两者都乘进攻因子 `mode`。
-- 阈值效果（削弱/动摇 → 伤害与速度倍率 `effectsFor`）。
-- 归零即溃逃；溃逃恢复、无城可退立即投降、被困超时投降。
+### `src/simulation/systems/supplyStock.js`
+**补给存量系统**（`gdd.md §6`，机制原本是士气，数值含义已改为「剩余补给存量」）：
+- `updateSupplyStock(world, dt)`：先按状态分派（溃逃/失序走各自的搜集分支），其余单位走 `consume`（进货 − 消耗），最后统一结算归零掉血。
+- **进货**：`unit.supplyIntake`（由 `supply.js` 每轮结算写入的补给存量/秒）；**消耗**：基础口粮 −1/s（任何状态都吃，与下面叠加）、交战 −8/s、参战未瞄准 −3/s、行军 −5/s（乘 `terrain.marchSupplyMultiplier`，道路 0.5）、急行军 −10/s 取代行军值，有路线（进攻）时交战/行军项再乘 1.3。所以断补的驻军也会慢慢耗尽（轻步兵 80 s 见底 → 周期性失序）。
+- **阈值**：`effectsFor(ratio)` 按**存量比例**返回倍率（<0.6 缺补 ×0.75/×0.85；<0.3 将尽 ×0.5/×0.7）；`stockRatio(unit)` 是统一口径（combat / movement / AI / HUD 都用它）。
+- **归零**：正被攻击 → 溃逃（撤向己方城市，无城可退立即投降）；未受攻击 → 失序原地；两者都 +8/s、+10/s 就地搜集，恢复到 `stopAt` 停止。
+- `applyAttrition`：**存量归零才掉血**（`supply.attritionHpPerSecond`，走 `world.damageUnit` 计入伤亡）——补给线被切断本身不掉血。
+- 已删除的旧士气项：附近友军 +2/s、附近城市 +5/s（含 `cities.recovery.moralePerSecond`）、友军阵亡 −10。
 
 ### `src/simulation/supplyPath.js`
 **补给线寻路的纯计算**（`gdd.md §8`）：不依赖 Phaser/DOM，输入是 `World`（只读地形 / 城市 / 控制线），输出是代价场或折线，可 headless 单测。
@@ -279,10 +281,10 @@ war_game/
 ### `src/simulation/systems/supply.js`
 补给运力结算与城市维护（`gdd.md §8`）：
 - **两档节流**：分配每 `refreshSeconds`（0.5 s）重跑；代价场每 `fieldRefreshSeconds`（1 s）重算一次并把 `world.supplyToken` +1（渲染层据此失效路径缓存）。
-- **分配**（`distribute`）：所有仍需补给的己方单位按「到最近可用城市的代价」升序排序，逐个支出城市点数；城市要付出 `需求 ÷ 因子` 点，单位实收 = 付出 × 因子；某城点数用光就把它剔出种子、用临时场重算一次（单位于是落到下一座最近的城）。全部城用光或够不着 = 断补。
-- 结果写进单位：`supplied`（实收 ≥ 需求）、`supplyRatio`（实收 ÷ 需求）、`supplyEdges`（本轮的每条补给边 `{ cityId, cost, factor, points, received }`，按代价升序）、`supplyCost`（到最近己方城市的代价）；城市侧记在 `world.citySupplyLoad`。
+- **分配**（`distribute`）：**按缺口申领**——`claimOf(unit) = min(demandPerUnit, 缺口存量 ÷ stockPerPoint)`，存量已满的单位申领 0、**不占用运力**（多余运力流向缺补的部队，避免"收进来再被 clamp 丢掉"的溢出）。有缺口的单位按「到最近可用城市的代价」升序排序，逐个支出城市点数；城市要付出 `申领量 ÷ 因子` 点，单位实收 = 付出 × 因子；某城点数用光就把它剔出种子、用临时场重算一次（单位于是落到下一座最近的城）。全部城用光或够不着 = 断补。
+- 结果写进单位：`supplied`（**补给线是否可达** = `supplyCost` 有限；满额但被围也是 false）、`supplyRatio`（**本轮申领满足度**）、`supplyIntake`（进货速率 = 实收点数 ÷ 结算间隔 × `stockPerPoint`，供 `supplyStock.js` 消费）、`supplyEdges`（本轮的每条补给边 `{ cityId, cost, factor, points, received }`，按代价升序；满额单位记一条 `standby: true` 的 0 流量边供渲染画淡线）、`supplyCost`（到最近己方城市的代价）；城市侧记在 `world.citySupplyLoad`。
 - 己方城市附近恢复生命 +3/s；城市生产当前**关闭**（`values.cities.production.enabled = false`；逻辑保留：12s/轻型，本轮运力用光或被围暂停）。
-- **缺补给损耗**：按缺口比例，生命 `−attritionHpPerSecond × (1 − supplyRatio)`/s；士气由 `morale.js` 读 `supplyRatio` 同比例缩放。
+- **缺补给损耗**：**存量归零**后生命 `−attritionHpPerSecond`/s（断补只停止进货，不掉血，见 `supplyStock.js`）。
 - **环境损耗**：身处水域的单位每秒掉 `terrain.waterHpPerSecond`（1）点血（走 `world.damageUnit`，计入伤亡），掉光即溺水阵亡（`cause = 'water'`）；桥梁是独立地形，不算水域。
 
 ### `src/simulation/systems/capture.js`
@@ -385,7 +387,7 @@ DOM 编辑器工具栏：
 单位与城市（每帧重绘，只读状态）：
 - 己方完整渲染；敌军仅在目视时渲染实时状态，否则画**最后已知位置虚影**（`drawGhost`）。
 - 选中态：去掉黄色亮圈，改为**单位变深色**（`dim` 提黑 + 去饱和）；未选中蓝亮 `0x2f6bff`。
-- 血条/士气条：仅己方显示，尺寸≈圆点直径，黑色框底；HP≥50% 绿、<50% 黄、<20% 橘红，士气青蓝；固定于单位真实位置不跟随震动。
+- 血条/补给存量条：仅己方显示，尺寸≈圆点直径，黑色框底；HP≥50% 绿、<50% 黄、<20% 橘红，补给存量青蓝；固定于单位真实位置不跟随震动。
 - 血量裂纹：<50% 轻破碎(6 条)、<20% 重破碎(13 条)，`mulberry32(unit.id)` 确定性种子。
 - 交战震动：沿「自身→敌人」连线方向的低频小幅度位移（仅渲染层，不影响模拟坐标）。
 
@@ -475,13 +477,13 @@ e2e：`testDir: 'tests/e2e'`，`baseURL: 'http://localhost:5173'`，Chrome/Firef
 > 运行时代码之外，`tests/` 也全部是 JS 文件，汇总如下。
 
 ### `tests/unit/`（Vitest，18 个）
-覆盖命令校验、战斗、士气、占领、补给、迷雾三态、胜负、地图 JSON 校验/迁移、固定步长确定性、脚本敌军、i18n、config↔gdd 镜像、空间分区、移动寻路、编辑器 store、性能基线等确定性规则。
+覆盖命令校验、战斗、补给存量、占领、补给、迷雾三态、胜负、地图 JSON 校验/迁移、固定步长确定性、脚本敌军、i18n、config↔gdd 镜像、空间分区、移动寻路、编辑器 store、性能基线等确定性规则。
 
 ### `tests/e2e/`（Playwright，7 个）
 - `helpers.js`：`waitForGame`（打开 `/game.html`）、`clickWorld`/`dragWorld`（世界坐标→页面坐标）、`firstBlueUnit`/`firstRedUnit`。
 - `smoke.spec.js`：页面加载、Phaser 启动、HUD 渲染、1920×1080 启动、主页双入口。
 - `orders.spec.js`：右键移动/攻击、拖拽轨迹。
 - `selection.spec.js`：单选/框选/Shift、点击不触发框选。
-- `tutorial.spec.js`：教学关完整闭环、失败分支、士气标签、暂停与速度。
+- `tutorial.spec.js`：教学关完整闭环、失败分支、补给存量标签、暂停与速度。
 - `editor.spec.js`：编辑器闭环（新建/绘制/保存/载入/导入/导出/可玩性校验/一键试玩返回）。
 - `performance.spec.js`：`#bench` 500 单位 tick 预算基线。

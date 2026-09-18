@@ -40,7 +40,11 @@ export function pointStrength(world, point, faction, radius = values.ai.weakSpot
     enemy = 0;
     for (const item of knowns) {
       if (Math.hypot(item.x - point.x, item.y - point.y) > radius) continue;
-      const unit = item.unit ?? { type: 'light', hp: values.units.light.hp, morale: values.morale.initial, x: item.x, y: item.y, state: 'hold', faction: item.faction };
+      const unit = item.unit ?? {
+        type: 'light', hp: values.units.light.hp,
+        supplyStock: values.units.light.supplyStock, maxSupplyStock: values.units.light.supplyStock,
+        x: item.x, y: item.y, state: 'hold', faction: item.faction,
+      };
       enemy += combatPower(unit, world) * (item.ghost ? item.confidence : 1);
     }
   }

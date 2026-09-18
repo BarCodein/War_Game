@@ -4,9 +4,9 @@ import { FOG_VISIBLE } from '../../src/simulation/systems/fog.js';
 import { values } from '../../src/config/index.js';
 
 // 占领点（gdd.md §7.1）：可被占领，但被占领后**仅提供视野**——
-// 不提供补给容量、不提供士气加成、不生产、不恢复，也不计入胜负。
+// 不提供补给容量与存量、不生产、不恢复，也不计入胜负。
 // 这些排除并非靠特判，而是因为占领点存在独立数组 world.capturePoints，
-// 而 supply / morale / victory 只读 world.cities。
+// 而 supply / supplyStock / victory 只读 world.cities。
 
 function pointMap(capturePoints, extra = {}) {
   return makePlainMap({ capturePoints, ...extra });
@@ -99,18 +99,19 @@ describe('占领点：被占领后仅提供视野', () => {
   });
 });
 
-describe('占领点：不提供补给 / 士气 / 生产 / 恢复 / 胜负', () => {
+describe('占领点：不提供补给 / 补给存量 / 生产 / 恢复 / 胜负', () => {
   it('不提供补给容量：容量仍只由城市决定（每城 5）', () => {
     const world = makeWorld(pointMap([pointAt(640, 360, 'blue')]));
-    for (let i = 0; i < 6; i += 1) world.spawnUnit('blue', 'light', 640 + i * 3, 360);
+    // 只有有缺口的单位才申领运力：清空存量，让容量成为真正的约束
+    for (let i = 0; i < 6; i += 1) world.spawnUnit('blue', 'light', 640 + i * 3, 360).supplyStock = 0;
     advance(world, 1);
-    const supplied = world.units.filter(unit => unit.supplied).length;
+    const satisfied = world.units.filter(unit => unit.supplyRatio >= 1 - 1e-6).length;
     // 占领点不提供任何补给容量：喂满一个单位至少要花 1 点吞吐，唯一的蓝城（100,600）
     // 离这里 600+ px、因子只有 0.3 上下，5 点容量喂不满这 6 个贴着占领点站的单位
-    expect(supplied).toBeGreaterThan(0);
-    expect(supplied).toBeLessThan(6);
+    expect(satisfied).toBeGreaterThan(0);
+    expect(satisfied).toBeLessThan(6);
 
-    // 对照：把占领点换成一座城市，同样 6 个单位就都能满额（容量确实只来自城市）
+    // 对照：把占领点换成一座城市，同样 6 个单位就都能申领到运力（容量确实只来自城市）
     const withCity = makeWorld(pointMap([], {
       cities: [
         { id: 'c1', x: 100, y: 600, faction: 'blue' },
@@ -118,9 +119,9 @@ describe('占领点：不提供补给 / 士气 / 生产 / 恢复 / 胜负', () =
         { id: 'c3', x: 640, y: 360, faction: 'blue' },
       ],
     }));
-    for (let i = 0; i < 6; i += 1) withCity.spawnUnit('blue', 'light', 640 + i * 3, 360);
+    for (let i = 0; i < 6; i += 1) withCity.spawnUnit('blue', 'light', 640 + i * 3, 360).supplyStock = 0;
     advance(withCity, 1);
-    expect(withCity.units.filter(unit => unit.supplied).length).toBe(6);
+    expect(withCity.units.filter(unit => unit.supplyIntake > 0).length).toBe(6);
   });
 
   it('不提供回血，也没有生产计时器', () => {
@@ -132,26 +133,41 @@ describe('占领点：不提供补给 / 士气 / 生产 / 恢复 / 胜负', () =
     expect(world.capturePoints[0].productionTimer).toBeUndefined(); // 占领点不生产
   });
 
-  it('不提供士气加成：同位置的城市给的士气明显更多', () => {
-    const withCity = makeWorld(makePlainMap({
+  it('不提供补给存量：站在占领点上不会有人给你进货，换成城市就会', () => {
+    // 大图：蓝城在西南角，占领点在 1800 px 外（超出行进上界 → 补给线拉不到）
+    const far = (capturePoints) => makePlainMap({
+      width: 2200,
+      height: 900,
+      capturePoints,
       cities: [
-        { id: 'c1', x: 640, y: 360, faction: 'blue' }, // 城市就在该点
-        { id: 'c2', x: 1100, y: 100, faction: 'red' },
+        { id: 'c1', x: 100, y: 600, faction: 'blue' },
+        { id: 'c2', x: 2100, y: 100, faction: 'red' },
+      ],
+    });
+
+    const withPoint = makeWorld(far([pointAt(1900, 600, 'blue')]));
+    const pointUnit = withPoint.spawnUnit('blue', 'light', 1900, 600);
+    pointUnit.supplyStock = 0; // 有缺口才会申领运力
+    advance(withPoint, 1);
+    expect(pointUnit.supplyIntake).toBe(0);   // 占领点没有任何运力：进货恒为 0
+
+    // 对照：把占领点换成同一位置的城市 → 立刻有运力进货
+    const withCity = makeWorld(makePlainMap({
+      width: 2200,
+      height: 900,
+      cities: [
+        { id: 'c1', x: 100, y: 600, faction: 'blue' },
+        { id: 'c2', x: 2100, y: 100, faction: 'red' },
+        { id: 'c3', x: 1900, y: 600, faction: 'blue' },
       ],
     }));
-    const cityUnit = withCity.spawnUnit('blue', 'light', 640, 360);
-
-    const withPoint = makeWorld(pointMap([pointAt(640, 360, 'blue')]));
-    const pointUnit = withPoint.spawnUnit('blue', 'light', 640, 360);
-
-    cityUnit.morale = 50;
-    pointUnit.morale = 50;
+    const cityUnit = withCity.spawnUnit('blue', 'light', 1900, 600);
+    cityUnit.supplyStock = 0;
     advance(withCity, 1);
-    advance(withPoint, 1);
-
-    // 城市：城市修正 +5/s 与城市恢复 +5/s 叠加；占领点：只有补给 +1/s
-    expect(cityUnit.morale).toBeGreaterThan(pointUnit.morale);
-    expect(pointUnit.morale).toBeLessThan(56);
+    expect(cityUnit.supplyIntake).toBeGreaterThan(0);
+    advance(withCity, 4); // 满额进货 20/s → 80 存量上限 4 s 补满
+    // 稳态停在满额下方一点点（基础口粮每秒 1 存量，正好由那一点点申领抵掉）
+    expect(cityUnit.supplyStock).toBeGreaterThan(cityUnit.maxSupplyStock - 1);
   });
 
   it('不影响胜负：失去全部城市仍然判负，即使仍拥有占领点', () => {

@@ -1,5 +1,6 @@
 import { t } from '../i18n/index.js';
 import { values } from '../config/index.js';
+import { stockRatio } from '../simulation/systems/supplyStock.js';
 import { saveProgress } from '../entries/battlechoose-data.js';
 import { levelHref, rememberLevelId } from '../level-link.js';
 
@@ -147,7 +148,7 @@ export function createHud(scene, world, controller, selection, orders) {
       <div class="unit-card ${selection.isSelected(unit.id) ? 'active' : ''}" data-id="${unit.id}">
         <span class="unit-avatar blue-avatar">●</span>
         <span><b>${t('unit.fullname', { faction: t('faction.blue'), name: t(`unit.name.${unit.type}`), id: unit.id })}</b>
-          <small>${t(`unit.status.${statusLabel(unit)}`)} · 血量 ${Math.round(unit.hp)} · 士气 ${Math.round(unit.morale)} · 补给 ${Math.round((unit.supplyRatio ?? 1) * 100)}%</small></span>
+          <small>${t(`unit.status.${statusLabel(unit)}`)} · 血量 ${Math.round(unit.hp)} · 补给存量 ${Math.round(unit.supplyStock)}/${unit.maxSupplyStock}（${Math.round(stockRatio(unit) * 100)}%）${unit.supplied ? '' : ' · 补给线已断'}</small></span>
         <span class="unit-hp"><i style="width:${unit.hp / unit.maxHp * 100}%"></i></span>
       </div>`).join('');
     els.unitCount.textContent = t('hud.units.count', { n: units.length.toString().padStart(2, '0') });
@@ -155,8 +156,9 @@ export function createHud(scene, world, controller, selection, orders) {
 
   function statusLabel(unit) {
     if (unit.state === 'rout') return 'rout';
-    if (unit.morale < values.morale.thresholds.shakenBelow) return 'shaken';
-    if (unit.morale < values.morale.thresholds.weakenedBelow) return 'weakened';
+    const ratio = stockRatio(unit);
+    if (ratio < values.supplyStock.thresholds.shakenBelow) return 'shaken';
+    if (ratio < values.supplyStock.thresholds.weakenedBelow) return 'weakened';
     return 'normal';
   }
 
