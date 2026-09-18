@@ -192,11 +192,11 @@ war_game/
 
 ### `src/simulation/influence.js`
 **影响力场与实际控制线的纯计算**（`gdd.md §9`）：不依赖 `World` / Phaser / DOM，输入是影响力源数组、输出是网格与线段，可 headless 单测。
-- `influenceAt(distance, source, curve)`：单个源的影响力。**核心圈 `source.coreRadius` 是绝对值**（单位 = 碰撞体积、城市/占领点 = 占领半径），圈内满强度；出圈按原型手感掉到 20%（`coreExitRatio`），之后中圈/外圈两段线性衰减（断点按 `influenceRadius / curve.maxDistance` 等比缩放），到影响力半径归零。
+- `influenceAt(distance, source, curve)`：单个源的影响力。**核心圈 `source.coreRadius` 是绝对值**（单位 = 碰撞体积、城市 = `controlLine.city.coreRadius`、占领点 = `controlLine.capturePoint.coreRadius`），圈内满强度；出圈按原型手感掉到 20%（`coreExitRatio`），之后中圈/外圈两段线性衰减（断点按 `influenceRadius / curve.maxDistance` 等比缩放），到影响力半径归零。
 - `createField(width, height, cellSize)` → `{ cols, rows, values, raw, scratch, ready }`；`values` 是平滑后的影响力（对外），`raw` 是本次重算结果。
 - `rebuildField(field, sources, cfg)`：清零 → 按半径框（**只遍历源影响力覆盖到的格子**，不扫全图）累加带符号影响力（蓝 +、红 −）→ 按 `temporalSmoothing` 与上一次做指数平滑 → 可选 3×3 均值模糊（`fieldBlurPasses`，**必须为 0**：模糊会把邻格的敌方影响力混进单位脚下，实测让「单位所在格归自己阵营」的失败率从 0.000% 涨到 5.3%）→ 可选 `partitionMap`。
 - `partitionField(field, epsilon, fillValue)`：多源 BFS（曼哈顿 Voronoi）把"双方影响力都够不到"的格子按**最近的阵营**填上 ±`fillValue`。填充值远小于真实影响力下限（2.5），所以只决定归属、不挪动真实战线。作用：控制线铺满整张地图（含迷雾与从未探索区），否则战线会在没有部队的旷野断开——看起来像"迷雾把控制线吃掉了"。
-- `guaranteeUnitCells(field, marks, minMagnitude)`：**单位所在格的硬保证**——每个存活单位脚下那一格若符号不对，就按原量级翻转回自己阵营（最小扰动）。补上核心圈挡不住的三种情况：城市/占领点核心圈 60px、强度 120 压过单位身体的 100（攻城时脚下被判给敌方）；格心落在碰撞半径之外；多个敌军贴身叠加。
+- `guaranteeUnitCells(field, marks, minMagnitude)`：**单位所在格的硬保证**——每个存活单位脚下那一格若符号不对，就按原量级翻转回自己阵营（最小扰动）。补上核心圈挡不住的三种情况：城市（核心圈 20px / 强度 80）与占领点（核心圈 20px / 强度 60）压过单位身体的 100；格心落在碰撞半径之外；多个敌军贴身叠加。
 - `contour(field, epsilon, out)`：marching squares 取 **0 等值线**，即实际控制线线段（`{x1,y1,x2,y2}`）。只有 2×2 格块里**同时存在正格与负格**才输出线段——否则「只有蓝方影响力」的区域会沿着自己影响范围的外沿画出一条假分界线。鞍点（`code 5/10`）用格心值拆分。
 - `chainSegments(segments)`：按端点把线段串成折线（端点量化到 0.01 px 再匹配——相邻格块共享边上的过零点是同一对格值按同一公式算出来的，浮点结果一致）。一条战线 / 一个包围圈 = 一条折线，闭合的包围圈首尾同点。
 - `smoothPath(points, iterations)`：Chaikin 切角平滑（每轮保留首尾、每段取 1/4 与 3/4 两点）。**只磨几何、不动影响力场**——所以它不会像空间模糊那样破坏「单位所在格归自己阵营」。
@@ -205,7 +205,7 @@ war_game/
 ### `src/simulation/systems/controlLine.js`
 实际控制线系统（`gdd.md §9`）：
 - `updateControlLine(world)`：每 `refreshTicks`（默认 6 tick = 10 Hz）重算一次影响力场，写 `world.controlLine`（网格）、`world.controlLineSegments`（原始线段）与 `world.controlLinePaths`（串联 + 平滑后的折线）；非重算 tick 直接返回，保持上一次结果。
-- `collectSources(world)`：影响力源 = 存活单位 + 城市 + 占领点；蓝 `sign=+1`、红 `−1`，中立（`'neutral'` / 未占领）不产生影响力。**核心圈取绝对值**：单位用 `unit.radius`（碰撞体积），城市/占领点用 `cities.capture.radius` / `capturePoints.capture.radius`（占领半径 60）——所以核心圈只覆盖「脚下这块地」，单位始终在自己阵营的控制区内；城市不享受该保证（被占领时可以处在敌方控制区）。
+- `collectSources(world)`：影响力源 = 存活单位 + 城市 + 占领点；蓝 `sign=+1`、红 `−1`，中立（`'neutral'` / 未占领）不产生影响力。**核心圈取绝对值、每个源一个数值**：单位用 `unit.radius`（碰撞体积），城市用 `controlLine.city.coreRadius`（**20**），占领点用 `controlLine.capturePoint.coreRadius`（**20**）——两者都与各自的占领半径 60 脱钩，所以核心圈只覆盖「脚下这块地」，单位始终在自己阵营的控制区内；城市与占领点不享受该保证（被占领 / 争夺时可以处在敌方控制区）。
 - **不读战争迷雾**：影响力源是双方全部存活单位（含迷雾里的敌军），战线反映的是真实分界、不受视野限制。
 - **铺满全图**（`partitionMap`）：无影响力的格子按最近阵营归属，控制线会延伸到地图边界，因此在迷雾/未探索区也能看到战线随战况更新。
 - **单位所在格的硬保证**（`guaranteeUnitCell`）：重算后对每个存活单位脚下那一格做最小幅度符号纠正，保证"自己的兵不会站在敌方控制区里"（攻城、被贴身都成立）。

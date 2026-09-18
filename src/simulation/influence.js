@@ -17,8 +17,10 @@
  *
  * 曲线参数见 values.controlLine.curve，形状照搬原型 srcipt.js 的四段式：
  * - **核心圈** `source.coreRadius`（绝对值，不随 influenceRadius 缩放）：该距离内满强度。
- *   单位的核心圈 = 它的碰撞半径（`units.*.radius`），城市/占领点 = 占领半径，
- *   这样核心圈只覆盖源「脚下的身体」，而不是在它周围造一圈很大的绝对领域。
+ *   每个源各有自己的数值：单位 = 它的碰撞半径（`units.*.radius`），
+ *   城市 = `values.controlLine.city.coreRadius`，占领点 = `values.controlLine.capturePoint.coreRadius`
+ *   （两者的核心圈都与各自的占领半径脱钩），这样核心圈只覆盖源「脚下的身体」，
+ *   而不是在它周围造一圈很大的绝对领域。
  * - 出核心圈直接掉到 `coreExitRatio`（保留原型 100 → 20 的断崖手感）。
  * - 中圈/外圈断点按 `influenceRadius / curve.maxDistance` 等比缩放后两段线性衰减，
  *   到 `influenceRadius` 截断为 0。改半径只平移这两个断点，不用改曲线本身。
@@ -150,7 +152,7 @@ export function partitionField(field, epsilon, fillValue) {
  * **单位所在格的硬保证**：把每个存活单位脚下那一格强制归它自己的阵营。
  *
  * 为什么需要：影响力是"加总后看符号"，单靠核心圈并不能保证这一点——
- *   · 城市/占领点的核心圈是 60px、强度 120，会压过单位身体的 100（攻城时脚下被判给敌方）；
+ *   · 城市（核心圈 20px / 强度 80）与占领点（核心圈 14px / 强度 60）会压过单位身体的 100；
  *   · 格边长 20px、单位核心圈 = 碰撞半径 14px，格心可能落在核心圈外（只剩 20% 影响力）；
  *   · 多个敌军贴身时，它们的影响力会叠过你。
  * 这三条都会让"单位一定在自己阵营控制区内"失效，所以这里做最小幅度的兜底。
