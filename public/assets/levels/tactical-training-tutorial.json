@@ -1,0 +1,55 @@
+{
+  "version": 1,
+  "id": "tactical-training-tutorial",
+  "name": "战术演训场·地形与士气",
+  "map": "/assets/maps/tactical-training.json",
+  "type": "offensive",
+  "difficulty": "教学",
+  "anchors": {
+    "blueBase": {"cityId": "c1"},
+    "redBase": {"cityId": "c2"},
+    "blueStart": {"spawnId": "s1"},
+    "redStart": {"spawnId": "s2"},
+    "plainPoint": {"x": 130, "y": 550},
+    "roadPoint": {"x": 350, "y": 560},
+    "forestPoint": {"x": 270, "y": 440},
+    "mountainPoint": {"x": 800, "y": 220},
+    "townPoint": {"x": 640, "y": 360},
+    "waterPoint": {"x": 450, "y": 350}
+  },
+  "forces": [
+    {
+      "faction": "blue",
+      "at": {"anchor": "blueStart"},
+      "units": [
+        {"type": "light", "count": 4, "spacing": {"x": 30, "y": 20}}
+      ]
+    },
+    {
+      "faction": "red",
+      "at": {"x": 700, "y": 380},
+      "units": [{"type": "light", "count": 1}],
+      "objective": "annihilate"
+    },
+    {
+      "faction": "red",
+      "at": {"x": 420, "y": 300},
+      "units": [{"type": "light", "count": 1}],
+      "objective": "annihilate"
+    },
+    {
+      "faction": "red",
+      "at": {"x": 780, "y": 260},
+      "units": [{"type": "light", "count": 2, "spacing": {"x": 20, "y": 0}}],
+      "objective": "annihilate"
+    }
+  ],
+  "ai": {
+    "faction": "red",
+    "fallback": {"anchor": "redBase"},
+    "triggers": [
+      {"at": {"time": 99999}, "actions": [{"type": "hold", "at": {"anchor": "redBase"}}]}
+    ]
+  },
+  "victory": {"mode": "attack", "faction": "blue"}
+}

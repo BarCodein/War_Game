@@ -1,9 +1,9 @@
-import { values } from '../../config/index.js';
-import { effectsFor } from './morale.js';
+﻿import { values } from '../../config/index.js';
+import { effectsFor, stockRatio } from './supplyStock.js';
 
 // 战斗系统（gdd.md §4）：敌我单位足够接近（圆点接触）后自动交战；
 // 目标选择：优先当前目标直至死亡，否则取接触范围内最近（config.combat.targetPriority）；
-// 伤害 = 基础伤害 × 士气削弱 × 防御者地形修正；每单位独立攻击冷却，首次接触立即攻击。
+// 伤害 = 基础伤害 × 缺补削弱 × 防御者地形修正；每单位独立攻击冷却，首次接触立即攻击。
 // 统一为「攻击前进」（attack-forward）：move 与 attackMove 都沿预定路线行军，
 // 途中接触敌军即停下交战，敌军离开/清空后恢复行军（见 gdd.md §4）。
 export function updateCombat(world, dt) {
@@ -28,12 +28,12 @@ export function updateCombat(world, dt) {
     }
     unit.state = 'combat';
     unit.targetId = enemy.id;
-    enemy.underFire = true; // 交战中持续生效（morale 每秒修正，gdd.md §6）
+    enemy.underFire = true; // 交战中持续生效（supplyStock 每秒扣补给，gdd.md §6）
     var mode=1;
     if(enemy.route.length === 0)mode=1*values.combat.defend; // 判断敌军是原地固守还是运动
     if (unit.cooldown > 0) continue;
     const stats = values.units[unit.type];
-    const effects = effectsFor(unit.morale);
+    const effects = effectsFor(stockRatio(unit));
     // 攻方所在地形也影响输出：水域里攻击力打对折（values.terrain.attackMultiplier）
     const damage = (stats.damage * effects.damageMultiplier * 
       world.terrain.defenseModifierAt(enemy.x, enemy.y) * calcDamageRatio(unit) *

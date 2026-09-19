@@ -7,6 +7,7 @@ import { createTerrainRenderer } from '../terrainRenderer.js';
 import { createFogRenderer } from '../fogRenderer.js';
 import { createUnitRenderer } from '../unitRenderer.js';
 import { createControlLineRenderer } from '../controlLineRenderer.js';
+import { createSupplyLines } from '../supplyLines.js';
 import { createMapCamera } from '../cameraView.js';
 import { createHud } from '../hud.js';
 import { createSelection } from '../../input/selection.js';
@@ -95,18 +96,22 @@ export class GameScene extends Phaser.Scene {
       deployForces(world, this.level.forces, anchors);
       // 关卡任务规则（可选）：victory 写了 defend / attack 才生效，否则为 null，只走「失城判负」
       world.mess = buildMission(this.level, world);
-      this.ai = this.level.ai
-        ? new ScriptedAI(world, { faction: this.level.ai.faction, script: this.level.ai, anchors })
-        : null;
+      // 关卡脚本可以有多方（ai 写数组时）：每个脚本一个 ScriptedAI，各自指挥自己的阵营。
+      // this.ai 仍指向第一个脚本，保持既有引用（HUD / 调试）不变。
+      this.ais = (this.level.scripts ?? []).map(spec => new ScriptedAI(world, {
+        faction: spec.faction, script: spec, anchors,
+      }));
+      this.ai = this.ais[0] ?? null;
     } else {
       // 沙盒模式（编辑器试玩 / 关卡不可用）：仅按地图出生点部署，无脚本敌军、无任务规则
       world.spawnInitial();
       this.ai = null;
+      this.ais = [];
     }
 
     this.controller = createGameController();
     // AI 由固定步长循环驱动（与 headless 测试同一节奏），不再按渲染帧调用（docs/ai-design.md §4）
-    this.loop = createLoop(world, this.ai ? [this.ai] : []);
+    this.loop = createLoop(world, this.ais ?? []);
     // 编辑器试玩跳过开局准备阶段（反复试地图不该每次都等倒计时）
     if (this.fromEditor) this.controller.skipPrep();
 
@@ -120,6 +125,7 @@ export class GameScene extends Phaser.Scene {
     this.fogRenderer = createFogRenderer(this, world);
     this.unitRenderer = createUnitRenderer(this, world, this.selection);
     this.controlLineRenderer = createControlLineRenderer(this, world);
+    this.supplyLines = createSupplyLines(this, world, this.selection);
     this.overlayGraphics = this.add.graphics().setDepth(30);
     this.createPrepCountdown();
     // 地图相机：滚轮以光标为焦点缩放（渲染层只读世界状态，相机不参与模拟）
@@ -182,6 +188,7 @@ export class GameScene extends Phaser.Scene {
     this.unitRenderer.draw(dt);
     this.fogRenderer.sync();
     this.controlLineRenderer.draw();
+    this.supplyLines.draw();
     this.drawOverlays();
     this.syncPrepCountdown();
     this.hud.update(delta);

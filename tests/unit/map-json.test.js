@@ -41,14 +41,14 @@ describe('map json', () => {
     expect(terrain.defenseModifierAt(120, 500)).toBe(0.85);
   });
 
-  it('新增地形：山地减速减伤，高山不可通行，道路加速并降低移动士气消耗', () => {
+  it('新增地形：山地减速减伤，高山不可通行，道路加速并降低行军补给消耗', () => {
     const map = parseMap(makePlainMap({ terrainCells: { '1,1': 4, '2,1': 5, '3,1': 6 } }));
     const terrain = map.terrain;
     expect(terrain.moveMultiplierAt(15, 15)).toBe(0.65);
     expect(terrain.defenseModifierAt(15, 15)).toBe(0.75);
     expect(terrain.passableAt(25, 15)).toBe(false);
     expect(terrain.moveMultiplierAt(35, 15)).toBe(1.25);
-    expect(terrain.moraleMoveMultiplierAt(35, 15)).toBe(0.5);
+    expect(terrain.marchSupplyMultiplierAt(35, 15)).toBe(0.5);
   });
 
   it('结构校验：缺 version / 格子数不符 / 缺蓝城 / 缺红出生点 / 未来版本', () => {

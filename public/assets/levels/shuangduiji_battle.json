@@ -3,7 +3,7 @@
   "id": "shuangduiji_battle",
   "name": "双堆集战役",
   "subtitle": "SHUANGDUIJI BATTLE",
-  "type": "offensive",
+  "type": "annihilative",
   "difficulty": "教学",
   "description": "阻止黄维兵团北进增援徐州战场，将其歼灭在双堆集",
   "map": "/assets/maps/shuangduiji.json",
@@ -40,164 +40,179 @@
         { "type": "light", "count": 3 }
       ]
     },
+
     {
       "faction": "red",
       "objective": "annihilate",
-      "group": "north",
-      "at": { "spawnId": "s5" },
+      "group": "vanguard1",
+      "at": { "anchor": "redDeploy" },
       "units": [
-        { "type": "heavy", "count": 2 },
-        { "type": "light", "count": 1 }
+        { "type": "light", "count": 3 }
       ]
     },
     {
       "faction": "red",
-      "group": "pocket",
-      "at": { "cityId": "c6" },
+      "objective": "annihilate",
+      "group": "vanguard2",
+      "at": { "anchor": "redDeploy" },
       "units": [
-        { "type": "light", "count": 2 }
+        { "type": "light", "count": 3 }
+      ]
+    },
+    {
+      "faction": "red",
+      "objective": "annihilate",
+      "group": "sortie",
+      "at": { "anchor": "redDeploy" },
+      "units": [
+        { "type": "light", "count": 3 }
+      ]
+    },
+    {
+      "faction": "red",
+      "objective": "annihilate",
+      "group": "main",
+      "at": { "anchor": "redDeploy" },
+      "units": [
+        { "type": "heavy", "count": 2 },
+        { "type": "light", "count": 4 }
       ]
     }
   ],
 
-  "ai": {
+  "ai": [
+  {
     "faction": "red",
     "preset": "standard",
-    "fallback": { "anchor": "nanpingji" },
+    "fallback": { "anchor": "shuangduiji" },
     "triggers": [
       {
-        "id": "attack_nanpingji",
+        "id": "phase1_vanguard_to_nanpingji",
         "at": { "time": 20 },
         "actions": [
-          { "type": "engage", "target": { "anchor": "nanpingji" }, "units": { "group": "north" } },
-          {
-            "type": "spawn",
-            "unitType": "light",
-            "count": 1,
-            "at": { "cityId": "c7" },
-            "group": "east",
-            "order": { "type": "attackMove", "target": { "capturePointId": "p6" } }
-          }
+          { "type": "engage", "target": { "anchor": "nanpingji" }, "units": { "group": "vanguard1" } }
         ]
       },
       {
-        "id": "firstWave",
-        "at": { "time": 45 },
+        "id": "phase2_vanguard_to_northbank",
+        "at": { "time": 60 },
         "actions": [
-          {
-            "type": "spawn",
-            "unitType": "light",
-            "count": 2,
-            "at": { "cityId": "c6" },
-            "group": "north",
-            "spacing": { "x": 0, "y": 24 },
-            "order": { "type": "attackMove", "target": { "anchor": "nanpingji" } }
-          },
-          {
-            "type": "spawn",
-            "unitType": "light",
-            "count": 1,
-            "at": { "cityId": "c7" },
-            "group": "east",
-            "spacing": { "x": 0, "y": 24 },
-            "order": { "type": "attackMove", "target": { "capturePointId": "p6" } }
-          }
+          { "type": "engage", "target": { "capturePointId": "p6" }, "units": { "group": "vanguard2" } }
         ]
       },
       {
-        "id": "secondWave",
-        "at": { "time": 90 },
+        "id": "phase3_main_to_shuangduiji",
+        "at": { "time": 100 },
         "actions": [
-          {
-            "type": "spawn",
-            "unitType": "heavy",
-            "count": 1,
-            "at": { "cityId": "c6" },
-            "group": "north",
-            "spacing": { "x": 0, "y": 24 },
-            "order": { "type": "attackMove", "target": { "anchor": "nanpingji" } }
-          },
-          {
-            "type": "spawn",
-            "unitType": "light",
-            "count": 1,
-            "at": { "cityId": "c7" },
-            "group": "east",
-            "spacing": { "x": 0, "y": 24 },
-            "order": { "type": "attackMove", "target": { "capturePointId": "p6" } }
-          }
+          { "type": "engage", "target": { "anchor": "shuangduiji" }, "units": { "group": "main" } }
         ]
       },
       {
-        "id": "reliefWave",
-        "at": { "time": 150 },
+        "id": "phase4_sortie_southeast",
+        "at": { "time": 140 },
         "actions": [
-          {
-            "type": "spawn",
-            "unitType": "heavy",
-            "count": 1,
-            "at": { "cityId": "c5" },
-            "group": "north",
-            "spacing": { "x": 0, "y": 24 },
-            "order": { "type": "attackMove", "target": { "anchor": "nanpingji" } }
-          },
-          {
-            "type": "spawn",
-            "unitType": "light",
-            "count": 1,
-            "at": { "cityId": "c5" },
-            "group": "east",
-            "spacing": { "x": 0, "y": 24 },
-            "order": { "type": "attackMove", "target": { "capturePointId": "p6" } }
-          }
+          { "type": "engage", "target": { "anchor": "eastSouth" }, "units": { "group": "sortie" } }
+        ]
+      },
+      {
+        "id": "phase5_regroup",
+        "at": { "time": 180 },
+        "actions": [
+          { "type": "engage", "target": { "anchor": "shuangduiji" } }
         ]
       }
     ],
 
     "rules": [
       {
-        "id": "pressNorth",
-        "after": 40,
-        "repeatEvery": 15,
-        "when": { "capturePoint": "p7", "owner": "enemy" },
-        "then": [{ "type": "engage", "target": { "anchor": "nanpingji" }, "units": { "group": "north" } }]
-      },
-      {
-        "id": "pressEast",
-        "after": 40,
-        "repeatEvery": 15,
-        "when": { "capturePoint": "p6", "owner": "enemy" },
-        "then": [{ "type": "engage", "target": { "capturePointId": "p6" }, "units": { "group": "east" } }]
-      },
-      {
-        "id": "pocketCounterattack",
-        "after": 40,
-        "repeatEvery": 20,
-        "when": { "city": "c7", "owner": "enemy" },
-        "then": [{ "type": "engage", "target": { "anchor": "shuangduiji" }, "units": { "group": "pocket" } }]
-      },
-      {
-        "id": "northHoldOrWithdraw",
-        "after": 150,
-        "when": { "capturePoint": "p7", "owner": "self" },
-        "then": [{ "type": "hold", "units": { "group": "north" } }],
-        "otherwise": [{ "type": "retreat", "to": { "anchor": "redDeploy" }, "units": { "group": "north" } }]
-      },
-      {
-        "id": "eastHoldOrWithdraw",
-        "after": 150,
-        "when": { "capturePoint": "p6", "owner": "self" },
-        "then": [{ "type": "hold", "units": { "group": "east" } }],
-        "otherwise": [{ "type": "retreat", "to": { "anchor": "redDeploy" }, "units": { "group": "east" } }]
-      },
-      {
-        "id": "pocketHold",
+        "id": "vanguard1_hold_or_withdraw",
         "after": 60,
+        "when": { "capturePoint": "p7", "owner": "self" },
+        "then": [{ "type": "hold", "units": { "group": "vanguard1" } }],
+        "otherwise": [{ "type": "retreat", "to": { "anchor": "shuangduiji" }, "units": { "group": "vanguard1" } }]
+      },
+      {
+        "id": "vanguard2_hold_or_withdraw",
+        "after": 100,
+        "when": { "capturePoint": "p6", "owner": "self" },
+        "then": [{ "type": "hold", "units": { "group": "vanguard2" } }],
+        "otherwise": [{ "type": "retreat", "to": { "anchor": "shuangduiji" }, "units": { "group": "vanguard2" } }]
+      },
+      {
+        "id": "main_press",
+        "when": { "time": 100 },
+        "until": 180,
+        "repeatEvery": 20,
+        "then": [{ "type": "engage", "target": { "anchor": "shuangduiji" }, "units": { "group": "main" } }]
+      },
+      {
+        "id": "sortie_press",
+        "when": { "time": 140 },
+        "until": 180,
+        "repeatEvery": 20,
+        "then": [{ "type": "engage", "target": { "anchor": "eastSouth" }, "units": { "group": "sortie" } }]
+      },
+      {
+        "id": "hold_shuangduiji",
+        "after": 220,
         "when": { "city": "c7", "owner": "self" },
-        "then": [{ "type": "hold", "units": { "group": "pocket" } }]
+        "then": [
+          { "type": "hold", "units": { "group": "main" } },
+          { "type": "hold", "units": { "group": "vanguard1" } },
+          { "type": "hold", "units": { "group": "vanguard2" } },
+          { "type": "hold", "units": { "group": "sortie" } }
+        ],
+        "otherwise": [{ "type": "engage", "target": { "anchor": "shuangduiji" } }]
       }
     ]
   },
+
+  {
+    "faction": "blue",
+    "preset": "standard",
+    "triggers": [
+      {
+        "id": "huayeRelief1",
+        "at": { "time": 90 },
+        "actions": [
+          {
+            "type": "spawn",
+            "unitType": "light",
+            "count": 4,
+            "at": { "anchor": "eastSouth" },
+            "group": "relief",
+            "spacing": { "x": 0, "y": 24 },
+            "order": { "type": "attackMove", "target": { "anchor": "shuangduiji" } }
+          }
+        ]
+      },
+      {
+        "id": "huayeRelief2",
+        "at": { "time": 150 },
+        "actions": [
+          {
+            "type": "spawn",
+            "unitType": "light",
+            "count": 2,
+            "at": { "anchor": "eastSouth" },
+            "group": "relief",
+            "spacing": { "x": 0, "y": 24 },
+            "order": { "type": "attackMove", "target": { "anchor": "shuangduiji" } }
+          },
+          {
+            "type": "spawn",
+            "unitType": "heavy",
+            "count": 1,
+            "at": { "anchor": "eastSouth" },
+            "group": "relief",
+            "spacing": { "x": 0, "y": 24 },
+            "order": { "type": "attackMove", "target": { "anchor": "shuangduiji" } }
+          }
+        ]
+      }
+    ]
+  }
+  ],
 
   "victory": { "mode": "annihilative", "faction": "blue" }
 }

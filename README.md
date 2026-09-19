@@ -23,6 +23,7 @@ npm run dev        # 启动 Vite 开发服务器
 npm test           # Vitest 单元测试
 npm run test:e2e   # Playwright 端到端测试
 npm run build      # 构建到 dist/
+npm run tune       # 离线调参：headless 批量对局 + 参数扫描（scripts/tune.mjs）
 ```
 
 ## 项目结构

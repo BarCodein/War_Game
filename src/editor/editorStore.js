@@ -1,4 +1,4 @@
-import { validateMap } from '../simulation/map.js';
+﻿import { validateMap } from '../simulation/map.js';
 import { values } from '../config/index.js';
 
 // 地图编辑器状态：与运行时共享同一地图模型与校验（REQUIREMENTS.md §4.6）。
@@ -23,7 +23,7 @@ export function createNewMap(name, width, height) {
       { id: 's1', faction: 'blue', x: Math.round(width * 0.15), y: Math.round(height * 0.75) },
       { id: 's2', faction: 'red', x: Math.round(width * 0.85), y: Math.round(height * 0.25) },
     ],
-    // 占领点：可被占领，被占领后仅提供视野（不提供补给/士气）；默认留空
+    // 占领点：可被占领，被占领后仅提供视野（不提供补给）；默认留空
     capturePoints: [],
     objectives: [],
   };

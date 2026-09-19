@@ -6,6 +6,9 @@ import { chooseTarget, combatPower, enemiesWithin, scoreAttack } from './ai/tact
 import { approachWaypoint, chooseApproach, chooseWeakSpot, feintAxis } from './ai/front.js';
 import { perceive, unexploredFrontier, visibleEnemies } from './ai/perception.js';
 import { resolveAiConfig } from './ai/presets.js';
+import { clampToSupply, isLowSupply, squadLowSupply, supplyPolicy, withinSupply } from './ai/supply.js';
+import { interdictionPlan } from './ai/interdiction.js';
+import { bestRetreatCity, reliefPlan } from './ai/relief.js';
 
 const isNonEmptyString = (v) => typeof v === 'string' && v.length > 0;
 const isFiniteNumber = (v) => typeof v === 'number' && Number.isFinite(v);
@@ -65,6 +68,9 @@ export class ScriptedAI {
     this.cfg = resolveAiConfig(script.preset, script.tuning);
     // 迷雾公平模式（阶段三）：关卡写 "fog": true 才开启，默认全知（旧关卡行为不变）
     this.fogAware = typeof script.fog === 'boolean' ? script.fog : values.ai.fog;
+    // 补给策略（docs/ai-design.md §3.7）：由档位 supplyCaution 插值出活动范围 / 打分倍率 /
+    // 急行军门槛 / 回城阈值；cfg 一局固定，所以这里算一次即可。
+    this.policy = supplyPolicy(this.cfg);
   }
 
   update(dt) {
@@ -305,6 +311,8 @@ export class ScriptedAI {
     const cfg = this.cfg;
     // 情报：全知模式下就是全部敌军；公平模式下是"看得见 + 记得住"（阶段三）
     const knowns = perceive(this.world, this.faction, cfg, this.fogAware);
+    // 撤退选城（阶段五）要看"哪座城被围了"，用的是同一次情报（不额外再算一遍视野）
+    this.knowns = knowns;
     for (const [group, intent] of this.intents) {
       const units = this.ownUnits({ group });
       if (units.length === 0) continue;
@@ -314,13 +322,25 @@ export class ScriptedAI {
       const centroid = squadCentroid(units);
       const avgHp = units.reduce((sum, unit) => sum
         + unit.hp / values.units[unit.type].hp, 0) / units.length;
-      const avgMorale = units.reduce((sum, unit) => sum + unit.morale, 0) / units.length;
+      // 补给存量也按**比例**取平均：各兵种存量上限不同（values.units.*.supplyStock）
+      const avgStock = units.reduce((sum, unit) => sum
+        + (unit.maxSupplyStock > 0 ? unit.supplyStock / unit.maxSupplyStock : 0), 0) / units.length;
 
-      // ① 休整状态机（阶段二）：打残/打散 → 撤回最近己城恢复半径，恢复够了再回归
-      if (this.updateRegroupState(state, group, units, centroid, avgHp, avgMorale, cfg)) continue;
+      // ① 休整状态机（阶段二）：打残/缺补 → 撤回**补给代价最低**的己城，恢复够了再回归
+      //    lowSupply（补给线断了，或平均存量跌破警戒线）直接视同"该回去补给了"
+      const lowSupply = squadLowSupply(units, this.policy);
+      if (this.updateRegroupState(state, group, units, centroid, avgHp, avgStock, cfg, lowSupply)) continue;
 
       // ② 主攻方向（阶段二 B）：复用战线的薄弱点 → 接近轴端点；没有战线时就是脚本目标
-      const waypoint = this.resolveWaypoint(state, group, units, centroid, objective, cfg, knowns);
+      //    然后再把目标点**夹进补给可达区**（行动边界，docs/ai-design.md §3.7）
+      //    ③d 断敌粮道（阶段五）：先算一个"值得压住的敌方补给走廊点"，接近轴/薄弱点打分会偏向它
+      //    （软权重，不否决正面目标；weights.interdiction = 0 时这一步完全不跑）
+      const interdiction = this.cfg.weights.interdiction > 0
+        ? interdictionPlan(this.world, this.faction, { cfg, knowns, from: centroid })
+        : null;
+      const rawWaypoint = this.resolveWaypoint(state, group, units, centroid, objective, cfg, knowns, interdiction);
+      const clamped = clampToSupply(this.world, this.faction, centroid, rawWaypoint, this.policy.hardReachCost);
+      const waypoint = clamped.clamped ? clamped : rawWaypoint;
       const anchor = squadAnchor(units, waypoint);
       const template = needsColumn(this.world.terrain, anchor.centroid, waypoint) ? 'column' : 'line';
       const slots = formationSlots(units.length, template, anchor.facing);
@@ -331,11 +351,22 @@ export class ScriptedAI {
       const feintId = cfg.feint ? this.pickFeintUnit(state, group, units, waypoint, cfg) : null;
       const reserve = this.pickReserve(state, group, units, waypoint, cfg, feintId);
       const forced = this.shouldForceMarch(units, waypoint, cfg);
+      // ③e 预备队任务（阶段五）：解围 / 断敌粮道——预备队本来就在后方闲置，不占正面兵力
+      const mission = this.reserveMission(units, reserve, centroid, knowns, interdiction, cfg);
 
       // ③b 侦察兵（阶段三）：公平模式下抽人做前沿探索，暂时脱离队形
       const scouts = this.pickScouts(state, units, objective, feintId, cfg);
 
       for (const { unit, point } of assignSlots(units, anchor, slots)) {
+        // ③c 个别单位自己断补/存量告急（小队整体还算健康）：先回补给区，不再往前顶
+        //    —— 主动接战一律不下（contact 时 combat 系统仍会照常交战 = 只反击）
+        if (isLowSupply(unit, this.policy)) {
+          const back = this.retreatCity({ x: unit.x, y: unit.y }); // 避开正被围住的城（§3.8）
+          if (back) {
+            this.issueOnce(unit, moveCommand([{ x: back.x, y: back.y }]), `resupply:${back.id}`);
+            continue;
+          }
+        }
         if (scouts.has(unit.id)) {
           const frontier = this.scoutFrontier(state, unit, objective, cfg);
           if (frontier) {
@@ -350,7 +381,11 @@ export class ScriptedAI {
           continue;
         }
         if (reserve.has(unit.id)) {
-          // 预备队：在主力后方待命（投入条件见 shouldCommitReserve）
+          // 预备队：优先执行解围/断粮任务（阶段五），没有任务时在主力后方待命
+          if (mission) {
+            this.issueOnce(unit, attackMoveCommand({ x: mission.x, y: mission.y }, { forced }), mission.label);
+            continue;
+          }
           const rally = {
             x: centroid.x - anchor.facing.x * cfg.reserve.rallyBehind,
             y: centroid.y - anchor.facing.y * cfg.reserve.rallyBehind,
@@ -366,7 +401,7 @@ export class ScriptedAI {
           continue;
         }
         // ⑤ 选目标：集中火力上限内的最高分；已有目标且优势不足时保持（迟滞，防横跳）
-        const ctx = { targetCounts, cfg, knowns: this.fogAware ? knowns : null };
+        const ctx = { targetCounts, cfg, knowns: this.fogAware ? knowns : null, policy: this.policy };
         const chosen = this.chooseWithHysteresis(unit, ctx);
         if (chosen) {
           targetCounts.set(chosen.enemy.id, (targetCounts.get(chosen.enemy.id) ?? 0) + 1);
@@ -397,15 +432,20 @@ export class ScriptedAI {
 
   /**
    * 回城休整状态机（阶段二）：
-   *   engage --(平均血量/士气低于阈值)--> regroup --(进入己城恢复半径)--> recover
+   *   engage --(平均血量/存量比例低于阈值，或整队断补)--> regroup --(进入己城恢复半径)--> recover
    *   recover --(恢复到阈值)--> engage（带冷却，防止来回抖动）
    * 返回 true 表示本轮已经处理（调用方跳过队形/选目标逻辑）。
+   * 补给相关（docs/ai-design.md §3.7）：触发条件多一条 `lowSupply`（断补或平均存量跌破警戒线）；
+   * 撤退目标是**补给代价最低**的己城（用 `world.supplyFields` 的代价场，而不是欧氏最近——
+   * 后者可能正好是被切断的那座，越撤越惨）。
    */
-  updateRegroupState(state, group, units, centroid, avgHp, avgMorale, cfg) {
-    const city = this.nearestOwnCity(centroid);
+  updateRegroupState(state, group, units, centroid, avgHp, avgStock, cfg, lowSupply = false) {
+    const city = this.retreatCity(centroid);
     const inRecovery = city && Math.hypot(centroid.x - city.x, centroid.y - city.y) <= values.cities.recovery.radius;
     if (state.mode === 'engage') {
-      const tired = avgHp < cfg.regroup.hpRatio || avgMorale < cfg.regroup.morale;
+      const tired = avgHp < cfg.regroup.hpRatio
+        || avgStock < this.policy.regroupRatio
+        || lowSupply;
       if (!tired || state.cooldown > 0 || !city) return false;
       state.mode = 'regroup';
     }
@@ -424,8 +464,8 @@ export class ScriptedAI {
         return true;
       }
     }
-    // recover：在恢复半径内原地待命（+3hp/s、+5 士气/s 由补给系统结算）
-    if (avgHp >= cfg.regroup.recoverHpRatio && avgMorale >= cfg.regroup.recoverMorale) {
+    // recover：在恢复半径内原地待命（+3hp/s 由 supply 结算；补给存量靠城里的补给线进货）
+    if (avgHp >= cfg.regroup.recoverHpRatio && avgStock >= cfg.regroup.recoverSupplyRatio) {
       state.mode = 'engage';
       state.cooldown = cfg.regroup.cooldownSeconds;
       state.mainPower = null; // 重新集结后重新记基线
@@ -437,11 +477,11 @@ export class ScriptedAI {
   }
 
   // 主攻方向：优先"战线上的薄弱点"（阶段二 B），否则退回脚本目标；sly 档额外算侧翼佯动点
-  resolveWaypoint(state, group, units, centroid, objective, cfg, knowns = null) {
+  resolveWaypoint(state, group, units, centroid, objective, cfg, knowns = null, interdiction = null) {
     const objectiveChanged = state.objective?.x !== objective.x || state.objective?.y !== objective.y;
     if (objectiveChanged || state.axis === undefined) {
       state.objective = { x: objective.x, y: objective.y };
-      const fogArgs = { knowns, fogAware: this.fogAware };
+      const fogArgs = { knowns, fogAware: this.fogAware, interdiction };
       // 权限边界：只选"从哪个方向接近"，脚本给的目标点不变
       state.axis = chooseApproach(this.world, { unit: units[0], objective, faction: this.faction, cfg, ...fogArgs }) ?? null;
       state.weakness = chooseWeakSpot(this.world, { objective, faction: this.faction, cfg, ...fogArgs });
@@ -500,9 +540,21 @@ export class ScriptedAI {
     return candidates[0].id;
   }
 
-  // 急行军：档位允许 + 距推进点足够远（代价是士气与掉血，见 gdd §4）
+  // 急行军：档位允许 + 距推进点足够远（代价是补给与掉血，见 gdd §4）
+  /**
+   * 急行军：档位允许 + 距推进点足够远（代价是补给 −10/s、掉血 1.5/s）。
+   * 补给约束（docs/ai-design.md §3.7）：**存量够、路通、且目的地还在补给可达区内**才允许——
+   * 急行军是一台烧存量（和血）的机器，断补时开急行军等于自杀。
+   */
   shouldForceMarch(units, waypoint, cfg) {
     if (!cfg.useForcedMarch) return false;
+    const alive = units.filter(unit => unit.state !== 'dead');
+    if (alive.length === 0) return false;
+    // 全队都要满足最低存量门槛，且没有一个人断补
+    const stockOk = alive.every(unit => (unit.maxSupplyStock > 0
+      ? unit.supplyStock / unit.maxSupplyStock : 0) >= this.policy.forcedMarchStock);
+    if (!stockOk || alive.some(unit => !unit.supplied)) return false;
+    if (!withinSupply(this.world, this.faction, waypoint.x, waypoint.y, this.policy.hardReachCost)) return false;
     const centroid = squadCentroid(units);
     return Math.hypot(waypoint.x - centroid.x, waypoint.y - centroid.y) >= cfg.march.minDistance;
   }
@@ -519,6 +571,40 @@ export class ScriptedAI {
       }
     }
     return best;
+  }
+
+  /**
+   * 撤退/休整该去哪座城（阶段五）：**补给代价最低**的那座，但**避开正被围住的城**——
+   * 代价来自 `world.supplyFields[faction]`（已含地形权重与敌方实际控制区阻断），
+   * 被围判断来自已知敌情与 `captureProgress`（见 ai/relief.js 的 bestRetreatCity）。
+   */
+  retreatCity(point) {
+    return bestRetreatCity(this.world, this.faction, point.x, point.y, { cfg: this.cfg, knowns: this.knowns })
+      ?? this.nearestOwnCity(point);
+  }
+
+  /**
+   * 预备队任务（阶段五，docs/ai-design.md §3.8）：预备队本来就在主力后方闲置，于是让它去干
+   * "护粮道 / 断粮道"这两件不占正面兵力的事：
+   *   ① 解围优先：己城被围且它真的在养兵 → 压向围城的那几个敌人（`reliefPlan`）；
+   *   ② 否则去压敌方补给走廊（断敌粮道，interdiction 为 null 时跳过）；
+   *      断粮点还要夹进**己方**补给可达区——断人粮道不能先把自己断了。
+   * 没有任务返回 null，预备队照旧在主力后方待命（旧行为不变）。
+   */
+  reserveMission(units, reserve, centroid, knowns, interdiction, cfg) {
+    const pool = units.filter(unit => reserve.has(unit.id) && !isLowSupply(unit, this.policy));
+    if (pool.length === 0) return null;
+    const relief = reliefPlan(this.world, this.faction, { cfg, knowns, units: pool, from: centroid });
+    if (relief) return { x: relief.x, y: relief.y, label: `relief:${relief.city.id}` };
+    if (!interdiction) return null;
+    const reach = clampToSupply(this.world, this.faction, centroid, interdiction, this.policy.hardReachCost);
+    // 签名按 120px 粗格量化：断粮点会随敌人移动每 0.5s 漂几十像素，精确签名会导致
+    // "每半秒重发一次命令 → 行军路线被反复重置"（单位原地打转），粗格让漂移不触发重发。
+    return {
+      x: reach.x,
+      y: reach.y,
+      label: `interdict:${Math.round(reach.x / 120)},${Math.round(reach.y / 120)}`,
+    };
   }
 
   // 撤退/休整时不需要清意图表（意图是"打哪"，退是为了接着打），但要清掉旧命令签名
@@ -552,7 +638,8 @@ export class ScriptedAI {
   // 侦察兵名单（阶段三）：公平模式 + 开启侦察 + 编队够大时，抽最健康的几个
   pickScouts(state, units, objective, feintId, cfg) {
     if (!this.fogAware || !cfg.scout.enabled) return new Set();
-    const pool = units.filter(unit => unit.id !== feintId);
+    // 补给约束：库存告急或已断补的单位不去侦察（侦察兵本来就最容易脱离补给线）
+    const pool = units.filter(unit => unit.id !== feintId && !isLowSupply(unit, this.policy));
     if (pool.length < cfg.scout.minSquadSize) return new Set();
     const sorted = [...pool].sort((a, b) => {
       if (b.hp !== a.hp) return b.hp - a.hp; // 最健康的去侦察（更可能活着回来）
@@ -562,6 +649,7 @@ export class ScriptedAI {
   }
 
   // 侦察兵的前沿目标：只在"没走到/走过头"时重算，避免每 0.5 秒改目的地
+  // 补给约束：前沿点也夹进补给可达区（侦察兵不是一次性消耗品），夹不动就原地待命
   scoutFrontier(state, unit, objective, cfg) {
     const current = state.scoutTargets?.get(unit.id);
     if (current && Math.hypot(unit.x - current.x, unit.y - current.y) > 60) return current;
@@ -569,10 +657,14 @@ export class ScriptedAI {
     const enemyCity = (this.world.cities ?? []).find(city => city.faction !== this.faction);
     if (enemyCity) prefer.push({ x: enemyCity.x, y: enemyCity.y });
     prefer.push(objective);
-    const frontier = unexploredFrontier(this.world, this.faction, unit, { cfg, prefer });
+    const raw = unexploredFrontier(this.world, this.faction, unit, { cfg, prefer });
+    const frontier = raw
+      ? clampToSupply(this.world, this.faction, { x: unit.x, y: unit.y }, raw, this.policy.hardReachCost)
+      : null;
+    const target = frontier && Math.hypot(frontier.x - unit.x, frontier.y - unit.y) > 40 ? frontier : null;
     state.scoutTargets ??= new Map();
-    state.scoutTargets.set(unit.id, frontier);
-    return frontier;
+    state.scoutTargets.set(unit.id, target);
+    return target;
   }
 
   // 同一决策重复下发同样的命令会重置行军路线，所以只有签名变化时才真下单

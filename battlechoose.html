@@ -5,6 +5,54 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>沙盘战争 — 关卡选择</title>
   <link rel="stylesheet" href="./members/css/battlepages.css">
+  <style>
+    /* 教学关卡专用：在战役选择地图上直接显示 loading 进度条 */
+    #tutorialLoadingOverlay {
+      position: fixed; inset: 0; z-index: 9999;
+      display: none; align-items: flex-start; justify-content: center;
+      padding-top: 18vh;
+      background: rgba(8, 5, 2, 0.72);
+      backdrop-filter: blur(4px);
+      animation: tutLoadFadeIn .4s ease;
+    }
+    #tutorialLoadingOverlay.show { display: flex; }
+    @keyframes tutLoadFadeIn { from { opacity: 0; } to { opacity: 1; } }
+    .tut-loading-box {
+      width: 90%; max-width: 640px; text-align: center;
+    }
+    .tut-loading-eyebrow {
+      font-size: 11px; letter-spacing: 5px; color: #d8b97a;
+      margin-bottom: 12px; font-weight: 700;
+      text-shadow: 0 2px 6px rgba(0,0,0,.9);
+    }
+    .tut-loading-title {
+      font-size: 22px; font-weight: 700; color: #f0d088;
+      margin: 0 0 28px; letter-spacing: 3px;
+      text-shadow: 0 2px 10px rgba(0,0,0,.9);
+    }
+    .tut-loading-task {
+      font-size: 13px; letter-spacing: 3px; color: #d8b97a;
+      margin-bottom: 14px; min-height: 20px;
+      text-shadow: 0 2px 6px rgba(0,0,0,.9);
+    }
+    .tut-loading-track {
+      width: 100%; height: 12px;
+      border: 1.5px solid #6b4a1a; border-radius: 1px;
+      background: linear-gradient(180deg, #1a1208 0%, #2a1d0c 100%);
+      box-shadow: inset 0 1px 2px rgba(0,0,0,.7), inset 0 -1px 1px rgba(255,200,100,.05);
+      overflow: hidden; position: relative;
+    }
+    .tut-loading-fill {
+      height: 100%; width: 0%;
+      background: linear-gradient(180deg, rgba(255,225,140,.95) 0%, #d8a447 30%, #a67427 60%, #6b4a1a 100%);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.4), 0 0 10px rgba(216,164,71,.5);
+      transition: width .25s ease;
+    }
+    .tut-loading-hint {
+      margin-top: 18px; font-size: 11px; letter-spacing: 3px; color: #8c6b2c;
+      text-shadow: 0 1px 3px rgba(0,0,0,.9);
+    }
+  </style>
 </head>
 <body>
 
@@ -35,6 +83,7 @@
       <a class="battle-nav-brand" href="./index.html">
         <span class="nav-mark">&#9876;</span> 沙盘战争
       </a>
+      <a class="battle-nav-back" href="./achievements.html" style="margin-left:auto;">🏅 成就</a>
     </div>
   </nav>
 
@@ -71,6 +120,15 @@
              的视口坐标是 (-246,-258) 和 (244,-86)，两点都在视口外。
              另外要避开右上角的预览卡（right:24px top:24px，宽 280px）
              与右下角的缩放控件。 -->
+        <!-- 教学关：基础操作教学 -->
+        <div class="battle-pin unlocked" data-level="0" style="left:92%; top:62%;">
+          <span class="pin-dot"></span>
+          <span class="pin-label">基础教学</span>
+        </div>
+        <div class="battle-pin unlocked" data-level="5" style="left:72%; top:48%;">
+          <span class="pin-dot"></span>
+          <span class="pin-label">地形士气</span>
+        </div>
         <div class="battle-pin unlocked" data-level="1" style="left:122%; top:80%;">
           <span class="pin-dot"></span>
           <span class="pin-label">辽沈战役</span>
@@ -386,6 +444,8 @@
       // 静态服务器（如 npx serve 的 cleanUrls）会把 "/x.html?level=y" 301 重写成
       // "/x" 并丢掉查询参数，只有 hash 一定保留；另外还会写一份 sessionStorage 兜底。
       var battleData = {
+        0: { name: '基础教学', date: '新兵训练', desc: '一步一步学习选择单位、移动、攻击、框选和绘制行军轨迹，掌握 RTS 基础操作。', level: 'fracture-canyon-tutorial' },
+        5: { name: '地形与士气教学', date: '战术演训', desc: '深入学习地形利用（道路/城镇/山地/森林/水域）与士气决胜机制，体会不同地形对战斗的影响。', level: 'tactical-training-tutorial' },
         1: { name: '辽沈战役', date: '1948年9月 — 1948年11月', desc: '东北野战军发起辽沈战役，解放东北全境，奠定全国胜利基础。', level: 'tashan_battle' },
         2: { name: '宿北战役', date: '1946年12月', desc: '山东野战军与华中野战军联合作战，于江苏宿迁北部歼灭国民党军整编第69师，是解放战争战略防御阶段的重要转折。', level: 'subei_battle' },
         3: { name: '西安', date: '1936年12月', desc: '回到了36年12月的西安', level: 'xian_battle' },
@@ -428,6 +488,16 @@
           rememberLevel(data.level);
           preview.classList.add('show');
 
+          // 教学关卡：点击"进入战役"不跳 battlebackground，直接在本页显示 loading 后进游戏
+          if (data.level === 'fracture-canyon-tutorial' || data.level === 'tactical-training-tutorial') {
+            previewEnter.onclick = function (e) {
+              e.preventDefault();
+              startTutorialLoading(data.level);
+            };
+          } else {
+            previewEnter.onclick = null;
+          }
+
           // 自动放大聚焦到该关卡
           autoFocusPin(pin);
         });
@@ -456,6 +526,38 @@
           preview.classList.remove('show');
         }
       });
+
+      // 教学关卡：在战役选择地图上直接显示 loading 进度条，完成后进 game.html
+      function startTutorialLoading(levelId) {
+        var targetLevel = levelId || 'fracture-canyon-tutorial';
+        var overlay = document.getElementById('tutorialLoadingOverlay');
+        var fill = document.getElementById('tutLoadingFill');
+        var task = document.getElementById('tutLoadingTask');
+        if (!overlay || !fill) return;
+        preview.classList.remove('show');
+        overlay.classList.add('show');
+        window.playSfx && window.playSfx('loading');
+        var tasks = ['正在集结部队…', '正在部署兵力…', '正在侦察敌情…', '正在绘制战场…', '即将进入战场…'];
+        var progress = 0, lastIdx = -1;
+        var timer = setInterval(function () {
+          progress += Math.random() * 7 + 3;
+          if (progress >= 100) {
+            progress = 100;
+            clearInterval(timer);
+            task.textContent = '准备就绪';
+            fill.style.width = '100%';
+            setTimeout(function () {
+              var enc = encodeURIComponent(targetLevel);
+              window.location.href = './game.html?level=' + enc + '#level=' + enc;
+            }, 500);
+          } else {
+            var idx = Math.floor(progress / (100 / tasks.length));
+            if (idx >= tasks.length) idx = tasks.length - 1;
+            if (idx !== lastIdx) { task.textContent = tasks[idx]; lastIdx = idx; }
+            fill.style.width = progress + '%';
+          }
+        }, 180);
+      }
     })();
   </script>
 
@@ -470,5 +572,18 @@
       '#previewEnter': 'button'
     });
   </script>
+
+  <!-- 教学关卡 loading 覆盖层（直接显示在战役选择地图上） -->
+  <div id="tutorialLoadingOverlay">
+    <div class="tut-loading-box">
+      <div class="tut-loading-eyebrow">COMMAND TRAINING</div>
+      <h2 class="tut-loading-title">新兵指挥训练</h2>
+      <div class="tut-loading-task" id="tutLoadingTask">正在集结部队…</div>
+      <div class="tut-loading-track">
+        <div class="tut-loading-fill" id="tutLoadingFill"></div>
+      </div>
+      <div class="tut-loading-hint">加载中</div>
+    </div>
+  </div>
 </body>
 </html>

@@ -6,8 +6,8 @@ import { createField, rebuildField, contour, buildPaths, guaranteeUnitCells } fr
 // 结果写进 world.controlLine（网格）、world.controlLineSegments（原始线段）、
 // world.controlLinePaths（串联并平滑后的折线），供渲染层读取。
 //
-// 纯视觉系统：战斗 / 补给 / 士气 / 视野 / 胜负都不读它，
-// 因此放在 tick 顺序的末尾（victory 之前），不影响任何规则判定。
+// 影响力场供渲染与补给线读取（补给线不允许穿过敌方实际控制区，见 supplyPath.js），
+// 放在 tick 顺序的末尾（victory 之前），战斗 / 补给存量 / 视野 / 胜负都不直接读它。
 // **也不读战争迷雾**：影响力源包含双方全部存活单位（含迷雾里的敌军），
 // 所以控制线画出来的是真实分界，不受视野限制（渲染层同样画在迷雾之上）。
 export function updateControlLine(world) {
@@ -47,12 +47,13 @@ function collectUnitMarks(world, out = []) {
 /**
  * 影响力源：存活单位 + 城市 + 占领点。
  * - 蓝方 sign = +1、红方 -1；中立（'neutral' / 未占领）不产生影响力；
- * - **核心圈（满强度段）取绝对值**：单位 = 它自己的碰撞体积（`unit.radius`），
- *   城市/占领点 = 各自的占领半径——核心圈因此只覆盖「脚下这块地」，
- *   单位始终落在自己阵营的控制区里（城市不享受这个保证，见 gdd.md §9）；
+ * - **核心圈（满强度段）取绝对值、每个源一个数值**：单位 = 它自己的碰撞体积（`unit.radius`），
+ *   城市 = `values.controlLine.city.coreRadius`，占领点 = `values.controlLine.capturePoint.coreRadius`
+ *   ——两者的核心圈**都与占领半径脱钩**。核心圈因此只覆盖「脚下这块地」，
+ *   单位始终落在自己阵营的控制区里（城市与占领点不享受这个保证，见 gdd.md §9）；
  * - 城市与占领点在争夺中（captureProgress > 0）时，现属方的影响力按进度线性削弱，
  *   表现「城快丢了 → 控制线往城里压」；
- * - 影响力半径 / 强度取自 values.controlLine 的三组配置。
+ * - 影响力半径 / 强度 / 核心圈取自 values.controlLine 的三组配置。
  */
 export function collectSources(world) {
   const cfg = values.controlLine;
@@ -72,10 +73,11 @@ export function collectSources(world) {
     });
   }
 
-  // 城市/占领点的核心圈 = 占领半径（沿用同一份数值，不再另写一个 60）
-  for (const city of world.cities) pushHeld(sources, city, cfg.city, values.cities.capture.radius);
+  // 城市与占领点的核心圈都用自己的数值（controlLine.city.coreRadius / capturePoint.coreRadius），
+  // 与各自的占领半径（cities.capture.radius / capturePoints.capture.radius）无关
+  for (const city of world.cities) pushHeld(sources, city, cfg.city, cfg.city.coreRadius);
   for (const point of world.capturePoints) {
-    pushHeld(sources, point, cfg.capturePoint, values.capturePoints.capture.radius);
+    pushHeld(sources, point, cfg.capturePoint, cfg.capturePoint.coreRadius);
   }
 
   return sources;

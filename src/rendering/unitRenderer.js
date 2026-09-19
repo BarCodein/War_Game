@@ -1,4 +1,4 @@
-import { isSpotted } from '../simulation/systems/fog.js';
+﻿import { isSpotted } from '../simulation/systems/fog.js';
 import { t } from '../i18n/index.js';
 import { values } from '../config/index.js';
 
@@ -50,7 +50,7 @@ const SELECTED_TINT = 0x5a5a5a;
 // 单位与城市渲染（每帧重绘，只读世界状态）：
 // 层级：terrain 0 < fog 1 < 控制线 2 < 城市/基地 3 < 单位贴图 4 < 覆盖层(裂纹/血条/虚影) 5 < 城市标签 6 < 状态标签 7。
 // 单位改为贴图精灵（等比缩放至对角线 = 碰撞直径、随行进/交战方向旋转、选中着色加深），
-// 贴图缺失时回退圆形；城市、裂纹、血条/士气条、交战抖动、溃逃闪圈、敌军虚影仍用 Graphics 绘制。
+// 贴图缺失时回退圆形；城市、裂纹、血条/补给存量条、交战抖动、溃逃闪圈、敌军虚影仍用 Graphics 绘制。
 export function createUnitRenderer(scene, world, selection) {
   // 城市/基地单独一层，深度低于单位精灵，避免基地图案遮挡单位（bugfix）
   const cityGraphics = scene.add.graphics().setDepth(3);
@@ -97,10 +97,10 @@ export function createUnitRenderer(scene, world, selection) {
     if (unit.state === 'combat') effects.push({ icon: '战', color: 0xff6a33, bg: 0x7a2e0d, priority: 9 });
     // 溃逃
     if (unit.state === 'rout') effects.push({ icon: '溃', color: 0xff4444, bg: 0x8b1a1a, priority: 8 });
-    // 士气动摇
-    if (unit.morale < values.morale.thresholds.shakenBelow) effects.push({ icon: '摇', color: 0xff8a76, bg: 0x7a3020, priority: 7 });
-    // 士气削弱
-    else if (unit.morale < values.morale.thresholds.weakenedBelow) effects.push({ icon: '弱', color: 0xf2d42a, bg: 0x6b5c0e, priority: 6 });
+    // 补给存量将尽（< 30% 上限）
+    if (unit.supplyStock / (unit.maxSupplyStock || 1) < values.supplyStock.thresholds.shakenBelow) effects.push({ icon: '尽', color: 0xff8a76, bg: 0x7a3020, priority: 7 });
+    // 补给存量不足（< 60% 上限）
+    else if (unit.supplyStock / (unit.maxSupplyStock || 1) < values.supplyStock.thresholds.weakenedBelow) effects.push({ icon: '缺', color: 0xf2d42a, bg: 0x6b5c0e, priority: 6 });
     // 水域掉血
     if (world.terrain.terrainAt(unit.x, unit.y) === values.terrain.codes.water) effects.push({ icon: '水', color: 0x63a6d8, bg: 0x1a3d5c, priority: 5 });
     // 补给断裂
@@ -249,7 +249,7 @@ export function createUnitRenderer(scene, world, selection) {
     if (textured.get(texture.key)) drawTexturedUnit(unit, texture.key, dx, dy, isSelected, dt);
     else drawCircleUnit(unit, dx, dy, isSelected);
     drawCracks(unit, dx, dy); // 血量<50% 轻破碎、<20% 重破碎（跟随单位震动）
-    drawBars(unit, x, y); // 仅己方显示血条/士气条；固定于单位真实位置，不跟随震动
+    drawBars(unit, x, y); // 仅己方显示血条/补给存量条；固定于单位真实位置，不跟随震动
   }
 
   // 贴图单位：等比缩放到「对角线 = 半径 × SPRITE_DIAGONAL_FACTOR」，保持贴图原始长宽比；
@@ -335,7 +335,7 @@ export function createUnitRenderer(scene, world, selection) {
   }
 
   function drawBars(unit, cx, cy) {
-    if (unit.faction !== 'blue') return; // 隐藏敌方血条与士气条
+    if (unit.faction !== 'blue') return; // 隐藏敌方血条与补给存量条
     const { radius } = unit;
     const width = radius * 2; // 接近圆点直径（截图效果）
     const hpHeight = 5;
@@ -355,11 +355,12 @@ export function createUnitRenderer(scene, world, selection) {
     graphics.fillRect(cx - width / 2, top, width, hpHeight);
     graphics.fillStyle(hpColor, 1);
     graphics.fillRect(cx - width / 2, top, width * ratio, hpHeight);
-    // 士气条：青蓝色（如图）
+    // 补给存量条：青蓝色（如图）
+    const stockMax = unit.maxSupplyStock || 1;
     graphics.fillStyle(0x0c201b, 1);
     graphics.fillRect(cx - width / 2, top + hpHeight + gap, width, morHeight);
     graphics.fillStyle(0x3fd6e6, 1);
-    graphics.fillRect(cx - width / 2, top + hpHeight + gap, width * Math.min(1, unit.morale / 100), morHeight);
+    graphics.fillRect(cx - width / 2, top + hpHeight + gap, width * Math.min(1, unit.supplyStock / stockMax), morHeight);
   }
 
   // 血量破碎（截图效果）：<50% 轻度破碎、<20% 重度破碎；

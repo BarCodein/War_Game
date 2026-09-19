@@ -1,4 +1,4 @@
-// 全部游戏数值的唯一权威来源。
+﻿// 全部游戏数值的唯一权威来源。
 // gdd.md §12 的数值总表是本文件的镜像；两者一致性由 Vitest 同步测试守护（architecture.md §9）。
 // 任何模块禁止硬编码数值——新增或调整数值先改这里。所有数值状态均为「暂定」。
 
@@ -27,9 +27,11 @@ export const values = {
     preset: 'standard',            // 全局默认档位；关卡可写 ai.preset 覆盖
     // 三档性格：只有这几项随档位变化（决策节奏与休整阈值是全局的）
     presets: {
-      cautious: { reserveRatio: 0.3, pursuitRadius: 180, useForcedMarch: false, terrainBias: 'defensive', feint: false },
-      standard: { reserveRatio: 0.15, pursuitRadius: 320, useForcedMarch: true, terrainBias: 'balanced', feint: false },
-      sly: { reserveRatio: 0, pursuitRadius: 520, useForcedMarch: true, terrainBias: 'mobility', feint: true },
+      // supplyCaution：补给敏感度，0 = 激进（敢短时脱离补给线换机会），1 = 保守（贴着补给线打）。
+      // 它插值出 ai.supply 里的四组阈值（活动范围 / 打分倍率 / 急行军门槛 / 回城阈值）。
+      cautious: { reserveRatio: 0.3, pursuitRadius: 180, useForcedMarch: false, terrainBias: 'defensive', feint: false, supplyCaution: 0.8 },
+      standard: { reserveRatio: 0.15, pursuitRadius: 320, useForcedMarch: true, terrainBias: 'balanced', feint: false, supplyCaution: 0.5 },
+      sly: { reserveRatio: 0, pursuitRadius: 520, useForcedMarch: true, terrainBias: 'mobility', feint: true, supplyCaution: 0.2 },
     },
     decisionIntervalSeconds: 0.5,  // 战术层决策节奏（模拟时间，秒）
     hysteresis: 0.15,              // 换目标所需的分数优势（防止每半秒反复横跳）
@@ -44,6 +46,50 @@ export const values = {
       chase: 0.15,             // 追击溃逃目标的额外权重
       terrain: 0.15,           // 我方所在地形（水里输出减半）
       approach: 0.4,           // 接近轴的地形偏好权重（配合 presets[].terrainBias）
+      supply: 0.25,            // 补给（存量是否够、战场是否在补给可达区内）——见 ai.supply 与 docs/ai-design.md §3.7
+      interdiction: 0.2,       // 断敌粮道（接近轴/薄弱点压住敌方补给走廊的偏好）——见 ai.interdiction 与 §3.8。
+                               // ⚠️ 它实际是**开关**而不是旋钮：0.1~0.6 的行为逐位相同（§5.3 教训 2），
+                               //    因为断粮任务只判断 `> 0`；0 = 整套断粮关闭（§7 决策 37 决定保持这个语义）。
+    },
+    // 补给视野（docs/ai-design.md §3.7）：硬约束阈值 + 由档位 supplyCaution 线性插值的软阈值。
+    // 硬约束（与档位无关）：补给线断了（supplied=false）或存量比例 < lowRatio → 收紧
+    //   （不急行军、不主动接战、向补给区内回撤）。
+    supply: {
+      lowRatio: 0.3,              // 硬约束：存量比例低于此值视为"低补给"
+      squadCutFraction: 0.5,      // 小队里断补人数占比达到此值 → 整队转入低补给姿态
+      reachRatio: { min: 0.95, max: 0.65 },        // 允许活动范围 = supply.path.maxCost × 该值
+      weightScale: { min: 0.7, max: 1.4 },         // 效用打分里补给项的倍率
+      forcedMarchStock: { min: 0.35, max: 0.7 },   // 急行军要求的最低存量比例
+      regroupCautionRange: 0.2,   // 回城阈值 = regroup.supplyRatio + 该值 × (supplyCaution − 0.5)：标准档不漂移
+      regroupRatioFallback: 0.5,  // cfg.regroup.supplyRatio 缺省时的兜底
+    },
+    // 断敌粮道（docs/ai-design.md §3.8）：敌方补给线 = 敌单位 → 它最近的敌城（两条都是公开信息），
+    // 而"一个单位脚下 140px 内的格子算我方实际控制"（controlLine.unit.influenceRadius）——
+    // 所以把部队插到那条走廊上，就能真的掐断它的补给。AI 只做两件事：
+    //   ① 软权重：接近轴 / 薄弱点打分里偏向"压得住敌走廊"的方向（weights.interdiction）；
+    //   ② 预备队任务：闲置的预备队去守那个点（不下正面攻击命令 = 不否决正面目标）。
+    // 公平：只用**可见**敌单位的位置（记忆里的 ghost 不参与）+ 敌城坐标，绝不读 supplyFields[敌]。
+    // 关闭方式：weights.interdiction = 0（打分项归零，预备队也不再领断粮任务）。
+    //   注：weights.interdiction 只分"开/关"两档——它在 0.1~0.6 之间不改变任何行为（§5.3 教训 2、
+    //   §7 决策 37）：断粮任务只判断 `> 0`，而接近轴打分的区分度又不足以改变选择。
+    interdiction: {
+      minCuts: 2,          // 至少要能同时压住几条敌方补给线才值得为它调整方向（1 条 = 顺手刮一下）
+      corridorSamples: 3,  // 每条走廊采样几个点（按 0.3 / 0.5 / 0.7 均分：避开城下与单位脚下）
+      minCorridor: 240,    // 走廊短于这个长度就不算"粮道"（敌人就在城边，掐不断）
+      minDistance: 160,    // 断粮点离我方形心太近（已经在自己控制里）不算数
+      maxDistance: 900,    // 太远的断粮点不值得绕路（超出直接出局）
+      cutRadius: 140,      // 压制半径 = controlLine.unit.influenceRadius：一个单位能压住的地盘
+    },
+    // 护己方粮道（docs/ai-design.md §3.8）：解围 + 撤退选城避开被围的城。
+    // "被围"= 看得见的敌人在城周 threatRadius 内，或这城正在被夺（captureProgress > 0，公开信息）。
+    relief: {
+      threatRadius: 200,        // 己城周围这个半径内出现敌军 = 被围
+      standoff: 180,            // 解围分队停在城外多远（不直接撞进占领圈）
+      minUsers: 2,              // 这城至少是这么多己方单位的"最近己方城市"才值得解围
+      minLoadPoints: 1,         // 或本轮至少输出这么多运力点（城被切断时 load=0，改看 minUsers）
+      forceRatio: 0.5,          // 解围分队战力 ≥ 围城敌军战力 × 该值才去（否则等主力，不送人头）
+      maxDistance: 1200,        // 解围分队的有效驰援距离（再远就来不及，出局）
+      retreatThreatPenalty: 400, // 撤退选城时，被围的城按等效像素加罚（代价场单位：平地 px）
     },
     squad: {
       cohesionRadius: 170,       // 队形松散判定半径（px）
@@ -77,12 +123,12 @@ export const values = {
     // 回城休整（全局阈值，不随档位变化）
     regroup: {
       hpRatio: 0.45,            // 小队平均血量低于此值 → 撤退休整
-      morale: 40,               // 或平均士气低于此值
+      supplyRatio: 0.5,         // 或平均补给存量低于上限的这个比例（去城里重新进货）
       recoverHpRatio: 0.75,     // 恢复到该血量比例 → 回归脚本目标
-      recoverMorale: 60,        // 且士气达到该值
+      recoverSupplyRatio: 0.75, // 且补给存量恢复到这个比例
       cooldownSeconds: 12,      // 休整完的冷却，避免来回抖动
     },
-    march: { minDistance: 650 }, // 距目标超过这个距离且档位允许时才走急行军（代价：士气 -10/s、掉血 1.5/s）
+    march: { minDistance: 650 }, // 距目标超过这个距离且档位允许时才走急行军（代价：补给 -10/s、掉血 1.5/s）
 
     // ---- 阶段三：迷雾公平 + 侦察（docs/ai-design.md §3.4）----
     // 默认关闭：旧的关卡（塔山/宿北）行为与平衡完全不变；想公平的关卡写 "ai": { "fog": true }。
@@ -106,8 +152,10 @@ export const values = {
   prep: { seconds: 5 },
 
   units: {
-    light: { hp: 60, damage: 0.8, attackInterval: 0.2, range: 40, speed: 40, radius: 14, vision: 140 },
-    heavy: { hp: 80, damage: 1, attackInterval: 0.2, range: 40, speed: 40, radius: 14, vision: 160 },
+    // supplyStock = 补给存量上限（gdd.md §6）：出击时带满，战斗中/行军中消耗，回补给线内进货。
+    // 存量归零 = 完全断补（掉血 + 归零溃逃），所以上限 ≈ 断补后还能撑多久 × 消耗速率。
+    light: { hp: 60, damage: 0.8, attackInterval: 0.2, range: 40, speed: 40, radius: 14, vision: 140, supplyStock: 80 },
+    heavy: { hp: 80, damage: 1, attackInterval: 0.2, range: 40, speed: 40, radius: 14, vision: 160, supplyStock: 120 },
   },
 
   combat: {
@@ -125,34 +173,40 @@ export const values = {
     passable: { plain: true, forest: true, water: true, bridge: true, mountain: true, highMountain: false, road: true, town: true },
     moveMultiplier: { plain: 1.0, forest: 0.6, water: 0.4, bridge: 1.0, mountain: 0.65, highMountain: 0, road: 1.25, town: 1.0 },
     defenseModifier: { plain: 1.0, forest: 0.85, bridge: 0.9, mountain: 0.75, road: 1.0, town: 0.6 }, // 防御者地形修正（town 0.6 = 防御大幅提升）
-    moraleMoveMultiplier: { plain: 1.0, forest: 1.0, water: 1.0, bridge: 1.0, mountain: 1.0, highMountain: 1.0, road: 0.5, town: 1.0 },
+    // 行军消耗的**地形系数**（gdd.md §4）：沿道路行军补给消耗减半，其余地形照常
+    marchSupplyMultiplier: { plain: 1.0, forest: 1.0, water: 1.0, bridge: 1.0, mountain: 1.0, highMountain: 1.0, road: 0.5, town: 1.0 },
     // 攻方所在位置的地形对输出的影响（gdd.md §5）：水里站不稳，攻击力打对折。
     // 注意是**攻方所在地形**，与 defenseModifier（守方所在地形）不是一回事。
     attackMultiplier: { plain: 1.0, forest: 1.0, water: 0.5, bridge: 1.0, mountain: 1.0, highMountain: 0, road: 1.0, town: 1.0 },
     waterHpPerSecond: 1, // 身处水域每秒损失的血量（走 World.damageUnit，计入伤亡；可溺水阵亡）
   },
 
-  morale: {
-    initial: 80, min: 0, max: 100,
+  // 补给存量系统（gdd.md §6）：这套机制原本是士气，**现在数值的含义是「单位剩余的补给存量」**
+  // ——战斗消耗补给、行军消耗补给、急行军消耗更多；唯一的进货渠道是补给系统
+  // （城市运力 × 距离因子算出的实收点数，见 supply.stockPerPoint 与 §8）。
+  // 机制（阈值削弱 / 归零溃逃投降 / 溃逃撤退）都保留，只是含义变了：
+  //   存量 ≥ 60% 上限 → 正常；< 60% → 缺补（削弱）；< 30% → 将尽（动摇）；= 0 → 耗尽（溃逃/失序）。
+  supplyStock: {
+    min: 0,
+    // 存量上限按兵种分开（见 units.*.supplyStock）：出击时带满，归零即完全断补
     perSecond: {
-      friendlyNearby: 2,  // 附近友军（≤ ranges.friendly）
-      cityNearby: 5,      // 附近己方城市（≤ ranges.city）
-      supplied: 1,
-      unsupplied: -2,
-      inCombat: -8, // 持续交战的士气损耗（过低会使围攻不可行，见 gdd.md §6）
+      // 只保留「消耗」类修正。友军密度（+2）、城市范围（+5）、友军阵亡（−10）都已删除：
+      // 补给只能沿补给线从城市运来，不能凭空产生、也不会因为战友阵亡而减少。
+      idle: -1,     // **驻军基础口粮**：站着不动也要吃。与交战/行军消耗**叠加**。
+                    // 断补的驻军因此会缓慢耗尽（轻 80 → 80 s）→ 存量归零后周期性失序（原地停摆 + 易伤 ×1.5）。
+      inCombat: -4, // 交战中（正被敌方瞄准）的补给消耗
       // 参战但当前**没有**被敌方瞄准（state=combat 且 !underFire，例如两个单位打同一个敌人时
-      // 只有前排被还击）：同样消耗士气，但比面对面的单位少
+      // 只有前排被还击）：同样消耗补给，但比面对面的单位少
       inCombatSupport: -3,
-      moving: -5,
-      attack: 1.3, // 进攻 士气消耗放大因子
+      moving: -2.5,   // 行军消耗
+      attack: 1.3,  // 进攻（有路线）时的消耗放大因子
     },
-    ranges: { friendly: 60, city: 120, allyDeath: 100 },
-    onAllyDeath: -10,     // 附近友军阵亡瞬间
-    thresholds: { weakenedBelow: 60, shakenBelow: 30, routAt: 0 },
+    thresholds: { weakenedBelow: 0.6, shakenBelow: 0.3, routAt: 0 }, // 按**存量比例**（各兵种上限不同）
     effects: {
       weakened: { damageMultiplier: 0.75, speedMultiplier: 0.85 },
       shaken: { damageMultiplier: 0.5, speedMultiplier: 0.7 },
     },
+    // 溃逃/失序时的补给恢复（无条件下就地搜集，gdd.md §6）
     rout: { recoverPerSecond: 8, stopAt: 20, stuckSeconds: 5 },
     unordered: { recoverPerSecond: 10, stopAt: 20, stuckSeconds: 5 }
   },
@@ -163,21 +217,72 @@ export const values = {
     // 不再随时间自动涨兵（避免拖时间自动获得单位，破坏关卡设计的兵力配比）。
     // 逻辑仍保留在 supply.js，改回 true 即恢复「每 interval 秒产 1 个 unitType」的旧行为。
     production: { enabled: false, interval: 12, unitType: 'light', pauseWhenSupplyFull: true },
-    recovery: { radius: 100, hpPerSecond: 3, moralePerSecond: 5 },
+    recovery: { radius: 100, hpPerSecond: 3 }, // 只回血：补给走补给系统（gdd.md §7、§8）
     vision: 180,
   },
 
   // 占领点：可被占领的中立/阵营目标，被占领后**仅提供视野**；
-  // 不提供补给容量、不提供士气加成、不生产、不恢复、不计入胜负（gdd.md §7.1）。
+  // 不提供补给容量、不提供补给存量加成、不生产、不恢复、不计入胜负（gdd.md §7.1）。
   capturePoints: {
     vision: 180, // 被己方占领后提供的视野半径（独立数值，可单独调）
     capture: { radius: 60, perUnitPerSecond: 0.05, capPerSecond: 0.15, decayPerSecond: 0.03 }, // 沿用城市占领规则
   },
 
+  // 补给（gdd.md §7）：不再按直线就近分配，改成**沿最短路径的运力结算**。
+  //   1. 单位 → 己方城市的最短路径（地形加权，「等效像素」= 平原上走的距离），
+  //      路径**不可穿过敌方实际控制区**（读 world.controlLine 的带符号影响力）；
+  //   2. 城市有吞吐点数（capacityPerCity），按「路径代价最小的单位优先」分配
+  //      —— 也就是「城市优先补给离自己最近的单位」；某城点数用光就顺延到下一座城；
+  //   3. 城市为把补给送到单位手里要付 demand ÷ factor 点（factor 由路径代价决定），
+  //      单位实收 = 付出的点数 × factor；因此**近城一座就够，远城要好几座城合力**；
+  //   4. 实收 < 需求 = 进货不足（补给线被切断就完全不进货）；
+  //      所有城都够不着 / 点数都用光 = 断补（实收 0）；
+  //   5. 实收点数按 stockPerPoint 换算成**补给存量**加进单位（gdd.md §6），
+  //      存量耗尽才开始掉血（attritionHpPerSecond）。
   supply: {
-    capacityPerCity: 5,
-    attritionHpPerSecond: 1,
-    attritionMoralePerSecond: 2,
+    demandPerUnit: 1,       // 每个单位的需求（点）
+    capacityPerCity: 5,     // 每座城的吞吐点数（5 点 = 5 个近城的满额单位，远城供不了这么多）
+    // 1 点实收 = 10 点补给存量。满补给时每秒实收 2 点（每 0.5s 结算 1 点）→ 进货 +20/s：
+    // 比战斗消耗（−8/s）、行军（−5/s）都快，所以**补给线通畅的部队不会掉存量**；
+    // 远城因子 0.33 时只有 +6.6/s，战斗中就会慢慢入不敷出。断开供给（断补）= 只出不进。
+    stockPerPoint: 2,
+    attritionHpPerSecond: 1,     // 补给存量归零（完全断补）时的血量损耗
+    refreshSeconds: 0.5,    // 分配重算间隔（单位位置一直在变，这步很便宜）
+    // 代价场（多源 Dijkstra）重算间隔。代价场只取决于城市 + 敌方控制区，与单位位置无关，
+    // 所以它比分配算得稀得多：500 单位的地图上，一次全图 Dijkstra 是这整套里最贵的一步。
+    fieldRefreshSeconds: 1,
+    enemyControlBlocks: true, // 补给线不可穿过敌方实际控制区（false = 只看地形，便于对比调试）
+    waterIsBarrier: false,  // 水域是否阻断补给线（默认否：水能蹚过去，只是代价很贵，见 moveMultiplier）
+
+    // 距离因子：factor = clamp(1 − (cost − fullCost) / (zeroCost − fullCost), min, 1)
+    //   cost ≤ 100  → 1.0（近城，一座城就能喂饱一个单位）
+    //   100 → 900   → 线性衰减
+    //   cost ≥ 900  → 0.2（远城仍能救急，只是要花 5 点运力才能送到 1 点，见 gdd.md §7）
+    factor: { fullCost: 100, zeroCost: 900, min: 0.2 },
+
+    path: {
+      // 寻路网格边长（px）：比 10 px 的地形格粗一档。补给线是战略级线条，不需要逐 10 px 精度，
+      // 粗一档让 500 单位场景的重算开销降到约 1/4（与控制线同一个思路，见 gdd.md §9）。
+      cellSize: 20,
+      // 搜索上界（等效像素）：代价超过它的城视为够不着 —— 也就是**补给线的最大长度**。
+      // 因子下限 0.2 落在 900，再远的城要掏 ≥ 1500/900×1 ≈ 1.7 点才送到 1 点（超过一座城的容量），
+      // 实战中没有意义；同时这也是主要的性能护栏：可搜索面积按它的平方缩小。
+      maxCost: 1500,
+      // 判定「敌方实际控制区」的影响力阈值：|影响力| 不超过它的格子不算被谁实际控制。
+      // 取 partitionFillValue(0.01) —— 控制线把**无人区域**按最近阵营铺满时赋的就是这个弱值，
+      // 那是画线用的归属，不是"敌人真的控制着这里"。不排除它的话，一个孤立的敌军单位
+      // 会凭一圈虚线归属把几百像素外的己方补给线整条掐断（"实际控制"变成了"名义归属"）。
+      controlBlockMin: 0.01,
+    },
+
+    // 补给线渲染（选中单位时显示）：线宽/不透明度随「实收 ÷ 需求」变化，
+    // 断补时改画红色虚线，并在切断处打叉。
+    style: {
+      color: 0x1f6fb2, cutColor: 0xc0392b, alpha: 0.9,
+      width: { min: 1.5, max: 5 },
+      dash: { length: 12, gap: 8 },
+      cutMarkSize: 7,
+    },
   },
 
   fog: {
@@ -196,7 +301,7 @@ export const values = {
   // （影响力源 = 存活单位 + 城市 + 占领点），按**带符号代数和**判定该格归属：
   // sum > 0 → 蓝方控制，sum < 0 → 红方控制，sum === 0 → 中立。
   // 相邻格归属不同处即为实际控制线，取 0 等值线（marching squares）绘制。
-  // 纯视觉：不参与战斗 / 补给 / 士气 / 胜负判定。
+  // 纯视觉：不参与战斗 / 补给 / 补给存量 / 胜负判定（补给线**读**它判定敌方控制区，见 §8）。
   controlLine: {
     cellSize: 20,            // 影响力网格边长（px）。地形格是 10 px，这里刻意粗一档以控开销
     refreshTicks: 6,         // 每 N 个 tick 重算一次（60 Hz / 6 = 10 Hz）
@@ -229,10 +334,12 @@ export const values = {
     // 注：原型在 r=25 处 5 → 6.25 有个 1.25 的小跳变（判断为笔误），这里按连续处理。
     //
     // ⚠️ 核心圈（满强度的那一段）**改用绝对值，不随 influenceRadius 缩放**，
-    // 目的是让核心圈只覆盖影响力源「脚下的身体」，而不是在它周围造一圈很大的绝对领域：
+    // 目的是让核心圈只覆盖影响力源「脚下的身体」，而不是在它周围造一圈很大的绝对领域。
+    // **每个源各有自己的 coreRadius，与任何「占领半径」都不再共用同一个数**：
     //   单位 → 该单位的碰撞半径 units.*.radius（14）——即「单位始终在自己阵营的控制区内」的依据；
-    //   城市 → cities.capture.radius（60）；占领点 → capturePoints.capture.radius（60）。
-    // 城市不享受这个保证：被敌方占领时，它脚下可以是敌方控制区（gdd.md §9 的边界条件）。
+    //   城市 → controlLine.city.coreRadius（20）；
+    //   占领点 → controlLine.capturePoint.coreRadius（20，覆盖标记本体并守住脚下那一格）。
+    // 城市与占领点不享受这个保证：被敌方占领/争夺时，它们脚下可以是敌方控制区（gdd.md §9 的边界条件）。
     curve: {
       maxDistance: 40,     // 原型曲线的距离上界（= 中圈/外圈断点的缩放基准）
       coreExitRatio: 0.2,  // 出核心圈立刻降到该比例（原型的 100 → 20 断崖，保持原型手感）
@@ -242,8 +349,18 @@ export const values = {
     },
 
     unit: { influenceRadius: 140, strength: 100 },          // 半径取轻型视野 140
-    city: { influenceRadius: 180, strength: 120 },          // 半径取城市视野 180
-    capturePoint: { influenceRadius: 180, strength: 100 },  // 占领点同半径，强度略低于城市
+    // 城市：半径取城市视野 180。
+    // coreRadius **与占领半径（cities.capture.radius = 60）脱钩**，是影响力系统自己的数值：
+    // 它只管「城市本体满强度圈有多大」，占领判定仍用 60，两者互不影响。
+    // 调大 → 城市在近处更强势（控制线被推离城墙、攻城方更难切断城下那一格）；
+    // 调小 → 城市只守住本体，贴近城墙的一圈容易被敌方单位翻转。
+    city: { influenceRadius: 140, strength: 80, coreRadius: 20 },
+    // 占领点：核心圈同样**独立**，与占领半径 60 脱钩。
+    // 取 20（= 覆盖它自己的标记体积，并且**守住脚下那一格**）：
+    // 占领点没有"单位所在格"那样的硬保证，核心圈小于 14（控制格对角线）时，
+    // 一个 30px 外的敌军就能把据点自己那一格翻成敌方（实测 −6.4）——地图上会看到控制线在据点里来回扫。
+    // 调大 → 争夺中的据点向四周撑开控制区；调小 → 只有站上去的那一格算己方控制。
+    capturePoint: { influenceRadius: 140, strength: 60, coreRadius: 20 },
 
     // 分界线样式：深色主色 + 浅色底衬（halo）双色描边。
     // 只画深色时，叠在战争迷雾 / 森林这类深色底上对比度会归零（看起来像"被迷雾盖住了"）；
@@ -286,10 +403,10 @@ export const values = {
   movement: {
     routSpeedMultiplier: 0.6,
     // 急行军（gdd.md §4）：E + 右键 / E + 左键拖轨迹下达，命令带 forced: true。
-    // 除了水域之外的地形都提速（水面上照常按 0.4 走，不给加成），代价是士气掉得更快 + 缓慢掉血。
+    // 除了水域之外的地形都提速（水面上照常按 0.4 走，不给加成），代价是**补给消耗快得多** + 缓慢掉血。
     forcedMarch: {
-      speedMultiplier: 1.5, // 与地形、士气速度倍率**叠乘**（例：路上 40 × 1.25 × 1.5 = 75 px/s）
-      moralePerSecond: -10, // 取代普通行军的 morale.perSecond.moving(-5)；仍乘地形士气系数与进攻因子
+      speedMultiplier: 1.5, // 与地形、缺补速度倍率**叠乘**（例：路上 40 × 1.25 × 1.5 = 75 px/s）
+      supplyPerSecond: -10, // 取代普通行军的 supplyStock.perSecond.moving(-5)；仍乘地形系数与进攻因子
       hpPerSecond: 1.5,     // 每秒损失的血量（走 World.damageUnit，计入结算伤亡；可以力竭阵亡）
     },
     stuckThresholdSeconds: 0.35,

@@ -120,7 +120,7 @@ describe('影响力网格', () => {
     expect(full[0].sign).toBe(1);
     expect(full[0].radius).toBe(CFG.city.influenceRadius);
     expect(full[0].strength).toBe(CFG.city.strength);
-    expect(full[0].coreRadius).toBe(values.cities.capture.radius); // 核心圈 = 占领半径
+    expect(full[0].coreRadius).toBe(CFG.city.coreRadius); // 核心圈 = 城市自己的数值（不再是占领半径）
 
     world.cities[0].captureProgress = 50;
     expect(collectSources(world)[0].strength).toBeCloseTo(CFG.city.strength / 2, 6);
@@ -129,7 +129,7 @@ describe('影响力网格', () => {
     expect(collectSources(world)).toHaveLength(0);
   });
 
-  it('单位的核心圈就是它自己的碰撞体积，占领点的核心圈就是占领半径', () => {
+  it('单位的核心圈是碰撞体积、城市是独立的 coreRadius、占领点是占领半径', () => {
     const world = makeWorld(makePlainMap({ width: 640, height: 480 }));
     world.cities = [{ id: 'c1', x: 100, y: 100, faction: 'blue', captureProgress: 0 }];
     world.capturePoints = [{ id: 'p1', x: 300, y: 100, faction: 'red', captureProgress: 0 }];
@@ -139,7 +139,13 @@ describe('影响力网格', () => {
     const bySign = (sign) => collectSources(world).filter((source) => source.sign === sign);
     expect(bySign(1).find((s) => s.coreRadius === light.radius).coreRadius).toBe(values.units.light.radius);
     expect(bySign(-1).find((s) => s.coreRadius === heavy.radius).coreRadius).toBe(values.units.heavy.radius);
-    expect(bySign(-1).find((s) => s.coreRadius === values.capturePoints.capture.radius)).toBeTruthy();
+    expect(bySign(-1).find((s) => s.coreRadius === values.controlLine.capturePoint.coreRadius).coreRadius)
+      .toBe(values.controlLine.capturePoint.coreRadius);
+    // 城市与占领点的核心圈**都与各自的占领半径脱钩**：改占领半径不会动它们，反之亦然
+    expect(bySign(1).find((s) => s.coreRadius === values.controlLine.city.coreRadius).coreRadius)
+      .toBe(values.controlLine.city.coreRadius);
+    expect(values.controlLine.city.coreRadius).not.toBe(values.cities.capture.radius);
+    expect(values.controlLine.capturePoint.coreRadius).not.toBe(values.capturePoints.capture.radius);
   });
 
   it('阵亡单位与中立占领点不产生影响力', () => {
@@ -193,7 +199,7 @@ describe('实际控制线（0 等值线）', () => {
         sign: 1,
         radius: CFG.city.influenceRadius,
         strength: CFG.city.strength,
-        coreRadius: values.cities.capture.radius,
+        coreRadius: values.controlLine.city.coreRadius,
       },
       unitSource(550, 400, 'red'), // 双方影响力半径在这两点之间重叠
     ]);
@@ -319,14 +325,15 @@ describe('controlLine 系统（10 Hz 重算 + tick 集成）', () => {
 });
 
 describe('单位所在格的硬保证（guaranteeUnitCells）', () => {
-  // 敌方城市：核心圈 60px、强度随占领进度衰减——正是"攻城时自己脚下被判给敌方"的元凶
+  // 敌方城市：核心圈 = controlLine.city.coreRadius、强度随占领进度衰减
+  // ——正是"攻城时自己脚下被判给敌方"的元凶
   const cityAt = (progress) => ({
     x: 640,
     y: 360,
     sign: -1,
     radius: CFG.city.influenceRadius,
     strength: CFG.city.strength * (1 - progress / 100),
-    coreRadius: values.cities.capture.radius,
+    coreRadius: values.controlLine.city.coreRadius,
   });
   const guard = (field, unit) => guaranteeUnitCells(
     field,
@@ -454,7 +461,8 @@ describe('控制线几何：串联 + Chaikin 平滑', () => {
     expect(buildPaths(segments, 0)[0]).toEqual(chainSegments(segments)[0]);
 
     // 红方城市被蓝军团团围住 → 0 等值线闭合成一个圈
-    // （用城市当圆心：城市核心圈 60px / 强度 120，被 4 个 130px 外的单位围住仍守得住中心）
+    // （用城市当圆心：城市核心圈 = controlLine.city.coreRadius、强度 120，
+    //  被 4 个 130px 外的单位围住仍守得住中心）
     const ring = buildField(1000, 800, [
       {
         x: 400,
@@ -462,7 +470,7 @@ describe('控制线几何：串联 + Chaikin 平滑', () => {
         sign: -1,
         radius: CFG.city.influenceRadius,
         strength: CFG.city.strength,
-        coreRadius: values.cities.capture.radius,
+        coreRadius: values.controlLine.city.coreRadius,
       },
       unitSource(270, 400, 'blue'), unitSource(530, 400, 'blue'),
       unitSource(400, 270, 'blue'), unitSource(400, 530, 'blue'),

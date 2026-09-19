@@ -12,7 +12,7 @@
 战术层 ai.js + ai/tactics.js + ai/squad.js（阶段一新增）  队形、节奏、选谁打、追击
       │ 逐单位命令（统一命令接口 world.issueCommands）
       ▼
-simulation（movement / combat / morale / supply…）        完全未改动
+simulation（movement / combat / supply / supplyStock…）        完全未改动
 ```
 
 **铁律**
@@ -29,7 +29,9 @@ simulation（movement / combat / morale / supply…）        完全未改动
 | 编队协同 | `src/simulation/ai/squad.js` | `formationSlots`（line / column / wedge）、`squadAnchor`、`needsColumn`、`cohesionRatio`、`isRushingAhead`、`assignSlots` |
 | 薄弱点/接近轴（阶段二） | `src/simulation/ai/front.js` | `frontPointsNear`（复用控制线 0 等值线定位战线）、`pointStrength`、`chooseWeakSpot`、`approachAxes`、`chooseApproach`、`terrainPreference`、`feintAxis`、`approachWaypoint` |
 | 档位（阶段二） | `src/simulation/ai/presets.js` | `AI_PRESET_NAMES`、`AI_TUNING_KEYS`、`resolveAiConfig(preset, tuning)`、`validateAiTuning` |
-| 战术调度 | `src/simulation/ai.js` | `engage` 动作、意图表 `intents`、`runTactics()`、休整状态机、预备队/佯动/急行军、换目标迟滞、命令签名去重 |
+| 补给视野（阶段四） | `src/simulation/ai/supply.js` | `supplyPolicy`、`supplyCostOf`、`withinSupply`、`bestSupplyCity`、`clampToSupply`、`isLowSupply`、`squadLowSupply`、`supplyScore` |
+| 补给战术（阶段五） | `src/simulation/ai/interdiction.js`、`src/simulation/ai/relief.js` | `enemyCorridors`、`cutCountAt`、`interdictionPlan`、`interdictionScore` / `supplyUserCounts`、`cityThreat`、`reliefPlan`、`bestRetreatCity` |
+| 战术调度 | `src/simulation/ai.js` | `engage` 动作、意图表 `intents`、`runTactics()`、休整状态机、预备队/佯动/急行军/断粮任务、换目标迟滞、命令签名去重 |
 | 固定步长接线 | `src/simulation/loop.js`、`GameScene` | `createLoop(world, controllers)` 每 tick 驱动 AI；GameScene 不再按帧调 AI |
 
 ### 2.1 效用打分（选谁打）
@@ -44,7 +46,7 @@ score = threat      × 局部兵力比 P(me)/(P(me)+P(enemy))     // 0.30
       + vulnerability × (目标 rout/unordered ? 1 : 0)        // 0.10  承受伤害 ×1.5
       + chase       × (溃逃 ? 距离项 : 0)                    // 0.15  追击收益
       + terrain     × attackMultiplierAt(自己)               // 0.15  在水里输出减半
-P(unit) = dps × effectsFor(morale).damageMultiplier × calcDamageRatio(unit) × (hp / 地形防御修正)
+P(unit) = dps × effectsFor(stockRatio).damageMultiplier × calcDamageRatio(unit) × (hp / 地形防御修正)
 ```
 
 - **战力估算刻意复用真实伤害公式的成分**（`calcDamageRatio` 由 `combat.js` 导出），避免 AI 与战斗两套数值打架。
@@ -95,15 +97,15 @@ approachWaypoint：先到轴线端点集结，越过停战线后压向脚本目�
 - **预备队**：按比例把离推进点最远的那几名留在主力后方 `rallyBehind` 处；投入条件 = 主力战力掉到开战基线
   `commitMainRatio` 以下，或目标方向我方相对优势已达 `commitWeaknessRatio`（扩大战果）。
 - **佯动分兵（sly）**：派 1 个单位走相邻的侧翼轴，作为牵制（接触后按 attack-forward 自动交火）。
-- **急行军**：档位允许且距推进点 ≥ `march.minDistance` 才下令（代价是士气 −10/s、掉血 1.5/s）。
+- **急行军**：档位允许且距推进点 ≥ `march.minDistance` 才下令（代价是补给 −10/s、掉血 1.5/s）。
   实测发现 400px 就触发太浪费（见 §5），已调到 650px。
 
 ### 3.3 回城休整
 
 ```
-engage --(小队平均血量 < hpRatio 或士气 < morale)--> regroup（逐单位 move 到最近己城）
-regroup --(进入己城恢复半径 100px)--> recover（原地 hold，靠 +3hp/s、+5 士气/s 恢复）
-recover --(血量 ≥ recoverHpRatio 且士气 ≥ recoverMorale)--> engage（带 cooldownSeconds 冷却）
+engage --(小队平均血量 < hpRatio 或补给存量比例 < supplyRatio)--> regroup（逐单位 move 到最近己城）
+regroup --(进入己城恢复半径 100px)--> recover（原地 hold：+3hp/s 由 supply 结算，补给存量靠城里的补给线进货）
+recover --(血量 ≥ recoverHpRatio 且补给存量比例 ≥ recoverSupplyRatio)--> engage（带 cooldownSeconds 冷却）
 ```
 无己方城市时不撤退（继续打），避免"无城可退却站着不动"。
 
@@ -128,11 +130,207 @@ recover --(血量 ≥ recoverHpRatio 且士气 ≥ recoverMorale)--> engage（�
 范围说明：公平化只作用于**战术层与敌情条件**；脚本里的 `fallback`、`attackMove` 目标等"作者意图"仍然是
 点位的绝对引用（不涉及敌情）✓。玩家侧的实际控制线**不动**（本轮确认：它仍按全图统计，见 gdd §9）。
 
+### 3.5 多方剧本：蓝方（我军）也能按剧本增援
+
+`ai` 允许写成**数组**（`architecture.md §7.1`）：`parseLevel` 归一化成 `level.scripts`，GameScene 为每个脚本
+建一个 `ScriptedAI` 一起挂到固定步长循环上，于是**双方都能有自己的增援波次**。
+
+双堆集战役的用法（`public/assets/levels/shuangduiji_battle.json` 的 `ai[1]`）：
+
+```json
+{ "faction": "blue", "preset": "standard",
+  "triggers": [
+    { "id": "huayeRelief1", "at": { "time": 90 },
+      "actions": [{ "type": "spawn", "unitType": "light", "count": 4,
+                    "at": { "anchor": "eastSouth" }, "group": "relief",
+                    "order": { "type": "attackMove", "target": { "anchor": "shuangduiji" } } }] }
+  ],
+  "rules": [
+    { "id": "reliefPress", "after": 90, "repeatEvery": 20,
+      "when": { "city": "c7", "owner": "enemy" },
+      "then": [{ "type": "engage", "target": { "anchor": "shuangduiji" }, "units": { "group": "relief" } }] }
+  ] }
+```
+
+- **东南角** = 地图出生点 `s1`（1161, 771），关卡锚点表里叫 `eastSouth`；两批援军分别在 90 s / 150 s 投入（共 7 人）。
+- **铁律：蓝方剧本必须用 `units: { "group": "relief" }` 限定自己的增援编队**——否则它会替玩家指挥初始部队。
+  `tests/unit/level.test.js` 有守卫用例（检查蓝方脚本每个动作都限定在 `relief`）＋ 运行验证（t≈90 s 在东南角刷出援军、300 s 内蓝方取胜）。
+- 援军也算进补给：每座城只补给最近的 5 个单位（`supply.js`），援军规模要与城市容量匹配（双堆集：蓝方 4 城 = 20 容量）。
+
+### 3.6 双堆集关卡：红军五阶段脚本（实例）
+
+按关卡需求把红军写成**一支按时间先后依次行动**的部队（不是同时分兵），开局 15 人全部在 `redDeploy`，
+无一增援，全部标 `objective: "annihilate"` ⇒ 胜利条件 = **歼灭开局时的全部红军**：
+
+| 阶段 | 时刻 | 编队 | 命令 | 失败判定 |
+|---|---|---|---|---|
+| ① 前锋打南坪集 | 20 s | `vanguard1`(3 轻) | `engage` → `nanpingji`（占领点 p7 就在南坪集） | 60 s 时 p7 不在红军手里 → `retreat` 到双堆集 |
+| ② 第二支前锋打北岸 | 60 s | `vanguard2`(3 轻) | `engage` → 占领点 p6 | 100 s 时 p6 不在红军手里 → `retreat` 到双堆集 |
+| ③ 主力转进双堆集 | 100 s | `main`(2 重 + 4 轻) | `engage` → `shuangduiji`(c7)；`main_press` 每 20 s 重发直到 180 s | — |
+| ④ 部分兵力向东南攻击 | 140 s | `sortie`(3 轻) | `engage` → `eastSouth`(s1)；`sortie_press` 每 20 s 重发直到 180 s | — |
+| ⑤ 固守双堆集 | 180 s 收拢 / 220 s 起 | 全体 | 180 s 全体 `engage` 双堆集收拢；220 s 起 `hold_shuangduiji`（c7 在手 → 全体 `hold`；丢了 → 全体夺回） | — |
+
+- 蓝方（玩家）侧：三处初始部署（南平集 s2 7 人 / 北岸 s3 3 人 / 西北 s4 3 人）＋ §3.5 的华野援军剧本（90/150 s 从东南角投入 7 人）。
+- `tests/unit/level.test.js` 用**命令流**断言这五个阶段（记录每次 `issueCommands` 的时间与目标）：
+  撤退命令下达后部队走到目的地时 `command` 会被清空，所以看"某一时刻的状态"不可靠，必须看"下达过什么命令"。
+- 教训（上一版遗留，对新设计同样成立）：**给"歼灭战的目标编队"写撤退规则前，先确认玩家还碰得到它。**
+  上一版红方照抄塔山的"占不到点就退回集结地"，把 3 个歼灭目标带回红军集结地，玩家够不着，关卡永不结束。
+
+**已知的收尾问题（设计取舍，供后续决定）**：全歼 15 个红军是很长的任务——headless 里"不做指挥的蓝方"
+跑满 300 s 还剩 2 个红军（他们固守双堆集），因为攻方受城市运力限制（`supply.js`）又深插久攻，补给跟不上。
+可选的处理：缩减红军规模 / 给蓝方更多城市以延长补给 / 胜利条件放宽为"歼灭主力 N 个" /
+加时限并按剩余数量判定。本轮按需求"不考虑平衡性"未做。
+
+### 3.7 补给视野（阶段四）
+
+**动机**：补给系统（gdd §6/§8）改完之后，AI 却完全不知道补给的存在——它会把部队推进到补给线够不着的
+地方、断补了还继续硬打、急行军把存量烧光、撤退时挑一座被切断的城市。这一节让 AI"看得见补给"。
+
+**数据来源（都在模拟层现成算好，AI 只查表，不自己寻路）**：
+
+| 数据 | 用途 |
+|---|---|
+| `unit.supplied` | 补给线是否可达（断没断） |
+| `unit.supplyStock / maxSupplyStock` | 存量比例：够不够打、够不够跑 |
+| `unit.supplyIntake` | 每秒进多少货（可判断"在补但补得慢"） |
+| `world.supplyFields[faction].cost` | **全图每格到最近己方城市的路径代价**（含地形权重与敌方控制区阻断）——判断"这个位置好不好补给" |
+| `world.supplyFields[faction].owner` | 那一格最近的是哪座城（撤退目标直接取它） |
+
+**硬约束（与档位无关，防自杀）**：
+
+```
+低补给定义：supplied === false（路断了） 或 存量比例 < ai.supply.lowRatio（0.3）
+  ① 不主动接战：不下 attack 命令（接触时 combat 系统照常交战 = 只反击）
+  ② 不执行急行军（急行军 −10 存量/s，断补时等于自杀）
+  ③ 回撤进补给区：整队低补给 → 转入 regroup（撤向补给代价最低的城，恢复后自动归队）；
+     个别单位低补给 → 它自己 move 回那座城，其余照常推进
+  ④ 行动边界：目标点若落在 supply.path.maxCost 之外（真"够不着"），
+     沿"自身 → 目标"直线二分回退到边界内（clampToSupply）
+```
+
+**软权重（档位敏感，会自己权衡）**：`ai.weights.supply`（0.25）× 档位倍率 × 供应打分，
+加进 `scoreAttack`（选谁打）与 `chooseApproach` / `chooseWeakSpot`（从哪打）。
+供应打分 = 存量是否充足(0.5) + 战场是否在补给可达区内(0.3) + 自己是否断补(0.2)。
+
+**难度档位 `supplyCaution`（0 激进 ~ 1 保守）**，插值出四组阈值（`ai-supply.test.js` 守护单调性）：
+
+| 参数 | 激进(sly 0.2) | 均衡(standard 0.5) | 保守(cautious 0.8) |
+|---|---|---|---|
+| 活动软范围（× maxCost） | 0.89 | 0.80 | 0.71 |
+| 补给项倍率 | 0.84 | 1.05 | 1.26 |
+| 急行军门槛（存量比例） | 0.42 | 0.53 | 0.63 |
+| 回城阈值（平均存量比例） | 0.44 | 0.50 | 0.56 |
+
+**公平模式**：`ai.fog = true` 时只读**本方**的代价场与已知情报——绝不读 `supplyFields[enemy]`，
+免得"看不见的对手粮道"被 AI 直接看穿（与 §3.4 同一条边界）。
+
+**守卫测试**：`tests/unit/ai-supply.test.js`（16 条）——
+档位插值与单调性、代价查询（够不着 = Infinity、没有场 = 不限制）、撤退目标、
+`clampToSupply`（区内原样 / 区外回退且仍在区内）、硬约束判定（单单位 / 小队）、
+行为验证（目标点被夹回、整队断补转入 regroup 并 move 到补给城、急行军四种拒止条件、个别单位被拦下）。
+
+### 3.8 补给战术：断敌粮道 + 护己粮道（阶段五）
+
+阶段四让 AI"看得见自己的补给"；阶段五让它**动手动对方的补给**：一边掐断敌人的粮道，
+一边别让自己的城被围到断粮。两者都只用**公开信息**，都不改战斗规则、不新增寻路。
+
+**机制依据**（`supplyPath.js` 现成的规则，不需要为 AI 开新接口）：
+
+| 事实 | 数值来源 |
+|---|---|
+| 敌补给线 = 敌单位 → **它最近的敌城**的最短路径 | `supply.js` 的多源 Dijkstra（AI 只做直线近似，不自己寻路） |
+| 一个单位脚下的一片格子算我方**实际控制**，敌方补给线不可穿过 | `controlLine.unit.influenceRadius`（140px）+ `supply.path.controlBlockMin` |
+| 城被围了 | 看得见的敌军在城周 `relief.threatRadius`（200px）内，或 `city.captureProgress > 0`（公开信息） |
+| 这城养着多少兵 | `world.citySupplyLoad`（运力点数）+ 按**欧氏最近己城**归属的单位数（断补时代价场是 Infinity，只有欧氏归属还成立） |
+
+**断敌粮道（软权重 + 预备队任务）**：
+
+```
+① 走廊：每个看得见的敌单位 → 它最近的敌城；走廊 < interdiction.minCorridor(240) 不算（敌人就在城边）
+② 候选点：每条走廊按 0.3 / 0.5 / 0.7 采样（避开城下与单位脚下）
+③ 方案：能同时压住 ≥ minCuts(2) 条走廊、离我方形心 ∈ [minDistance(160), maxDistance(900)] 的点，
+   得分 = 压制面(cuts/走廊总数)×0.5 + 局部安全(我方战力占比)×0.25 + 距离(越近越好)×0.25
+④ 软权重：ai.weights.interdiction × 档位倍率 × 压制打分，加进 chooseApproach / chooseWeakSpot
+   （压制打分 = 压住的走廊数占比×0.6 + 离走廊多近×0.4：接近轴之间只隔约 130px，
+     小于压制半径 140px，只看"压住几条"的话相邻两条轴会拿到一样的分数）
+⑤ 预备队任务：闲置的预备队去守那个点（不下正面攻击命令 = 不否决正面目标）；
+   目标点还要经 clampToSupply 夹进**己方**补给可达区——断人粮道不能先把自己断了
+⑥ weights.interdiction = 0 → 第 ④⑤ 步完全跳过（旧行为）；> 0 时第 ⑤ 步照常执行。
+   ⚠️ 实测这个权重只分"开 / 关"两档：0.1~0.6 之间行为逐位相同（§5.3 教训 2），
+      所以**不再假装它是可调的旋钮**（§7 决策 37）。
+```
+
+**护己粮道（解围 + 撤退选城）**：
+
+```
+解围：己城被围 **且** 值得救（users ≥ minUsers(2) 或本轮运力 ≥ minLoadPoints(1)）
+      **且** 打得过（解围分队战力 ≥ 围城敌军战力 × forceRatio(0.5)）
+      **且** 赶得上（距离 ≤ maxDistance(1200)）
+      → 看得见围城敌军：预备队**压向他们的形心**（attackMove 接触即交战）；
+        只从 captureProgress 判断出"城正在被夺"时：停在城外 standoff(180) 处待机
+      得分 = 这城养兵数×0.5 + 围城压力(敌军战力占比)×0.3 + 离得多近×0.2
+撤退选城：首选仍是补给代价最低的城（旧行为）；**它被围时**改挑"代价 + retreatThreatPenalty(400)×被围"
+      最低的城——原来那套会整队撤进一座马上要丢的城，越撤越惨
+优先级：解围 > 断粮 > 主力后方待命（护己方粮道优先于断敌粮道）
+```
+
+**公平模式**：走廊只由**看得见**的敌单位生成（`perceive` 里带 `ghost: true` 的记忆条目一律不算，
+免得照着旧坐标去"断"一条早就不存在的粮道）；威胁估计可以带记忆条目（按置信度折算），
+那只会让 AI 更保守。**绝不读 `supplyFields[enemy]`**——`ai-interdiction.test.js` 里有一条用例
+把敌方的代价场整个删掉，要求方案逐字段不变。
+诚实局限：看不到围城敌军时 AI 不知道城被围了（只有 `captureProgress` 还会提醒它）。
+
+**守卫测试**：`tests/unit/ai-interdiction.test.js`（18 条）——
+走廊识别（记忆/城边/无城的敌人不算）、压制计数、方案的地理与距离门槛、公平性与确定性、
+压制打分、接近轴接入（同一条轴有方案 > 没方案、无关的轴分数不变；权重够大时真的会改选侧翼轴）、
+解围方案（值得救 / 打不过 / 太远）、撤退选城避围，以及三条**行为**用例
+（预备队领到 relief / interdict 任务、断粮目标仍在补给可达区内、没有任务时照旧在后方待命）。
+
+### 3.9 离线调参基建（阶段六）
+
+**动机**：阶段四/五往 AI 里塞了十来个新数值（`ai.supply.*` / `ai.interdiction.*` / `ai.relief.*`），
+它们基本都是"看着合理就写上去"的。这一节把"拍脑袋"换成**可复现的批量对局 + 粗网格扫描**。
+
+**1. 关卡级嵌套覆盖**（`presets.js` 的 `AI_TUNING_GROUPS`）
+
+`ai.tuning` 除了原本 6 个扁平键，还可以**按子对象**覆盖 4 个域里的 27 个纯数字项：
+
+```json
+"ai": { "tuning": { "weights": { "interdiction": 0.35 }, "interdiction": { "minCuts": 3 } } }
+```
+
+- 覆盖范围：`weights`（10 项）、`supply`（4 项）、`interdiction`（6 项）、`relief`（7 项）；
+  `{min,max}` 这类"档位插值区间"不在其中（它们不是单点数值）。
+- `validateAiTuning` 逐个报出未知子键 / 类型不对 / 越界值（区间写在 `AI_TUNING_GROUPS` 里）。
+- AI 侧读数值统一优先本局 `cfg`（`cfg.weights` / `cfg.supply` / `cfg.interdiction` / `cfg.relief`），
+  所以覆盖立刻生效，且只做一层浅拷贝、**不会渗回 `values.js`**（`ai-presets.test.js` 守护）。
+
+**2. `scripts/tune.mjs`（`npm run tune`）**
+
+- 4 个**确定性**场景（固定步长、双方都是 `ScriptedAI`、无渲染）：
+  `interdict`（走廊可压）/ `siege`（己城被围）/ `retreat`（撤退选城避围城）/ `open`（无可断走廊的正面）；
+- 12 个参数先做一遍 **OAT 扫描**（一次只改一个值，现值直接复用 baseline 结果），
+  再对最有影响力的两个（`weights.interdiction` × `interdiction.minCuts`）做**二维粗网格**；
+- 每格输出「敌掉血比例 / 我掉血比例 / 敌断补率（撤退场景显示撤退去向）」+ fitness + 任务数 + 耗时；
+- JSON 落在 `test-results/tune-*.json`（该目录已被 gitignore）；**不自动改源码**，
+  末尾只给"改不改、改成多少"的建议。
+
+**怎么读结果**（也写在脚本头部）：
+
+| 规则 | 理由 |
+|---|---|
+| fitness 是启发式的，**只用于排序**，判据看原始指标 | 场景是人为设计的，任何单一分数都可能被"刷" |
+| 我方断补率 > 5% 或我方全灭 → 标 `⚠` 并**排除**出推荐 | 防止"靠把自己饿死换来敌方掉血"这种假优势 |
+| 只有提升 ≥ 2% **且单调**的取值才进 recommendations | 粗网格 + 单场景，2% 以下视为噪声 |
+| 否则写"保持现值" | "当前值已在平台区"是**合法结论**，不是失败 |
+
+**不做**：自动写回 `values.js`、贝叶斯/进化搜索、把调参结果做成 CI 里的慢断言。
+
 ## 4. 确定性、性能与验收
 
 - **确定性**：AI 每个固定 tick 收到 `1/60` 的 `dt`（与 headless `runSimulation` 同一节奏）；决策节奏由累加器控制（0.5 s），与渲染帧率无关 —— `tests/unit/ai-engage.test.js` 里"60fps 与 240fps 决策次数相同"与"createLoop 与逐 tick 驱动结果逐位一致"两条用例守护这一点。
-- **性能**：只走 `world.spatial` 与半径截断（`pursuitRadius` / `localForceRadius` / `weakSpot.sampleRadius`），每单位每决策 O(候选数)；战线采样按 `pointLimit` 封顶；无意图时不跑任何战术代码（纯脚本关卡零开销）。
-- **测试**：`ai-squad.test.js`（12 条队形/窄口/就位度）、`ai-tactics.test.js`（11 条战力/兵力比/价值/易伤/集火）、`ai-engage.test.js`（8 条接入/队形/不添油/集火/脚本优先/节奏/确定性）、`ai-presets.test.js`（7 条档位与校验）、`ai-front.test.js`（10 条战线/薄弱点/接近轴/地形偏好）、`ai-phase2.test.js`（8 条接近轴/预备队/佯动/急行军/休整）。
+- **性能**：只走 `world.spatial` 与半径截断（`pursuitRadius` / `localForceRadius` / `weakSpot.sampleRadius`），每单位每决策 O(候选数)；战线采样按 `pointLimit` 封顶；补给判定只查**代价场数组**（O(1)，不需要 AI 自己寻路）；无意图时不跑任何战术代码（纯脚本关卡零开销）。
+- **测试**：`ai-squad.test.js`（12 条队形/窄口/就位度）、`ai-tactics.test.js`（11 条战力/兵力比/价值/易伤/集火）、`ai-engage.test.js`（8 条接入/队形/不添油/集火/脚本优先/节奏/确定性）、`ai-presets.test.js`（9 条档位、扁平与**嵌套**覆盖、校验）、`ai-front.test.js`（10 条战线/薄弱点/接近轴/地形偏好）、`ai-phase2.test.js`（8 条接近轴/预备队/佯动/急行军/休整）、`ai-supply.test.js`（16 条补给策略/视野/硬约束/选路）、`ai-interdiction.test.js`（20 条走廊/压制/公平性/解围/撤退选城/预备队任务/关闭开关/开关语义）。
 
 ## 5. 实测（headless，双方各 12 轻装对撞：蓝方推进，红方固守，180 s）
 
@@ -191,6 +389,69 @@ recover --(血量 ≥ recoverHpRatio 且士气 ≥ recoverMorale)--> engage（�
 2. 一旦侦察兵铺开/撞上敌人，AI 立刻回到阶段一/二的完整决策（可见即可打、记忆只当坐标）。
 3. **难度明显下降**（本轮确认不补偿，交给关卡设计：需要时给公平关卡加兵力或换 `sly` 档）。
 
+### 5.2 阶段五：补给战术的实测（headless）
+
+场景：1800×800 平地图，蓝城 c1(150,400)、红城 c2(1650,400)；蓝方 4 轻装（编队 `main`，标准档 +
+`tuning.reserveRatio 0.5`）向 (1500,400) 推进；红方 2 个前出单位 + 2 个目标方向守军。180 s：
+
+| 观测 | 断粮任务开（默认） | 断粮任务关（对照组） |
+|---|---|---|
+| 敌（红）断补率 | **7.0 %** | 0 % |
+| 敌平均存量比例 | 0.960 | 0.994 |
+| 敌伤亡（HP） | **120（2 个单位被歼）** | 0 |
+| 我方伤亡（HP） | 20 | 3 |
+| 我方断补率 | 0 % | 0 % |
+| 派出的断粮任务 | 9 次（点落在敌「单位 ↔ 城」连线上，如 (1200,360) 那一格） | 0 |
+
+- 对照组只把 `reserveMission` 关掉（返回 null），**接近轴的软权重仍在** → 上表是这套改动的效果**下限**。
+- 60 s 的短局里敌断补率到 **15.9 %**、敌平均存量 0.918：效果在前半段最强，之后敌方守军被吃掉、走廊消失。
+- 确定性：同一场景跑两次（60 s，各 11 项指标）逐位一致。
+- **"断粮"在这套规则下的真实形态**：走廊被压制后，敌方补给线并不总是直接消失（它可以绕行），
+  实测断补率是 7 % 而不是 100 %——它更像"抬高对手的补给成本 + 逼对手挪窝"；
+  只有在桥梁 / 窄口这类**必经地形**上才是真掐断（绕不开）。
+
+**解围（护己方粮道）没能造出可测差异**，原因在补给规则本身，值得记下来：
+
+- 想触发占领就必须进到城周 60px 内，而城市影响力半径 140px——**贴身围城的部队必然自己断补**
+  （它的补给线必须穿过被围城市的控制区）。实测围城部队在 t≈8 s 就 `supplied = false`，
+  存量 120 → 0 后开始掉血，30 s 内被守军与回援部队清掉，开不开解围城都守得住。
+- 所以"解围"实际是**保险**（只有对手真能一边围城一边吃上饭时才有差别），
+  这一支里真正每天在用的一条是**撤退选城避开被围的城**（有单测覆盖）。
+- 要让解围产生收益，需要关卡设计配合（给围城方一座贴得极近的城 + 窄口地形），
+  本轮不造这种关卡，按"未验证收益"记录。
+
+### 5.3 阶段六：离线调参的结果（`npm run tune`，4 场景 × 180 s）
+
+方法（§3.9）：4 个确定性场景（断粮 / 解围 / 撤退选城 / 无走廊正面）× 12 个参数的 OAT 粗网格扫描
+（一次只改一个值，现值直接复用 baseline），fitness 以**交换比**打底（3:1 记满分）再叠各场景专属项；
+`⚠`（我方断补率 > 5% 或全灭）的运行直接排除。全表在 `test-results/tune-*.json`（gitignore）。
+
+**结论：12 个参数的现值全部保留**——没有任何取值比现值高 ≥ 2%。但扫描给出了明确的方向性证据：
+
+| 参数 | 现值 | 关键观测（fitness 为 4 场景均值） |
+|---|---|---|
+| `weights.interdiction` | 0.2 | = 0 → **0.628**（−26%）：断粮机制整体有效；0.1~0.6 之间指标**逐位相同**（见下） |
+| `interdiction.maxDistance` | 900 | 500 → 0.742、700 → 0.727、**900 → 0.844**、1200 → 0.843 → 900 正是拐点 |
+| `interdiction.minCuts` | 2 | 1/2/3 相同；4 → 0.767（门槛太高，很少出击） |
+| `interdiction.minCorridor` | 240 | 400 → 0.806：敌掉血 50%→100%，但**我方掉血 8.5%→46.6%（交换比 5.9:1 → 2.1:1）** → 不采纳 |
+| `supply.lowRatio` | 0.3 | 0.2 → 0.820、0.4 → 0.791 → 0.3 最好（0.2 太敢拼、0.4 太保守） |
+| `relief.retreatThreatPenalty` | 400 | = 0 → **0.594**：小队退进被围的城并掉 12% 血；400 与 900 相同 → 400 已足够 |
+| 其余 6 个（minDistance / cutRadius / squadCutFraction / threatRadius / forceRatio / relief.maxDistance） | — | 全部在**平台**上（改这些值不影响这 4 个场景的指标）→ 保留现值（"不敏感"不等于"错误"） |
+
+**两条方法论教训**（也写在脚本头部）：
+
+1. **fitness 的口径会直接决定"建议"**：第一版 fitness 只看敌掉血比例，于是把 `minCorridor = 400`
+   判成 +5% 的改进；加入交换比后同一个取值变成 −4.5%（拿命换全歼）。所以脚本**只给建议、不自动改源码**，
+   并把原始指标（敌我掉血比例 / 敌断补率 / 交换比 / 任务数）一并打出来。
+2. **`weights.interdiction` 目前实际是个开关**：0.1 / 0.2 / 0.35 / 0.6 的 44 项指标逐位完全相同。
+   两个原因：断粮**任务**只要权重 > 0 就会派出（与权重大小无关）；权重真正影响的"接近轴打分"
+   区分度太低——相邻接近轴只隔约 130px，小于压制半径 140px（§3.8）。
+   **决策（§7 决策 37）：保持开关语义**——`values.js`、§3.8 与 §12 都写明"0 = 关、> 0 = 开"，
+   不再假装它是可调旋钮；单测 `ai-interdiction.test.js` 里有一条用例把这个语义钉住
+   （0.1 与 0.6 派出同一个断粮任务，只有 = 0 才关闭）。
+   如果将来要把它变成真旋钮（例如让权重同时缩放断粮任务的活动半径），那是**行为改动**，
+   要连带改这条用例并重跑扫描。
+
 ## 6. 阶段划分与未做项
 
 | 阶段 | 内容 | 状态 |
@@ -198,7 +459,10 @@ recover --(血量 ≥ recoverHpRatio 且士气 ≥ recoverMorale)--> engage（�
 | 一 | 效用打分 + 编队协同 | ✅ 已实现 |
 | 二 | 薄弱点进攻（复用战线 + 兵力比采样）+ 难度/性格三档 + 回城休整 | ✅ 已实现 |
 | 三 | 侦察与信息公平（迷雾内决策 + 前沿探索 + `lastSeen` 记忆） | ✅ 已实现（默认关，关卡 `ai.fog: true` 开启） |
-| 四 | 离线调参：headless 批量对局 + 参数搜索，把最优权重写回 `values.js` | 未做 |
+| 四 | 补给视野（硬约束 + 档位敏感度 + 撤退选城，见 §3.7） | ✅ 已实现 |
+| 五 | 补给战术：断敌粮道（走廊识别 + 软权重 + 预备队任务）+ 护己粮道（解围 + 撤退选城避围），见 §3.8 | ✅ 已实现（解围的收益待关卡设计验证，见 §5.2） |
+| 六 | 离线调参基建：`scripts/tune.mjs`（headless 批量对局 + OAT / 粗网格）+ 关卡级嵌套覆盖（§3.9） | ✅ 已实现（结论见 §5.3；改为"只给建议、人工改源码"，不做自动写回） |
+| — | 断粮权重的语义（开关 vs 旋钮）——见 §5.3 教训 2 | ✅ 已定：**保持开关语义**（§7 决策 37，单测钉住） |
 | — | 急行军触发时机细化（只在增援/救火时）——见 §5 观察 1 | 未做（建议下一轮） |
 | — | 严格封顶同目标受攻人数（要改战斗目标选择规则） | 本轮明确不做 |
 
@@ -235,3 +499,38 @@ recover --(血量 ≥ recoverHpRatio 且士气 ≥ recoverMorale)--> engage（�
 21. 难度补偿：**不补偿**，交给关卡设计（需要时加兵力或换档位）。
 22. 玩家侧控制线：**不动**（仍按全图统计）。
 23. 本文档存档于 `docs/ai-design.md`。
+
+**阶段五**
+
+24. 机制依据：**不新增寻路、不改战斗规则**——直接复用"敌方实际控制区阻断补给线"这条现成规则
+    （把部队插到"敌单位 ↔ 它的城"这条走廊上就真的能掐断）。
+25. 情报来源：**只用公开信息**（敌城坐标/归属、看得见的敌单位、`citySupplyLoad`、`captureProgress`）；
+    `lastSeen` 记忆只用来估威胁（更保守），**不用来生成走廊**（免得照着旧坐标去断一条不存在的粮道）。
+26. 权重：新增 `ai.weights.interdiction`（0.2），**复用档位倍率** `weightScale`，**不否决正面目标**
+    （只影响"从哪一侧接近"与预备队的去处）。
+27. 行动方式：由**闲置的预备队**执行（预备队本来就不参与正面，等于零成本）；断粮点还必须仍在
+    **己方**补给可达区内（断人粮道不能先把自己断了）。`weights.interdiction = 0` 即整体关闭。
+28. 优先级：**解围 > 断粮 > 主力后方待命**（护己方粮道优先于断敌粮道）。
+29. 撤退选城：首选仍是补给代价最低的城，**只有当它被围时**才改挑"代价 + 被围罚分"最低的
+    ——旧行为在没有威胁时逐位不变（单测守护）。
+30. 本轮不做：不为断粮单独派主力 / 不新增目标价值 / 不改战斗目标选择规则 /
+    不读敌方代价场（公平模式的一致边界）。
+
+**阶段六**
+
+31. 基建形态：**`scripts/tune.mjs` + `npm run tune`**（可重跑、输出指标表 + JSON），
+    不进构建产物、不进测试套件；复用 `tests/unit/helpers.js` 的造图工具，不复制第二套地图构造。
+32. 覆盖机制：**`AI_TUNING_GROUPS`**（4 域 27 个纯数字项的嵌套覆盖 + 区间校验），
+    AI 侧读数值统一优先本局 `cfg` → 关卡可调、脚本可扫、`values.js` 不被改动（浅拷贝 + 单测守护）。
+33. 评价口径：4 个场景的 fitness **只用于排序**，判据看原始指标；fitness 以**交换比**打底
+    （第一版只看敌掉血比例，把"拿命换全歼"判成了改进，见 §5.3 教训 1）。
+34. 安全阀：我方断补率 > 5% 或我方全灭的运行标 `⚠` 并**排除**出推荐；提升 < 2% 视为噪声。
+35. 改不改数值：**只给建议、人工改**，并且必须同步 `docs/gdd.md §12` 与镜像测试；
+    "保持现值/已在平台区"是合法结论。本轮扫描结论：12 个参数**一个都没改**（§5.3）。
+36. 本轮不做：自动写回源码、贝叶斯/进化搜索、把调参结果做成 CI 慢断言。
+37. **断粮权重的语义 = 开关**（承接 §5.3 教训 2）：`weights.interdiction` 只分 `0`（关闭整套断粮）
+    与 `> 0`（开启）两档，0.1~0.6 之间行为逐位相同。选择保持现状而不是改成旋钮，理由是：
+    ① 现在只有一个"要不要用这套战术"的问题，没有"多想要"的问题——档位敏感度已经由
+    `supplyCaution`（`weightScale`）承担；② 改成旋钮 = 改 AI 行为，需要重跑 4 场景扫描 + 重标定单测，
+    收益是"多一个可调旋钮"这种纸面收益。文档（`values.js` 注释、§3.8、§12）与单测都按开关语义写死，
+    将来真要改，按"行为改动"走完整流程。

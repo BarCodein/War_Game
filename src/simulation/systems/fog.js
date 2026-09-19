@@ -1,4 +1,4 @@
-import { values } from '../../config/index.js';
+﻿import { values } from '../../config/index.js';
 
 // 战争迷雾（gdd.md §9）：每格三态 0 从未探索 / 1 已探索 / 2 当前可见。
 // 可见区域 = 己方单位视野圆 ∪ 己方城市视野圆；森林中的敌军仅 60px 内可目视；
@@ -50,7 +50,7 @@ function paintVision(world, faction, mask) {
     paintCircle(terrain, mask, city.x, city.y, values.cities.vision);
   }
   // 占领点：仅在被己方占领时提供视野（用独立半径 values.capturePoints.vision）。
-  // 这是占领点唯一的规则作用——不提供补给、士气、生产或恢复。
+  // 这是占领点唯一的规则作用——不提供补给、生产或恢复。
   for (const point of world.capturePoints) {
     if (point.faction !== faction) continue;
     paintCircle(terrain, mask, point.x, point.y, values.capturePoints.vision);

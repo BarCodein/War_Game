@@ -4,8 +4,8 @@ import { SpatialGrid } from './spatial.js';
 import { validateCommand } from './commands.js';
 import { updateMovement, planRoute, transitionToNewRoute } from './systems/movement.js';
 import { updateCombat } from './systems/combat.js';
-import { updateMorale } from './systems/morale.js';
 import { updateSupply } from './systems/supply.js';
+import { updateSupplyStock } from './systems/supplyStock.js';
 import { updateCapture } from './systems/capture.js';
 import { updateFog, createFogGrid } from './systems/fog.js';
 import { updateControlLine } from './systems/controlLine.js';
@@ -13,9 +13,13 @@ import { updateVictory } from './systems/victory.js';
 import { values } from '../config/index.js';
 
 // tick 内系统执行顺序固定，保证确定性（architecture.md §4）：
-// movement → combat → morale → supply → capture → fog → controlLine → victory
-// controlLine 只读前面的结果（位置 / 城市归属 / 占领进度）做纯视觉统计，不回头影响任何规则。
-const TICK_ORDER = [updateMovement, updateCombat, updateMorale, updateSupply, updateCapture, updateFog, updateControlLine, updateVictory];
+// movement → combat → supply → supplyStock → capture → fog → controlLine → victory
+//   · supply 在 supplyStock **之前**：先算出本轮的实收点数与进货速率（unit.supplyIntake），
+//     补给存量系统才能用同一 tick 的数据扣消耗、判阈值、归零掉血；
+//   · combat 在 supplyStock 之前：underFire / state=combat 是这一 tick 的战况，直接决定消耗；
+//   · controlLine 仍在末尾汇总本 tick 战况；supply 读的是**上一 tick** 的控制线场
+//     （10 Hz 重算，最多陈旧 16 ms），用来判定补给线能不能穿过某格（gdd.md §6、§7、§9）。
+const TICK_ORDER = [updateMovement, updateCombat, updateSupply, updateSupplyStock, updateCapture, updateFog, updateControlLine, updateVictory];
 
 // 世界状态容器：纯数据 + tick 编排 + 统一命令入口。
 // 无 Phaser/DOM 依赖，可在 Node 环境 headless 运行完整对局。
@@ -27,18 +31,30 @@ export class World {
     this.terrain = map.terrain;
     this.size = map.size;
     this.cities = map.cities.map(city => makeCity(city));
-    // 占领点独立于 cities：supply / morale / production / victory 只读 cities，
-    // 因此占领点天然不提供补给、士气、生产与胜负影响，仅 fog 额外读取它提供视野。
+    // 占领点独立于 cities：supply / supplyStock / production / victory 只读 cities，
+    // 因此占领点天然不提供补给运力、不补充给存量、不生产、不影响胜负，仅 fog 额外读取它提供视野。
     this.capturePoints = map.capturePoints.map(point => makeCapturePoint(point));
     this.units = [];
     this.fog = { blue: createFogGrid(map.terrain), red: createFogGrid(map.terrain) };
-    // 实际控制线（纯视觉，gdd.md §9）：影响力网格在上面第一次 tick 时按地图尺寸建立。
+    // 实际控制线（gdd.md §9）：影响力网格在上面第一次 tick 时按地图尺寸建立。
+    // 它同时是**补给线的屏障**（supply 系统读它判定"敌方实际控制区"，见 supplyPath.js）：
+    // 渲染与规则用同一份数据，屏幕上看到的控制线就是补给线的边界。
     this.controlLine = null;
     this.controlLineSegments = []; // 原始等值线线段
     this.controlLinePaths = [];    // 串联 + 平滑后的折线（渲染用）
     this.unitMarks = [];           // 存活单位的位置/阵营（单位所在格硬保证用，复用数组）
     this.controlLineTick = 0;
-    this.events = [];   // 本 tick 产生的事件（morale 消费 unitDied 后于 tick 末清空）
+    // 补给（gdd.md §7）：每个阵营一张「到最近己方城市的代价场」（多源 Dijkstra，地形加权、
+    // 不穿敌方控制区）。代价场每 values.supply.fieldRefreshSeconds 重算一次（只取决于城市与控制线），
+    // 分配每 refreshSeconds 重跑一次；渲染层复用同一份场，靠 supplyToken 判断路径缓存是否过期。
+    this.supplyFields = { blue: null, red: null };
+    this.supplyMasks = { blue: null, red: null }; // 敌方实际控制区掩码（重算代价场时同批更新）
+    this.supplyScratch = null;      // 剔除"点数用光的城"后重算代价场用的临时场（两阵营共用）
+    this.supplyToken = 0;           // 每次重算代价场 +1
+    this.supplyTimer = Infinity;    // 累加到 refreshSeconds 就重跑分配（初值 Infinity = 第一 tick 立刻算）
+    this.supplyFieldTimer = Infinity; // 累加到 fieldRefreshSeconds 就重算代价场
+    this.citySupplyLoad = new Map(); // cityId → 本轮已支出的吞吐点数（HUD / 生产暂停判定）
+    this.events = [];   // 本 tick 产生的事件（history 于 tick 末统一收集）
     this.history = [];  // 事件日志（HUD 战场通讯用）
     // 伤亡统计（gdd.md §11）：按阵营累计**实际损失的血量**，1 点血 = 1 点伤亡。
     // 战斗扣血与补给损耗都走 damageUnit()，所以这里是唯一的记账入口；
