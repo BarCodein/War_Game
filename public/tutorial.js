@@ -1,4 +1,4 @@
-(function(){
+﻿(function(){
 "use strict";
 console.log("%c[教学系统] tutorial.js 已加载", "color:#4ec9a0;font-weight:bold");
 
@@ -137,7 +137,7 @@ const STEPS_LEVEL2 = [
     allowedButtons: [2],
     requireSelection: true,
     targetPoint: { x: 130, y: 550 },
-    targetRadius: 100,
+    targetRadius: 120,
   },
   {
     id: "roadmarch",
@@ -190,6 +190,25 @@ const STEPS_LEVEL2 = [
     targetRadius: 70,
   },
   {
+    id: "supplyobserve",
+    title: "观察补给线",
+    desc: "选中一支部队，观察从己方城市延伸出来的蓝色细线——那就是补给线！血条下方的青蓝色条是补给存量。观察清楚后，右键点击己方城市，表示你找到了补给线的起点。",
+    hint: "左键选中部队，观察补给线后，右键点击己方城市",
+    allowedButtons: [0, 2],
+    requireSelection: false,
+    expectSupplyCityClick: true,
+  },
+  {
+    id: "supplycut",
+    title: "远离补给区",
+    desc: "把部队移动到远离己方城市的地方，观察补给线断开！补给线一旦切断，部队就断了粮道——存量只减不增，打光了就只能撤退！",
+    hint: "右键点击远离城市的区域，观察补给线断开",
+    allowedButtons: [2],
+    requireSelection: true,
+    targetPoint: { x: 750, y: 320 },
+    targetRadius: 120,
+  },
+  {
     id: "terrainattack",
     title: "依托地形歼敌",
     desc: "现在你已体会了全部地形！选择有利地形（如城镇、山地）据守，右键点击红色敌军发动攻击。善用地形者，以少胜多。",
@@ -222,6 +241,9 @@ const STORY2_INTRO = {
     { talker: "纵队司令员", text: "【山地】易守难攻！占领高地据守，敌人仰攻困难，我军以逸待劳。塔山阻击战的核心，就是守住每一处高地，让敌人寸步难进！", bg: "images/bg-mountain.jpg", audio: "drum", alert: false, portrait: "images/port-hq.png" },
     { talker: "纵队司令员", text: "【城镇】防御最强的地方！房屋街巷都是掩体，巷战歼敌，据守城镇，是以弱胜强的最佳依托。守住一座城，就能挡住一路敌！", bg: "images/bg-town.jpg", audio: "drum", alert: false, portrait: "images/port-hq.png" },
     { talker: "纵队司令员", text: "【水域】最危险的地形！涉水作战，行动迟缓、火力削弱，还会持续伤亡——等于自杀！非万不得已，绝不涉水！", bg: "images/bg-water.jpg", audio: "", alert: false, portrait: "images/port-hq.png" },
+    { talker: "纵队司令员", text: "地形讲完了，再说补给！人是铁饭是钢——部队再能打，没有补给就是一堆废铁！选中一支部队，你会看到从己方城市延伸出来的蓝色细线，那就是补给线。", bg: "images/bg-command.jpg", audio: "", alert: false, portrait: "images/port-hq.png" },
+    { talker: "纵队司令员", text: "每支部队血条下方都有一条青蓝色的补给存量条。存量充足，部队生龙活虎；存量不足，战斗力大打折扣；存量彻底耗尽，部队持续失血，不撤回来就全完了！", bg: "images/bg-command.jpg", audio: "", alert: false, portrait: "images/port-hq.png" },
+    { talker: "纵队司令员", text: "补给线被切断，部队就断了粮道！孤军深入、被敌军包围、长时间交战——都会耗尽补给。记住：进攻再猛，也要守住自己的补给线！", bg: "images/bg-command.jpg", audio: "", alert: false, portrait: "images/port-hq.png" },
     { talker: "纵队司令员", text: "再说士气！部队打光了可以再建，士气垮了就一溃千里！士气低于六十，战斗力削弱；低于三十，军心动摇；归零且受攻击，当场溃逃！", bg: "images/bg-command.jpg", audio: "", alert: false, portrait: "images/port-hq.png" },
     { talker: "纵队司令员", text: "友军在身边、靠近己方城市、有补给，士气会回升；孤军深入、长时间交战、急行军，士气会暴跌！善用士气者，以弱胜强！", bg: "images/bg-command.jpg", audio: "", alert: false, portrait: "images/port-hq.png" },
     { talker: "纵队司令员", text: "现在，进入战术演训场！那里有道路、城镇、山地、森林、水域——每一种地形，每一种士气变化，都要亲手体会！", bg: "images/bg-command.jpg", audio: "", alert: false, portrait: "images/port-hq.png" },
@@ -307,10 +329,24 @@ function flashHint(text) {
 }
 
 /* ---------- 剧情过场构建（对话式 + 打字机效果） ---------- */
+function setGamePaused(paused) {
+  try {
+    const game = window.__rtsGame;
+    if (!game || !game.scene) return;
+    for (const s of game.scene.scenes) {
+      if (s.scene && s.scene.isActive && s.scene.isActive()) {
+        if (s.controller) s.controller.paused = paused;
+      }
+    }
+  } catch (e) {}
+}
+
 function buildStoryOverlay(opts) {
   const cfg = Object.assign({}, TUTORIAL_STORY, opts || {});
   if (!cfg.enabled) { if (cfg.onComplete) cfg.onComplete(); else startTutorial(); return; }
   if (typeof cfg.onStart === "function") cfg.onStart();
+  // 剧情播放期间暂停游戏，避免准备阶段倒计时在后台走完
+  setGamePaused(true);
 
   const AP = cfg.assetPath;
   const scenes = cfg.scenes;
@@ -581,6 +617,8 @@ function buildStoryOverlay(opts) {
   function closeStory() {
     stopTyping();
     playSfx("click");
+    // 恢复游戏，让准备阶段倒计时重新开始
+    setGamePaused(false);
     // 移除剧情层的键盘事件监听器（必须加 true，与 addEventListener 匹配）
     document.removeEventListener("keydown", storyKeyHandler, true);
     overlay.classList.add("closing");
@@ -1039,7 +1077,7 @@ function handlePointerDown(e) {
 
   // 右键移动/攻击（支持多关卡步骤ID）
   if (e.button === 2) {
-    const moveIds = ["move", "plainmarch", "roadmarch", "forestmarch", "mountainmarch", "townmarch", "watermarch"];
+    const moveIds = ["move", "plainmarch", "roadmarch", "forestmarch", "mountainmarch", "townmarch", "watermarch", "supplycut"];
     const attackIds = ["attack", "terrainattack"];
     const curIdx = state.stepIndex;
     if (moveIds.includes(step.id)) {
@@ -1053,6 +1091,10 @@ function handlePointerDown(e) {
       setTimeout(() => {
         if (state.stepIndex === curIdx && state.attackedConfirmed) completeCurrentStep();
       }, 300);
+    }
+    // 观察补给线步骤：选中部队后右键点击即完成
+    if (step.id === "supplyobserve" && activeSelectionCount() > 0) {
+      setTimeout(() => { completeCurrentStep(); }, 300);
     }
     // 最后总攻步骤：框选后右键攻击即完成
     if (step.id === "moralefinal" && activeSelectionCount() >= 2) {
@@ -1237,8 +1279,8 @@ function init() {
     steps = STEPS_LEVEL2;
     TUTORIAL_STORY = STORY2_INTRO;
     TUTORIAL_END_STORY = STORY2_OUTRO;
-    panelTitle = "地形与士气训练";
-    panelTag = "TERRAIN & MORALE";
+    panelTitle = "地形补给训练";
+    panelTag = "TERRAIN & SUPPLY";
   }
   console.log("%c[教学系统] 激活教学: " + panelTitle + " (" + steps.length + "步)", "color:#4ec9a0;font-weight:bold");
   // 重置状态（steps 可能已切换）
