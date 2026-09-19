@@ -22,10 +22,36 @@
     slide: 'slide.mp3',             // 滑动切换
     loading: 'loading.mp3',         // 加载中
     startup: 'startup.mp3',         // 开机 / 进入
-    shutdown: 'shutdown.mp3'        // 关机 / 退出
+    shutdown: 'shutdown.mp3',       // 关机 / 退出
+    // 战斗音效（hud.js 战斗循环 + 击杀触发）
+    blade: 'blade.mp3',             // 短兵相接（白刃战循环音）
+    hurt: 'hurt.mp3',               // 敌军被击败
+    gunshot: 'gunshot.mp3',         // 远距射击（预留）
+    explosion: 'explosion.mp3'      // 爆炸（预留）
   };
 
+  // Chrome 标签自动播放策略：未与页面交互前整个 tab 静音，连带 <audio> 静默失败。
+  // 解决：在所有按钮/链接的 click 上把"已经和页面交互"标记下来，
+  //       play() 时如果是首次播放并且未交互，先用一个 muted 的 Audio 探针播一下解锁。
+  // 这样不需要在 document 全局监听 mousedown 之类的副作用。
+  var interacted = false;
   var cache = {};
+  var probe = null;
+
+  function ensureUnlocked() {
+    if (interacted) return;
+    try {
+      if (!probe) {
+        probe = new Audio(BASE + SFX.tap);
+        probe.muted = true;
+        probe.volume = 0;
+      }
+      var p = probe.play();
+      if (p && typeof p.then === 'function') {
+        p.then(function () { probe.pause(); }).catch(function () {});
+      }
+    } catch (e) {}
+  }
 
   function play(name, volume) {
     try {
@@ -51,7 +77,10 @@
     function on(sel, name) {
       var els = root.querySelectorAll(sel);
       for (var i = 0; i < els.length; i++) {
-        els[i].addEventListener('click', function () { play(name); });
+        els[i].addEventListener('click', function () {
+          interacted = true; // 任何被 bindSfx 绑过的按钮被点都算"已交互"
+          play(name);
+        });
       }
     }
     if (typeof selectorOrMap === 'string') {
@@ -65,7 +94,23 @@
     }
   }
 
+  // 在 capture 阶段监听任意 click/pointerdown/keydown：标记已交互 + 解锁。
+  // 一次性的，触发后立刻移除监听器。
+  function markInteracted() {
+    interacted = true;
+    ensureUnlocked();
+    document.removeEventListener('click', markInteracted, true);
+    document.removeEventListener('pointerdown', markInteracted, true);
+    document.removeEventListener('keydown', markInteracted, true);
+    document.removeEventListener('touchstart', markInteracted, true);
+  }
+  document.addEventListener('click', markInteracted, true);
+  document.addEventListener('pointerdown', markInteracted, true);
+  document.addEventListener('keydown', markInteracted, true);
+  document.addEventListener('touchstart', markInteracted, true);
+
   window.playSfx = play;
   window.bindSfx = bindSfx;
   window.SFX_FILES = SFX;
+  window.__audioInteracted = function () { return interacted; }; // 给调试用
 })();

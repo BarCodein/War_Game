@@ -55,6 +55,7 @@ export default {
   'unit.status.rout': '溃逃',
   // 事件与提示
   'event.cityCaptured': '{faction} 占领了城市 {city}',
+  'event.pointCaptured': '{faction} 占领了据点 {point}',
   'event.surrender': '敌军投降',
   'event.timeWarning': '注意：剩余时间不足 {time} 秒！',
   'event.timeWarning.critical': '紧急：仅剩 {time} 秒，任务即将失败！',
@@ -81,16 +82,14 @@ export default {
   'victory.next': '下一关',
   'victory.select': '返回关卡选择',
   'victory.restart': '重新开始',
-  // 胜利条件弹窗
-  'victory.conditions.title': '胜利条件',
-  'victory.conditions.annihilative': '在 {time} 秒内歼灭所有指定敌军',
-  'victory.conditions.annihilative.notime': '歼灭所有指定敌军',
-  'victory.conditions.defend': '坚守阵地 {time} 秒',
-  'victory.conditions.defend.notime': '坚守阵地',
-  'victory.conditions.attack': '在 {time} 秒内夺取所有目标据点',
-  'victory.conditions.attack.notime': '夺取所有目标据点',
-  'victory.conditions.captureAll': '占领所有敌方城市',
-  'victory.conditions.default': '占领所有敌方城市',
+  // 复古全屏任务面板（vg.*）：由 hud.js 根据 world.mess 的 mode 生成真实任务文案
+  'vg.mission.defendHold': '坚守全部据点（{held}/{total}）',
+  'vg.mission.defendSurvive': '坚持到时限结束（剩余 {time}）',
+  'vg.mission.attackCapture': '夺取敌军据点（{captured}/{total}）',
+  'vg.mission.attackBefore': '在时限内完成（剩余 {time}）',
+  'vg.mission.annihilate': '消灭指定敌军（剩余 {alive}/{total}）',
+  'vg.mission.holdBase': '守住己方基地 {city}',
+  'vg.mission.eliminateEnemy': '消灭全部敌军',
   // 地图编辑器
   'editor.new': '新建',
   'editor.save': '保存',

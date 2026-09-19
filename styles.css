@@ -523,3 +523,48 @@ body.game-fullscreen #battlefield canvas {
 @media (max-width: 900px) {
   .game-layout { grid-template-columns: 180px 1fr; }
 }
+
+/* ---------------- 全局 BGM（被 bgm-controller.js 注入）----------------
+   iframe 不可见，按钮固定在右下角。游戏页（game/loading/battlebackground/
+   result/result-video）不引入 bgm-controller.js，所以不显示。 */
+.bgm-frame {
+  position: fixed;
+  width: 0;
+  height: 0;
+  border: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+.bgm-control {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  z-index: 100;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 1px solid #4a2f12;
+  background: linear-gradient(180deg, #d4b67c 0%, #a37b3a 100%);
+  color: #2b1d12;
+  font-size: 22px;
+  line-height: 1;
+  font-family: serif;
+  cursor: pointer;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .35),
+    inset 0 -2px 4px rgba(0, 0, 0, .3),
+    0 2px 6px rgba(0, 0, 0, .5);
+  transition: transform .12s, box-shadow .12s;
+}
+.bgm-control:hover {
+  background: linear-gradient(180deg, #e0c08a 0%, #b08840 100%);
+  transform: scale(1.05);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .5),
+    0 4px 10px rgba(0, 0, 0, .6);
+}
+.bgm-control.is-paused {
+  /* 暂停时颜色变暗，提示用户当前是关的 */
+  background: linear-gradient(180deg, #8b7a5a 0%, #5a4a2a 100%);
+  color: #f1e3c4;
+}
