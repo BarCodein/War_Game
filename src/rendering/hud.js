@@ -44,6 +44,7 @@ export function createHud(scene, world, controller, selection, orders) {
     missionEyebrow: document.querySelector('#missionEyebrow'),
     missionLevelName: document.querySelector('#missionLevelName'),
     tacticalEyebrow: document.querySelector('#tacticalEyebrow'),
+    victoryConditions: document.querySelector('#victoryConditions'),
   };
 
   // 动态设置关卡名称（从 level JSON 读取，替代 HTML 硬编码）
@@ -60,6 +61,7 @@ export function createHud(scene, world, controller, selection, orders) {
     victoryShown: false,
     lastEventIndex: 0,
     accumulator: 0,
+    timeWarnings: new Set(), // 已触发的时间预警阈值（避免重复）
   };
 
   // 顶部弹出的 toast 通知已移除（如「任务完成」）——相关进度只保留在右侧战场通讯日志。
@@ -133,6 +135,8 @@ export function createHud(scene, world, controller, selection, orders) {
     renderEvents();
     renderTimer();
     renderVictory();
+    checkVictoryConditionsTransition();
+    checkTimeWarnings();
   }
 
   // 编队列表
@@ -197,7 +201,7 @@ export function createHud(scene, world, controller, selection, orders) {
     const beacon = world.cities.find(city => city.id === objective.cityId);
     if (!status.obj3Done && beacon && !world.units.some(unit =>
       unit.state !== 'dead' && unit.faction === 'red'
-      && Math.hypot(unit.x - beacon.x, unit.y - beacon.y) <= values.tutorial.clearRadius)) {
+      && Math.hypot(unit.x - beacon.x, unit.y - beacon.y) <= 200)) {
       status.obj3Done = true;
       objectiveCompleted('toast.obj3', 'event.obj3');
     }
@@ -321,7 +325,59 @@ export function createHud(scene, world, controller, selection, orders) {
     showToast(t('toast.victory'));
   }
 
+  // 胜利条件弹窗：准备阶段居中放大，战斗开始后缩小至右上角
+  let victoryConditionsPrepping = true;
+  function renderVictoryConditions() {
+    if (!els.victoryConditions) return;
+    const victory = scene.level?.victory;
+    const mode = victory?.mode ?? victory?.type ?? 'captureAll';
+    const time = victory?.time;
+    let key = 'victory.conditions.default';
+    if (mode === 'annihilative') key = time ? 'victory.conditions.annihilative' : 'victory.conditions.annihilative.notime';
+    else if (mode === 'defend') key = time ? 'victory.conditions.defend' : 'victory.conditions.defend.notime';
+    else if (mode === 'attack') key = time ? 'victory.conditions.attack' : 'victory.conditions.attack.notime';
+    else if (mode === 'captureAll') key = 'victory.conditions.captureAll';
+    const text = time ? t(key, { time: String(time) }) : t(key);
+    els.victoryConditions.innerHTML = `
+      <div class="overlay-heading"><span>${t('victory.conditions.title')}</span></div>
+      <div class="victory-conditions-text">${text}</div>`;
+    // 初始状态：准备阶段（编辑器试玩跳过准备，直接进入战斗状态）
+    if (controller.isPrepping()) {
+      els.victoryConditions.classList.add('prep');
+    } else {
+      victoryConditionsPrepping = false;
+      els.victoryConditions.classList.add('battle');
+    }
+  }
+
+  // 战斗开始时：准备阶段 → 战斗阶段的过渡
+  function checkVictoryConditionsTransition() {
+    if (!els.victoryConditions || !victoryConditionsPrepping) return;
+    if (controller.isPrepping()) return;
+    victoryConditionsPrepping = false;
+    els.victoryConditions.classList.remove('prep');
+    els.victoryConditions.classList.add('battle');
+  }
+
+  // 时间预警：限时关卡剩余60s/30s/10s时在事件日志中提示
+  const TIME_WARNING_THRESHOLDS = [60, 30, 10];
+  function checkTimeWarnings() {
+    const mess = world.mess;
+    if (!mess || !Number.isFinite(mess.time)) return;
+    const remaining = mess.time - world.time;
+    for (const threshold of TIME_WARNING_THRESHOLDS) {
+      if (remaining <= threshold && remaining > 0 && !status.timeWarnings.has(threshold)) {
+        status.timeWarnings.add(threshold);
+        const key = threshold <= 10 ? 'event.timeWarning.critical' : 'event.timeWarning';
+        els.eventLog.insertAdjacentHTML('afterbegin',
+          `<p><time>${formatTime(world.time)}</time><span class="event-tag WARN">WARN</span>${t(key, { time: String(threshold) })}</p>`);
+        while (els.eventLog.children.length > 8) els.eventLog.lastElementChild.remove();
+      }
+    }
+  }
+
   renderTopBarUI(); // 初始渲染（不弹 toast）
+  renderVictoryConditions();
 
   return { update, showToast };
 }

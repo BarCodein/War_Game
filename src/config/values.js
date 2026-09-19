@@ -304,22 +304,6 @@ export const values = {
     toastDurationMs: 2200,
     timerRefreshMs: 1000,
   },
-
-  // 教学关卡的规则性数值；地图几何体（地形格子/城市坐标/出生点）
-  // 在关卡 JSON 中（architecture.md §7）
-  tutorial: {
-    map: { width: 1280, height: 800, midlineX: 640 },
-    forces: { blue: { light: 6, heavy: 2 }, red: { light: 2, heavy: 2 } },
-    garrisonRadius: 80,
-    clearRadius: 200, // 目标 3「清除信标周边敌军」的判定半径
-    reinforcement: {
-      atSecond: 60,
-      count: 2,
-      unitType: 'light',
-      spawn: { x: 1230, y: 400 },   // 增援出生点（东侧）
-      moveTo: { x: 1080, y: 160 },  // 增援目标（信标）
-    },
-  },
 };
 
 function deepFreeze(target) {

@@ -27,3 +27,7 @@ npm-debug.log*
 .DS_Store
 Thumbs.db
 *.swp
+.agents/
+.claude/
+.opencode/
+skills-lock.json

@@ -3,8 +3,8 @@ import { effectsFor } from './morale.js';
 import { isSpotted } from './fog.js';
 
 // 移动系统：沿命令路径点行进；直行遇不可通行地形时在逻辑网格上 A* 绕行（路径缓存共享）；
-// 软排斥防止单位重叠；交战中冻结；溃逃单位不受指挥，向最近己方城市全速撤退，
-// 无路可退或被困超过时限则投降（gdd.md §4、§6）。
+// 软排斥防止单位重叠；交战中冻结；溃逃单位不受指挥，向评估后最安全的己方城市全速撤退
+// （默认最近；路线穿敌时改选安全城市，见 rankRoutTargets），无路可退或被困超过时限则投降（gdd.md §4、§6）。
 
 // A* 路径缓存：同 tick 跨单位共享；容量上限内保留，超限清空（确定性）。
 const pathCache = new Map();
@@ -458,23 +458,27 @@ function activateNextQueuedRoute(world, unit) {
   }
 }
 
+// 溃退目标评估（gdd.md §6 增强）：不再无条件选「最近己方城市」。
+// 对每个己方城市用 A* 规划一条撤退路线，按路线沿途与敌军（敌方单位 + 敌方城市/占领点）
+// 的贴近程度打分：路线越贴敌分数越高；威胁分相同时取更近的城市。
+// 效果：最近城市的撤退路线如果穿过敌军火力范围，会改选一条更安全的己方城市，
+// 避免「一头扎进敌方怀抱」；全场无威胁时所有路线威胁分为 0，行为与旧版一致（取最近城市）。
+const ROUT_THREAT_RADIUS = 150;    // 敌军构成威胁的距离（px），超过即视为不构成威胁
+const ROUT_DISTANCE_WEIGHT = 0.02; // 距离分权重（px⁻¹），仅用于威胁分相同时打破平局
+
 function routMovement(world, unit, dt) {
-  const city = world.nearestOwnCity(unit);
-  if (!city) {
-    world.killUnit(unit, 'surrender');
-    return;
-  }
-  // 目标 = 最近己方城市；遇水域 A* 绕行（每进入新格子检查一次）
+  // 目标选择与路径重算同频：进入新格子（或路径脏）时重新评估最安全城市，
+  // 其余 tick 沿用已有路线，避免每帧重排导致的目标抖动与寻路开销。
   const cellKey = world.terrain.cellIndex(world.terrain.cellAt(unit.x, unit.y).cx, world.terrain.cellAt(unit.x, unit.y).cy);
   if (unit.pathDirty || unit.pathCheckCell !== cellKey) {
     unit.pathDirty = false;
     unit.pathCheckCell = cellKey;
-    const path = findPath(world.terrain, unit.x, unit.y, city.x, city.y);
-    if (!path) {
+    const targets = rankRoutTargets(world, unit);
+    if (targets.length === 0) {
       world.killUnit(unit, 'surrender');
       return;
     }
-    unit.route = path;
+    unit.route = targets[0].path;
     unit.routeIndex = 0;
   }
   const beforeX = unit.x;
@@ -484,6 +488,74 @@ function routMovement(world, unit, dt) {
   if (Math.hypot(unit.x - beforeX, unit.y - beforeY) < 0.5) unit.stuckTime += dt;
   else unit.stuckTime = 0;
   if (unit.stuckTime >= values.morale.rout.stuckSeconds) world.killUnit(unit, 'surrender');
+}
+
+/**
+ * 为溃退单位排布「安全撤退目标」：返回按分数升序的 { city, path, score } 列表（只含可达城市）。
+ * score = 路线威胁分 + 距离分；取列表首项即最安全目标。
+ * 导出供单测直接断言目标选择（不依赖整局模拟）。
+ */
+export function rankRoutTargets(world, unit) {
+  const candidates = world.cities.filter(city => city.faction === unit.faction);
+  if (candidates.length === 0) return [];
+
+  // 威胁源：敌方存活单位 + 敌方城市 + 敌方占领点（都是「敌方怀抱」）。
+  // 敌方单位走空间网格查询（只取附近，避免对全局敌军全量遍历）；静态目标数量少，直接遍历。
+  const enemyStructures = [];
+  for (const city of world.cities) {
+    if (isEnemyHeld(city.faction, unit.faction)) enemyStructures.push(city);
+  }
+  for (const point of world.capturePoints ?? []) {
+    if (isEnemyHeld(point.faction, unit.faction)) enemyStructures.push(point);
+  }
+
+  const scored = [];
+  for (const city of candidates) {
+    const path = findPath(world.terrain, unit.x, unit.y, city.x, city.y);
+    if (path === null) continue; // 不可达的城市不作为候选（找不到任何可达城市时才投降）
+    const threat = routeThreat(world, unit, path, enemyStructures);
+    const length = pathLength(path);
+    const fallbackDistance = Math.hypot(city.x - unit.x, city.y - unit.y);
+    scored.push({ city, path, score: threat + ROUT_DISTANCE_WEIGHT * (length > 0 ? length : fallbackDistance) });
+  }
+  scored.sort((a, b) => a.score - b.score || a.city.id.localeCompare(b.city.id));
+  return scored;
+}
+
+function isEnemyHeld(faction, ownFaction) {
+  return faction === 'blue' || faction === 'red' ? faction !== ownFaction : false;
+}
+
+// 路线威胁分：取所有采样点中最大的「敌军贴近缺额」（0 = 全程远离敌军）。
+// 缺额 = ROUT_THREAT_RADIUS − 距最近威胁源距离；路径上任何一点贴敌都会被计入。
+function routeThreat(world, unit, path, enemyStructures) {
+  const samples = path.length === 0
+    ? [{ x: unit.x, y: unit.y }]
+    : [{ x: unit.x, y: unit.y }, ...path];
+  let worst = 0;
+  for (const point of samples) {
+    let threat = 0;
+    for (const structure of enemyStructures) {
+      const d = Math.hypot(structure.x - point.x, structure.y - point.y);
+      if (d < ROUT_THREAT_RADIUS) threat = Math.max(threat, ROUT_THREAT_RADIUS - d);
+    }
+    const nearby = world.spatial.query(point.x, point.y, ROUT_THREAT_RADIUS);
+    for (const enemy of nearby) {
+      if (enemy.faction === unit.faction || enemy.state === 'dead') continue;
+      const d = Math.hypot(enemy.x - point.x, enemy.y - point.y);
+      threat = Math.max(threat, ROUT_THREAT_RADIUS - d);
+    }
+    if (threat > worst) worst = threat;
+  }
+  return worst;
+}
+
+function pathLength(path) {
+  let total = 0;
+  for (let i = 1; i < path.length; i += 1) {
+    total += Math.hypot(path[i].x - path[i - 1].x, path[i].y - path[i - 1].y);
+  }
+  return total;
 }
 
 // 跳过不可通行的路径点（如目标点在水中）
