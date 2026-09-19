@@ -484,4 +484,36 @@ describe('行为：预备队真的去护粮道 / 断粮道', () => {
     // 预备队退回"主力后方待命"的老行为
     expect(labels.some(label => label === 'reserve-hold' || label.startsWith('reserve:'))).toBe(true);
   });
+
+  it('断粮权重是开关而不是旋钮：0.1 与 0.6 派出同一个断粮任务（§7 决策 37）', () => {
+    const run = (weight) => {
+      const world = makeWorld(corridorMap());
+      const units = squad(world, [1100, 1140, 1180, 1220, 1260, 1300]);
+      world.spawnUnit('red', 'light', 1500, 450);
+      world.spawnUnit('red', 'light', 1500, 550);
+      world.spawnUnit('red', 'light', 2000, 480);
+      world.spawnUnit('red', 'light', 2000, 520);
+      advance(world, 1);
+      const ai = new ScriptedAI(world, {
+        faction: 'blue',
+        script: {
+          ...engageScript({ x: 2200, y: 500 }),
+          preset: 'standard',
+          tuning: { reserveRatio: 0.5, weights: { interdiction: weight } },
+        },
+      });
+      ai.update(STEP);
+      ai.update(values.ai.decisionIntervalSeconds);
+      return {
+        missions: [...ai.lastOrders.values()].filter(label => label.startsWith('interdict:')).sort(),
+        orders: units.map(unit => ai.lastOrders.get(unit.id) ?? null),
+      };
+    };
+
+    const low = run(0.1);
+    const high = run(0.6);
+    expect(low.missions.length).toBeGreaterThan(0);   // 都开了断粮
+    expect(high.missions).toEqual(low.missions);      // 任务点逐字相同
+    expect(high.orders).toEqual(low.orders);          // 全队命令也逐字相同
+  });
 });
