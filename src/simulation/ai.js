@@ -1,4 +1,4 @@
-﻿import { values } from '../config/index.js';
+import { values } from '../config/index.js';
 import { attackCommand, attackMoveCommand, holdCommand, moveCommand } from './commands.js';
 import { resolvePoint } from './level.js';
 import { assignSlots, cohesionRatio, facingTo, formationSlots, isRushingAhead, needsColumn, squadAnchor, squadCentroid } from './ai/squad.js';
@@ -335,7 +335,7 @@ export class ScriptedAI {
       //    然后再把目标点**夹进补给可达区**（行动边界，docs/ai-design.md §3.7）
       //    ③d 断敌粮道（阶段五）：先算一个"值得压住的敌方补给走廊点"，接近轴/薄弱点打分会偏向它
       //    （软权重，不否决正面目标；weights.interdiction = 0 时这一步完全不跑）
-      const interdiction = values.ai.weights.interdiction > 0
+      const interdiction = this.cfg.weights.interdiction > 0
         ? interdictionPlan(this.world, this.faction, { cfg, knowns, from: centroid })
         : null;
       const rawWaypoint = this.resolveWaypoint(state, group, units, centroid, objective, cfg, knowns, interdiction);

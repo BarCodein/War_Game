@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { values } from '../../src/config/index.js';
-import { AI_PRESET_NAMES, AI_TUNING_KEYS, resolveAiConfig, validateAiTuning } from '../../src/simulation/ai/presets.js';
+import {
+  AI_PRESET_NAMES, AI_TUNING_GROUPS, AI_TUNING_KEYS, resolveAiConfig, validateAiTuning,
+} from '../../src/simulation/ai/presets.js';
 
 // 难度/性格档位（docs/ai-design.md 阶段二 F）：三套基线 + 关卡级覆盖。
 describe('档位解析', () => {
@@ -48,6 +50,27 @@ describe('档位解析', () => {
     expect(JSON.stringify(values.ai.presets)).toBe(before);
     expect(values.ai.engageRadius).toBe(320);
   });
+
+  it('嵌套域覆盖（阶段六）：只改给出的那几项，其余保持原值，也不渗回 values.ai', () => {
+    const cfg = resolveAiConfig('standard', {
+      weights: { interdiction: 0.5 },
+      interdiction: { minCuts: 3, cutRadius: 120 },
+      relief: { forceRatio: 0.9 },
+      supply: { lowRatio: 0.4 },
+    });
+    expect(cfg.weights.interdiction).toBe(0.5);
+    expect(cfg.weights.supply).toBe(values.ai.weights.supply);              // 同域未覆盖的项原样
+    expect(cfg.weights).not.toBe(values.ai.weights);                        // 只浅拷贝一层
+    expect(cfg.interdiction.minCuts).toBe(3);
+    expect(cfg.interdiction.maxDistance).toBe(values.ai.interdiction.maxDistance);
+    expect(cfg.relief.forceRatio).toBe(0.9);
+    expect(cfg.supply.lowRatio).toBe(0.4);
+    expect(cfg.supply.squadCutFraction).toBe(values.ai.supply.squadCutFraction);
+    // 原值不动（体量：4 组共 27 个可覆盖键）
+    expect(values.ai.weights.interdiction).toBe(0.2);
+    expect(values.ai.interdiction.minCuts).toBe(2);
+    expect(Object.values(AI_TUNING_GROUPS).reduce((sum, spec) => sum + Object.keys(spec).length, 0)).toBe(27);
+  });
 });
 
 describe('关卡 JSON 校验', () => {
@@ -71,5 +94,21 @@ describe('关卡 JSON 校验', () => {
     expect(errors.some(e => e.includes('feint must be a boolean'))).toBe(true);
     expect(errors.some(e => e.includes('terrainBias must be one of'))).toBe(true);
     expect(validateAiTuning({ tuning: 5 }).some(e => e.includes('tuning must be an object'))).toBe(true);
+  });
+
+  it('嵌套域的校验：未知子键 / 类型不对 / 越界都会报出来', () => {
+    const errors = validateAiTuning({
+      tuning: {
+        weights: { interdiction: 5, nope: 1 },
+        interdiction: 'yes',
+        relief: { forceRatio: -1 },
+      },
+    });
+    expect(errors.some(e => e.includes('tuning.weights.interdiction must be a number in [0, 2]'))).toBe(true);
+    expect(errors.some(e => e.includes('tuning.weights unknown key: nope'))).toBe(true);
+    expect(errors.some(e => e.includes('tuning.interdiction must be an object'))).toBe(true);
+    expect(errors.some(e => e.includes('tuning.relief.forceRatio must be a number in [0, 3]'))).toBe(true);
+    expect(validateAiTuning({ tuning: { weights: { interdiction: 0.3 } } })).toEqual([]);
+    expect(validateAiTuning({ tuning: { interdiction: { minCuts: 3, cutRadius: 120 } } })).toEqual([]);
   });
 });

@@ -1,4 +1,4 @@
-﻿import { values } from '../../config/index.js';
+import { values } from '../../config/index.js';
 import { facingTo } from './squad.js';
 import { combatPower, localPower } from './tactics.js';
 import { supplyPolicy, supplyCostOf } from './supply.js';
@@ -94,6 +94,9 @@ export function chooseWeakSpot(world, { objective, faction, cfg = values.ai, kno
   if (candidates.length === 0) return null;
   const radius = cfg.weakSpot.sampleRadius;
   const policy = supplyPolicy(cfg);
+  // 权重与压制半径也从本局 cfg 读（关卡 ai.tuning / 离线调参可覆盖）
+  const w = cfg.weights ?? values.ai.weights;
+  const cutRadius = (cfg.interdiction ?? values.ai.interdiction).cutRadius;
   let best = null;
   for (const point of candidates) {
     const strength = pointStrength(world, point, faction, radius, fogAware ? (knowns ?? []) : null);
@@ -101,9 +104,9 @@ export function chooseWeakSpot(world, { objective, faction, cfg = values.ai, kno
     const proximity = 1 - Math.min(1, Math.hypot(point.x - objective.x, point.y - objective.y)
       / Math.max(1, cfg.weakSpot.frontSearchRadius));
     const supply = reachScore(world, faction, point, policy);
-    const interdict = interdictionScore(point, interdiction);
+    const interdict = interdictionScore(point, interdiction, cutRadius);
     const score = strength.ratio * 0.6 + proximity * 0.25 + supply * 0.15
-      + interdict * values.ai.weights.interdiction * policy.weightScale * 0.15;
+      + interdict * w.interdiction * policy.weightScale * 0.15;
     if (!best || score > best.score) best = { ...point, ...strength, score, proximity, supply, interdict };
   }
   return best;
@@ -147,6 +150,8 @@ export function chooseApproach(world, { unit, objective, faction, cfg = values.a
   const axes = approachAxes(objective, { x: unit.x, y: unit.y }, cfg);
   const biasName = cfg.terrainBias;
   const policy = supplyPolicy(cfg);
+  const w = cfg.weights ?? values.ai.weights;
+  const cutRadius = (cfg.interdiction ?? values.ai.interdiction).cutRadius;
   let best = null;
   for (const axis of axes) {
     if (taken.has(axis.index)) continue;
@@ -157,11 +162,11 @@ export function chooseApproach(world, { unit, objective, faction, cfg = values.a
     const proximity = 1 - Math.min(1, travel / Math.max(1, cfg.weakSpot.standoff * 2));
     const terrain = terrainPreference(world, axis, biasName);
     const supply = reachScore(world, faction, axis, policy);
-    const interdict = interdictionScore(axis, interdiction);
+    const interdict = interdictionScore(axis, interdiction, cutRadius);
     const score = strength.ratio * 0.4 + proximity * 0.2
-      + terrain * values.ai.weights.approach * 0.25
-      + supply * values.ai.weights.approach * 0.25
-      + interdict * values.ai.weights.interdiction * policy.weightScale * 0.25;
+      + terrain * w.approach * 0.25
+      + supply * w.approach * 0.25
+      + interdict * w.interdiction * policy.weightScale * 0.25;
     if (!best || score > best.score) best = { ...axis, ...strength, terrain, supply, interdict, score };
   }
   return best;

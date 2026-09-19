@@ -76,6 +76,8 @@ war_game/
 │  └─ editor/
 │     ├─ editorStore.js        # 编辑器纯数据状态
 │     └─ mapResize.js          # 地图补齐到画布尺寸（纯数据）
+├─ scripts/
+│  └─ tune.mjs                 # 离线调参：headless 批量对局 + 参数扫描（npm run tune，不进构建产物）
 └─ tests/
    ├─ unit/                    # 28 个 Vitest 测试文件（规则确定性）
    └─ e2e/                     # 7 个 Playwright 测试文件（浏览器流程）
@@ -254,7 +256,7 @@ war_game/
 - `supply.js`（阶段四）：AI 的补给视野（`supplyPolicy` / `supplyCostOf` / `withinSupply` / `bestSupplyCity` / `clampToSupply` / `isLowSupply` / `squadLowSupply` / `supplyScore`），见上文。
 - `interdiction.js`（阶段五）：断敌粮道——`enemyCorridors`（看得见的敌单位 → 它最近的敌城，走廊太短/记忆条目不算）、`cutCountAt`（该点压住几条走廊，半径 = `controlLine.unit.influenceRadius`）、`corridorCandidates`（0.3/0.5/0.7 采样）、`interdictionPlan`（压制面 + 安全 + 距离打分，只出"值得为它改方向"的点）、`interdictionScore`（接近轴/战线点的压制打分）。**只用公开信息，绝不读 `supplyFields[敌]`。**
 - `relief.js`（阶段五）：护己方粮道——`supplyUserCounts` / `supplyUsers`（按欧氏最近己城统计每城养兵数）、`cityThreat`（看得见的围城敌军及其形心 + `captureProgress`）、`reliefPlan`（值得救 + 打得过 + 赶得上 → 压向围城敌军的形心；只看得到"城正在被夺"时改停在城外 `standoff`）、`bestRetreatCity`（首选补给代价最低的城，它被围时改挑"代价 + 被围罚分"最低的）。
-- `presets.js`（阶段二 F）：`AI_PRESET_NAMES`（cautious / standard / sly）、`AI_TUNING_KEYS`（reserveRatio / pursuitRadius / useForcedMarch / terrainBias / feint / **supplyCaution**）、`resolveAiConfig(preset, tuning)`（档位覆盖 values.ai，tuning 再覆盖，且 `pursuitRadius` 同步为 `engageRadius`）、`validateAiTuning`（关卡结构校验：档位 / tuning 键 / `ai.fog` 布尔 / `supplyCaution ∈ [0,1]`）。
+- `presets.js`（阶段二 F / 阶段六）：`AI_PRESET_NAMES`（cautious / standard / sly）、`AI_TUNING_KEYS`（6 个扁平键：reserveRatio / pursuitRadius / useForcedMarch / terrainBias / feint / **supplyCaution**）、**`AI_TUNING_GROUPS`**（4 个域 27 个纯数字项的嵌套覆盖 + 区间校验：weights / supply / interdiction / relief）、`resolveAiConfig(preset, tuning)`（档位覆盖 values.ai，tuning 再覆盖，嵌套域只做一层浅拷贝，且 `pursuitRadius` 同步为 `engageRadius`）、`validateAiTuning`（关卡结构校验：档位 / tuning 键 / 嵌套子键与区间 / `ai.fog` 布尔）。
 - `perception.js`（阶段三）：`visibleEnemies`（`isSpotted`，含森林隐蔽）/ `rememberedEnemies`（`lastSeen` + 年龄衰减，低于 `staleConfidence` 即遗忘，条目带 `ghost: true`）/ `knownEnemies`·`perceive`（可见 + 记忆，或全知）/ `unexploredFrontier`（fog 网格上有界 BFS 找最近未探索格，同深度优先靠近敌城）/ `awarenessSummary`（调试用情报摘要）。
 
 ### `src/simulation/systems/movement.js`
@@ -487,7 +489,22 @@ e2e：`testDir: 'tests/e2e'`，`baseURL: 'http://localhost:5173'`，Chrome/Firef
 
 ---
 
-## 十一、测试文件（`tests/`）
+## 十一、开发脚本（`scripts/`）
+
+### `scripts/tune.mjs`（阶段六，docs/ai-design.md §3.9）
+离线调参基建，`npm run tune`：
+- 复用 `tests/unit/helpers.js` 的造图/造世界工具（**不**复制第二套地图构造），双方都是 `ScriptedAI`，
+  固定步长 1/60、无渲染 → 与 headless 复现一致（同场景跑两次逐位相同）；
+- 4 个场景：`interdict`（走廊可压）/ `siege`（己城被围）/ `retreat`（撤退选城避围城）/ `open`（无走廊正面）；
+- 12 个参数做 OAT 扫描（现值复用 baseline 结果），再对 `weights.interdiction × interdiction.minCuts` 做二维粗网格；
+- 每格输出「敌掉血 / 我掉血 / 敌断补率 + 交换比」、fitness（启发式，仅排序用）、任务数、耗时；
+- JSON 落到 `test-results/tune-*.json`（已被 gitignore）；**只给建议、不自动改源码**；
+- 覆盖机制靠 `AI_TUNING_GROUPS`（见 `src/simulation/ai/presets.js`）：`ai.tuning` 可按子对象覆盖
+  `weights` / `supply` / `interdiction` / `relief` 里的纯数字项，AI 侧统一从本局 `cfg` 读，不渗回 `values.js`。
+
+---
+
+## 十二、测试文件（`tests/`）
 
 > 运行时代码之外，`tests/` 也全部是 JS 文件，汇总如下。
 

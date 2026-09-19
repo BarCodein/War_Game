@@ -35,7 +35,8 @@ export function supplyCaution(cfg) {
  * 另外把"硬约束"的阈值原样带出来：断补（supplied=false）或存量比例 < lowRatio。
  */
 export function supplyPolicy(cfg) {
-  const s = values.ai.supply;
+  // 阈值从本局 cfg 读（关卡 ai.tuning 可以只覆盖 ai.supply 里的某几项）
+  const s = cfg?.supply ?? values.ai.supply;
   const caution = supplyCaution(cfg);
   const lerp = (range) => range.min + (range.max - range.min) * caution;
   const reachRatio = lerp(s.reachRatio);

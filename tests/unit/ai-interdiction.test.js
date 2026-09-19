@@ -456,4 +456,32 @@ describe('行为：预备队真的去护粮道 / 断粮道', () => {
       expect(label.startsWith('interdict:')).toBe(false);
     }
   });
+
+  it('ai.tuning 把断粮权重调成 0 → 整套补给战术关闭（旧行为）', () => {
+    const world = makeWorld(corridorMap());
+    const units = squad(world, [1100, 1140, 1180, 1220, 1260, 1300]);
+    world.spawnUnit('red', 'light', 1500, 450); // 本来是一条可断的走廊
+    world.spawnUnit('red', 'light', 1500, 550);
+    world.spawnUnit('red', 'light', 2000, 480);
+    world.spawnUnit('red', 'light', 2000, 520);
+    advance(world, 1);
+
+    const ai = new ScriptedAI(world, {
+      faction: 'blue',
+      script: {
+        ...engageScript({ x: 2200, y: 500 }),
+        preset: 'standard',
+        tuning: { reserveRatio: 0.5, weights: { interdiction: 0 } },
+      },
+    });
+    ai.update(STEP);
+    ai.update(values.ai.decisionIntervalSeconds);
+
+    expect(ai.cfg.weights.interdiction).toBe(0);
+    expect(values.ai.weights.interdiction).toBe(0.2); // values 本身没被改
+    const labels = [...ai.lastOrders.values()];
+    expect(labels.some(label => label.startsWith('interdict:'))).toBe(false);
+    // 预备队退回"主力后方待命"的老行为
+    expect(labels.some(label => label === 'reserve-hold' || label.startsWith('reserve:'))).toBe(true);
+  });
 });

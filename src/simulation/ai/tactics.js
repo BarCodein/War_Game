@@ -1,4 +1,4 @@
-﻿import { values } from '../../config/index.js';
+import { values } from '../../config/index.js';
 import { effectsFor, stockRatio } from '../systems/supplyStock.js';
 import { calcDamageRatio } from '../systems/combat.js';
 import { supplyPolicy, supplyScore } from './supply.js';
@@ -84,8 +84,9 @@ export function isVulnerable(enemy) {
  * 集中火力上限由调用方通过 ctx.targetCounts 提供：已达上限的目标直接跳过。
  */
 export function scoreAttack(world, unit, enemy, ctx = {}) {
-  const w = values.ai.weights;
-  const cap = values.ai.squad.maxAttackersPerTarget;
+  // 权重与集火上限都从本局 cfg 读（关卡 ai.tuning 可覆盖 → presets.js 的 AI_TUNING_GROUPS）
+  const w = ctx.cfg?.weights ?? values.ai.weights;
+  const cap = (ctx.cfg?.squad ?? values.ai.squad).maxAttackersPerTarget;
   if ((ctx.targetCounts?.get(enemy.id) ?? 0) >= cap) return null;
   const policy = ctx.policy ?? supplyPolicy(ctx.cfg);
   const distance = Math.hypot(enemy.x - unit.x, enemy.y - unit.y);
