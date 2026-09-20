@@ -147,6 +147,21 @@ describe('战役页面：关卡 id 的多重兜底契约', () => {
     expect(ending).toContain('返回战役选择');
   });
 
+  it('ending.html 只在"浏览器禁止带声音自动播放"时才静音，换源会重新争取声音', () => {
+    // 回归点：曾经只要 play() 被拒就 muted = true 重试，结果两个很常见的失败
+    // （刚 load() 就 play() 的 AbortError 竞态、远端源加载失败的 NotSupportedError）
+    // 都会把视频**永久静音**——画面在放、就是没声音，别的页面却都正常。
+    const ending = read('ending.html');
+    // 全页只允许一处 muted = true，且必须在 NotAllowedError 分支里
+    expect(ending.match(/video\.muted = true/g)).toHaveLength(1);
+    expect(ending).toContain("err.name === 'NotAllowedError'");
+    // 切到仓库备份时先取消静音，否则第一源失败会把没声音带到备用源上
+    expect(ending).toMatch(/video\.muted = false;[\s\S]{0,160}video\.load\(\)/);
+    // 不能刚 load() 就 play()：那是 AbortError 竞态，会被上面的判断误当成"策略拦截"
+    expect(ending).toContain('function attemptPlay');
+    expect(ending).toContain('video.readyState >= 2');
+  });
+
   it('result.html 把渡江战役的胜利接到结局页', () => {
     const html = read('result.html');
     expect(html).toContain("var ENDING_LEVEL = 'dujiang_battle'");

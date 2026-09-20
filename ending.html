@@ -228,18 +228,44 @@
       // 兜底：1.5 秒还没就绪也先把遮罩内容亮出来，绝不停在纯黑上
       setTimeout(revealIntro, 1500);
 
-      // 播放尝试：带声音的自动播放被浏览器拒了（没有用户手势）→ 退到静音播。
-      // 静音自动播放一定放行，画面照常出，只是没有声音（不再弹"点击开启声音"按钮）。
-      // 连静音都播不了（素材坏了）→ 直接收场，别把用户留在遮罩里。
-      function playVideo() {
+      // 播放尝试。这里有两个"把声音弄丢"的坑，都踩过：
+      //   1. 刚 `video.load()` 就 `play()`：浏览器常以
+      //      AbortError（"play() request was interrupted by a new load request"）拒绝，
+      //      这是**加载竞态**，不是自动播放策略；
+      //   2. 远端素材加载失败时 play() 会以 NotSupportedError 拒绝。
+      // 老写法只要 play() 被拒就 `muted = true` 再试，于是上面两种情况下
+      // 视频会被永久静音（画面照放、就是没声音）。现在的规则：
+      //   · 先等到真有数据（loadeddata / canplay）再播，绕开竞态；
+      //   · **只有 NotAllowedError（浏览器不许带声音自动播放）才退到静音**；
+      //   · 其它失败原样重试，不动静音状态，真正的素材问题交给 error / 看门狗兜底。
+      function attemptPlay() {
         var p = video.play();
-        if (p && typeof p.catch === 'function') {
-          p.catch(function () {
+        if (!p || typeof p.catch !== 'function') return;
+        p.catch(function (err) {
+          if (err && err.name === 'NotAllowedError') {
+            // 没有用户手势 → 带声音的自动播放被禁，只能静音放（画面优先，不留黑屏）
             video.muted = true;
-            var p2 = video.play();
-            if (p2 && typeof p2.catch === 'function') p2.catch(endIntro);
-          });
-        }
+            var mutedRetry = video.play();
+            if (mutedRetry && typeof mutedRetry.catch === 'function') mutedRetry.catch(endIntro);
+            return;
+          }
+          // 加载竞态等：保持原样再试一次，千万别顺手静音
+          var retry = video.play();
+          if (retry && typeof retry.catch === 'function') {
+            retry.catch(function () { /* 交给 error 事件与看门狗处理 */ });
+          }
+        });
+      }
+
+      function playVideo() {
+        if (video.readyState >= 2) { attemptPlay(); return; } // 已经有画面，直接播
+        var onReady = function () {
+          video.removeEventListener('loadeddata', onReady);
+          video.removeEventListener('canplay', onReady);
+          attemptPlay();
+        };
+        video.addEventListener('loadeddata', onReady);
+        video.addEventListener('canplay', onReady);
       }
 
       if (video && video.getAttribute('src')) {
@@ -252,6 +278,7 @@
           if (fallbackUsed || !alt) return false;
           fallbackUsed = true;
           video.src = alt;
+          video.muted = false; // 换源要重新争取"带声音播放"，别把上一源的失败变成永久静音
           video.load();
           playVideo();
           return true;
