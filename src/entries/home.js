@@ -13,8 +13,8 @@ document.querySelector('#logoutButton')?.addEventListener('click', () => {
 });
 
 // UI 音效：菜单卡片
-// 悬停（放大缩小）→ 轻盈滑动音（满音量）；点击进入 → 重按钮音
+// 悬停（放大缩小）→ 轻盈滑动音（满音量）；点击进入 → 清脆鼠标咔哒声
 document.querySelectorAll('.home-card').forEach((card) => {
   card.addEventListener('mouseenter', () => window.playSfx?.('slide'));
-  card.addEventListener('click', () => window.playSfx?.('button'));
+  card.addEventListener('click', () => window.playSfx?.('mouseClick'));
 });

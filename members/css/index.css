@@ -73,7 +73,10 @@ html, body {
 .menu-panel {
   position: absolute;
   left: 50px;
-  top: 250px;
+  /* 用百分比跟随背景图等比缩放：背景图里"解放战争沙盘推演"小字底部
+     约在区块高度的 34%（cover 缩放，全屏 768p/1080p/1440p 实测一致），
+     top:250px 在全屏时会压住小字；37% 起步各分辨率下都留有余量 */
+  top: 37%;
 }
 .home-actions {
   display: flex;

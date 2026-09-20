@@ -6,7 +6,7 @@
   <link rel="stylesheet" href="/styles.css">
 </head>
 <body class="game-fullscreen">
-  <!-- 左上角计时器（独立于原 #timer 元素，自己跑 setInterval） -->
+  <!-- 左上角计时器：由 src/rendering/hud.js 的 renderTimer 驱动 world.time（受暂停/加速控制） -->
   <div class="vg-clock-panel" id="vgClockPanel">
     <span id="vgClockText">00:00</span>
   </div>
@@ -36,25 +36,12 @@
         <div class="panel-heading tech-title"><span>城市状态</span><em>CITY</em></div>
         <div class="status-card" id="cityCard"></div>
       </aside>
-      <!-- 左侧任务面板（悬浮 HUD，CSS 定位） -->
+      <!-- 左侧任务面板（悬浮 HUD，任务条目由 hud.js 按关卡任务规则动态注入） -->
       <aside class="vg-task-panel" aria-label="任务">
         <div class="vg-task-title">
           <span class="vg-task-title-text">任务</span>
         </div>
-        <ul class="vg-task-list">
-          <li class="vg-task-item">
-            <span class="vg-task-tri"></span>
-            <span class="vg-task-card">攻占塔山堡，封锁敌军增援通道</span>
-          </li>
-          <li class="vg-task-item">
-            <span class="vg-task-tri"></span>
-            <span class="vg-task-card">切断锦西至沈阳铁路补给线</span>
-          </li>
-          <li class="vg-task-item vg-task-done">
-            <span class="vg-task-tri"></span>
-            <span class="vg-task-card">完成部队集结与火力配置</span>
-          </li>
-        </ul>
+        <ul class="vg-task-list"></ul>
       </aside>
       <section class="battlefield-wrap">
         <div class="battlefield-head">
@@ -92,25 +79,18 @@
   <script src="/audio.js"></script>
   <script src="/tutorial.js"></script>
   <script>
-    // UI 音效：暂停 / 速度切换 / 主菜单 / 返回编辑器 / 重新开始
+    // UI 音效：暂停 / 速度切换 / 主菜单 / 缩放复位 / 返回编辑器 / 重新开始
     window.bindSfx && window.bindSfx({
       '#pauseButton': 'button',
       '.speed-controls button': 'toggle',
       '.editor-link': 'click',
+      '#zoomReset': 'button',
       '#exitPlaytest': 'click',
       '#restartButton': 'button'
     });
-    // 任务面板：点击 sanjiaoxing 切换任务行隐藏/显示
-    document.querySelectorAll('.vg-task-tri').forEach(tri => {
-      tri.style.cursor = 'pointer';
-      tri.addEventListener('click', (e) => {
-        e.stopPropagation();
-        const item = tri.closest('.vg-task-item');
-        const card = item?.querySelector('.vg-task-card');
-        if (!card) return;
-        card.style.display = (card.style.display === 'none') ? '' : 'none';
-      });
-    });
+    // 注：任务面板（vg-task-list）与左上角计时器（#vgClockText）现由 src/rendering/hud.js
+    // 的 renderMission / renderTimer 驱动真实游戏数据（world.mess 任务规则 + world.time）。
+    // 三角点击绑定也在 hud.js 重建列表时重绑，此处不再重复。
     // 战场通讯：监听 #eventLog 子节点变化时显示 4s 后渐隐消失
     (function() {
       const feed = document.querySelector('.feed-overlay');
@@ -130,18 +110,6 @@
         // 过滤掉只是 textContent 变化的；只要新增 child 才显示
         if (muts.some(m => m.addedNodes.length > 0)) showAndFade();
       }).observe(log, { childList: true });
-    })();
-    // 左上角计时器：每秒 +1
-    (function() {
-      const el = document.getElementById('vgClockText');
-      if (!el) return;
-      const start = Date.now();
-      const fmt = (ms) => {
-        const s = Math.floor(ms / 1000);
-        return String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0');
-      };
-      el.textContent = fmt(0);
-      setInterval(() => { el.textContent = fmt(Date.now() - start); }, 1000);
     })();
   </script>
   <script type="module" src="/src/auth.js"></script>

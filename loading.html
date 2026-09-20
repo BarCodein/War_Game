@@ -133,25 +133,6 @@
       text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
     }
 
-    /* 左右箭头（相框两侧，参考图样式） */
-    .frame-arrow {
-      position: absolute;
-      top: 48%;
-      transform: translateY(-50%);
-      background: transparent;
-      border: none;
-      color: #8c6b2c;
-      font-size: 3.2rem;
-      line-height: 1;
-      cursor: pointer;
-      opacity: 0.55;
-      padding: 10px 14px;
-      text-shadow: 0 2px 8px rgba(0, 0, 0, 0.9);
-      transition: opacity 0.2s, color 0.2s;
-    }
-    .frame-arrow:hover { opacity: 1; color: #d8b97a; }
-    .frame-arrow-left { left: 10px; }
-    .frame-arrow-right { right: 10px; }
   </style>
 </head>
 <body>
@@ -195,10 +176,6 @@
 
     <!-- 左下角加载提示 -->
     <div class="loading-hint">加载中</div>
-
-    <!-- 左右箭头（相框两侧） -->
-    <button class="frame-arrow frame-arrow-left" type="button" aria-label="上一张">‹</button>
-    <button class="frame-arrow frame-arrow-right" type="button" aria-label="下一张">›</button>
 
   </div>
 

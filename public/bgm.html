@@ -1,0 +1,114 @@
+<!doctype html>
+<!--
+  bgm.html — 全局 BGM 播放器（被各非游玩页面通过 <iframe> 嵌入）
+
+  设计要点：
+  1. 单 audio 元素 + loop=true，无缝循环
+  2. 跨页"接力"：每个页面都嵌入一个本 iframe；通过 localStorage 共享
+     播放位置（currentTime）。新页面创建的 iframe 加载后从
+     localStorage 读取上次的 currentTime 续播，弥补页面切换的断裂。
+  3. 默认自动播放：除用户显式暂停过之外，进入任何带 BGM 控件的页面都
+     自动播放（不需要先点页面）。这是通过 audio.muted + 立即 play
+     来"骗过" Chrome autoplay 策略实现的——同源/同 frame 的 muted
+     audio 允许自动播放。
+  4. UI 控件（播放/暂停按钮）由父页面通过 postMessage 操控；本页面
+     不渲染可见控件（保持极简，0×0 不可见）。
+-->
+<html>
+<head>
+<meta charset="UTF-8">
+<title>BGM</title>
+<style>
+  html, body { margin: 0; padding: 0; background: transparent; }
+  body { display: none; } /* 不可见 */
+</style>
+</head>
+<body>
+<audio id="bgm" src="/assets/bgm/jiangshanruciduojiao.mp3" loop preload="auto" muted></audio>
+<script>
+(function () {
+  'use strict';
+  var audio = document.getElementById('bgm');
+  audio.volume = 0.4;
+  var STORAGE_KEY = 'war-of-dots.bgm';
+
+  // 加载时从 localStorage 接力
+  try {
+    var saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
+    if (saved && typeof saved.t === 'number') {
+      audio.currentTime = saved.t;
+    }
+    // muted=true 时 autoplay 一定成功（即使没 user activation），先把播放跑起来
+    if (saved && saved.paused) {
+      // 用户曾显式暂停过 → 保持暂停，不自动播
+      audio.muted = true;
+      // 不调 play()
+    } else {
+      // 默认：尝试自动播
+      var p = audio.play();
+      if (p && p.catch) p.catch(function () {});
+    }
+  } catch (e) {
+    // localStorage 读失败：直接尝试自动播
+    var p2 = audio.play();
+    if (p2 && p2.catch) p2.catch(function () {});
+  }
+
+  // 解除静音：一旦父页面给 start 信号或用户首次与父页面交互，
+  // 才把 audio.muted 设为 false，让用户真正听到声音
+  function unmute() {
+    audio.muted = false;
+  }
+
+  // 持续上报播放位置（让下一个接力的 iframe 能续上）
+  setInterval(function () {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({
+        t: audio.currentTime || 0,
+        paused: audio.paused,
+        muted: audio.muted
+      }));
+    } catch (e) {}
+  }, 500);
+
+  // 父页面 postMessage 协议：
+  //   { cmd: 'start' }     — 用户首次交互后解锁（unmute + play）
+  //   { cmd: 'play' }      — 播放
+  //   { cmd: 'pause' }     — 暂停
+  //   { cmd: 'toggle' }    — 切换播放/暂停
+  //   { cmd: 'status' }    — 查询状态
+  window.addEventListener('message', function (e) {
+    var msg = e.data;
+    if (!msg || typeof msg !== 'object') return;
+    if (msg.cmd === 'start' || msg.cmd === 'play') {
+      unmute();
+      var p = audio.play();
+      if (p && p.catch) p.catch(function () {});
+    } else if (msg.cmd === 'pause') {
+      audio.pause();
+    } else if (msg.cmd === 'toggle') {
+      if (audio.paused) {
+        unmute();
+        var p2 = audio.play();
+        if (p2 && p2.catch) p2.catch(function () {});
+      } else {
+        audio.pause();
+      }
+    } else if (msg.cmd === 'status') {
+      try {
+        e.source && e.source.postMessage({
+          cmd: 'status',
+          paused: audio.paused,
+          t: audio.currentTime || 0,
+          muted: audio.muted
+        }, '*');
+      } catch (err) {}
+    }
+  });
+
+  // 通知父页面：iframe 已就绪
+  try { parent.postMessage({ cmd: 'ready' }, '*'); } catch (e) {}
+})();
+</script>
+</body>
+</html>

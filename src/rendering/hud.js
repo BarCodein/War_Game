@@ -45,7 +45,13 @@ export function createHud(scene, world, controller, selection, orders) {
     missionEyebrow: document.querySelector('#missionEyebrow'),
     missionLevelName: document.querySelector('#missionLevelName'),
     tacticalEyebrow: document.querySelector('#tacticalEyebrow'),
-    victoryConditions: document.querySelector('#victoryConditions'),
+    // 复古全屏 HUD（game.html 里手写的三个浮层元素）：
+    //   vg-task-list  左侧任务面板条目容器（由 renderMission 驱动真实任务数据）
+    //   vgClockText   左上角计时器（由 renderTimer 驱动 world.time，非自跑）
+    //   vgTaskPanel   任务面板整体（无任务时隐藏）
+    vgTaskPanel: document.querySelector('.vg-task-panel'),
+    vgTaskList: document.querySelector('.vg-task-list'),
+    vgClockText: document.querySelector('#vgClockText'),
   };
 
   // 动态设置关卡名称（从 level JSON 读取，替代 HTML 硬编码）
@@ -72,6 +78,12 @@ export function createHud(scene, world, controller, selection, orders) {
 
   // 顶栏
   els.pauseButton.addEventListener('click', () => controller.togglePause());
+  // 编队列表（事件委托，innerHTML 重建后无需重绑）
+  if (els.unitList) {
+    els.unitList.addEventListener('click', (e) => {
+      if (e.target.closest('.unit-card')) window.playSfx?.('tap');
+    });
+  }
   for (const button of els.speedButtons) {
     button.addEventListener('click', () => controller.setSpeed(Number(button.dataset.speed)));
   }
@@ -196,6 +208,9 @@ export function createHud(scene, world, controller, selection, orders) {
   // 信标取自地图 objectives（编辑器试玩地图可能无任务，此时隐藏任务面板）。
   function renderMission() {
     const objective = world.map.objectives.find(item => item.type === 'captureCity');
+    // 复古全屏 HUD：左侧任务面板（vg-task-list）由真实任务数据驱动，覆盖旧的内嵌 missionPanel。
+    renderVgTasks();
+
     if (!objective) {
       els.missionPanel.style.display = 'none';
       return;
@@ -232,6 +247,111 @@ export function createHud(scene, world, controller, selection, orders) {
     els.missionProgress.style.width = `${percent}%`;
   }
 
+  // ---------- 复古全屏任务面板（vg-task-list）----------
+  // 从 world.mess（buildMission 产出的任务规则）与 world 实时状态生成任务条目。
+  // 无任务规则（沙盒/编辑器试玩/纯失城判负）时隐藏整块面板。
+  // 每条任务 = { done, text }，其中 text 用 i18n 键查表，实时 done 用状态回填。
+  const vgTaskStates = { lastSignature: null, hidden: new Set() };
+  function renderVgTasks() {
+    const panel = els.vgTaskPanel;
+    const list = els.vgTaskList;
+    if (!panel || !list) return;
+    const mess = world.mess;
+
+    // 无任务规则 → 隐藏任务面板（旧 missionPanel 已有类似逻辑）
+    if (!mess) {
+      panel.style.display = 'none';
+      return;
+    }
+    panel.style.display = '';
+
+    const tasks = buildVgTasks(mess);
+    // 用签名比对避免每帧重写 innerHTML（会打断用户点击三角的交互状态）。
+    // 签名必须包含 done 与文案全文：文案里有实时数字（剩余时间/据点数/歼灭数），
+    // 数字变化也要触发重写，否则计时会"卡住"。
+    const signature = tasks.map(task => `${task.done ? 1 : 0}:${task.text}`).join('|');
+    if (signature === vgTaskStates.lastSignature) return;
+    vgTaskStates.lastSignature = signature;
+
+    list.innerHTML = tasks.map((task, i) => `
+      <li class="vg-task-item ${task.done ? 'vg-task-done' : ''}">
+        <span class="vg-task-tri"></span>
+        <span class="vg-task-card" ${vgTaskStates.hidden.has(i) ? 'style="display:none"' : ''}>${task.text}</span>
+      </li>`).join('');
+
+    // 重新绑定三角点击（innerHTML 重建后旧监听丢失）——隐藏/显示该条任务
+    list.querySelectorAll('.vg-task-tri').forEach((tri, i) => {
+      tri.style.cursor = 'pointer';
+      tri.addEventListener('click', (e) => {
+        e.stopPropagation();
+        window.playSfx?.('tap');
+        const card = tri.closest('.vg-task-item')?.querySelector('.vg-task-card');
+        if (!card) return;
+        const hidden = card.style.display === 'none';
+        card.style.display = hidden ? '' : 'none';
+        if (hidden) vgTaskStates.hidden.delete(i);
+        else vgTaskStates.hidden.add(i);
+      });
+    });
+  }
+
+  // 按任务规则 mode 生成真实任务文案（defend 坚守 / attack 夺取 / annihilative 消灭）。
+  // 文案走 i18n（vg.* 键），实时 done 按当前据点归属 / 时限 / 歼灭目标回填。
+  function buildVgTasks(mess) {
+    const fac = mess.faction;          // 玩家视角阵营（defend=防守方，attack/annihilative=我方）
+    const enemy = fac === 'blue' ? 'red' : 'blue';
+    const timeLimit = Number.isFinite(mess.time) ? Math.max(0, Math.round(mess.time)) : null;
+    const points = mess.points ?? [];
+    const tasks = [];
+
+    if (mess.mode === 'defend') {
+      const held = points.filter(p => p.faction === fac).length;
+      const total = points.length;
+      const timeLeft = timeLimit != null ? Math.max(0, timeLimit - Math.floor(world.time)) : null;
+      tasks.push({
+        done: total > 0 && held === total,
+        text: t('vg.mission.defendHold', { held, total }),
+      });
+      if (timeLeft != null) {
+        tasks.push({
+          done: world.winner === fac,
+          text: t('vg.mission.defendSurvive', { time: formatTime(timeLeft) }),
+        });
+      }
+    } else if (mess.mode === 'attack') {
+      const captured = points.filter(p => p.faction === fac).length;
+      const total = points.length;
+      tasks.push({
+        done: total > 0 && captured === total,
+        text: t('vg.mission.attackCapture', { captured, total }),
+      });
+      if (timeLimit != null) {
+        tasks.push({
+          done: world.winner === fac,
+          text: t('vg.mission.attackBefore', { time: formatTime(Math.max(0, timeLimit - Math.floor(world.time))) }),
+        });
+      }
+    } else if (mess.mode === 'annihilative') {
+      const targets = world.units.filter(unit => unit.faction === enemy && unit.objective === 'annihilate');
+      const alive = targets.filter(unit => unit.state !== 'dead').length;
+      tasks.push({
+        done: targets.length > 0 && alive === 0,
+        text: t('vg.mission.annihilate', { alive, total: targets.length }),
+      });
+    }
+
+    // 始终补一条通用目标（消灭敌军 / 守住基地），让面板不至于只有孤零零一条
+    const baseCity = world.cities.find(city => city.faction === fac);
+    tasks.push({
+      done: world.winner === fac,
+      text: baseCity
+        ? t('vg.mission.holdBase', { city: baseCity.id })
+        : t('vg.mission.eliminateEnemy'),
+    });
+
+    return tasks;
+  }
+
   function objectiveCompleted(toastKey, eventKey) {
     showToast(t(toastKey));
     els.eventLog.insertAdjacentHTML('afterbegin', `
@@ -249,16 +369,90 @@ export function createHud(scene, world, controller, selection, orders) {
     els.eventLog.insertAdjacentHTML('afterbegin', items.reverse().map(item => `
       <p><time>${formatTime(item.time)}</time><span class="event-tag ${item.tag}">${item.tag}</span>${item.text}</p>`).join(''));
     while (els.eventLog.children.length > 8) els.eventLog.lastElementChild.remove();
+    // 战斗音效：据点易主 → 爆炸音（不分敌我，自己夺回来也播）
+    for (const event of entries) {
+      if (event.type === 'capturePointCaptured') {
+        window.playSfx?.('explosion');
+        break; // 单帧多事件只播一次
+      }
+    }
   }
 
   function formatEvent(event) {
     if (event.type === 'cityCaptured') {
       return { tag: 'OK', time: event.at, text: t('event.cityCaptured', { faction: t(`faction.${event.faction}`), city: '信标' }) };
     }
+    if (event.type === 'capturePointCaptured') {
+      return { tag: 'OK', time: event.at, text: t('event.pointCaptured', { faction: t(`faction.${event.faction}`), point: event.pointId }) };
+    }
     if (event.type === 'unitDied' && event.cause === 'surrender') {
       return { tag: 'WARN', time: event.at, text: t('event.surrender') };
     }
     return null;
+  }
+
+  // ---------- 战斗音效 ----------
+  // 规则：
+  //   1. 任一存活单位 state==='combat' → 每隔 BLADE_INTERVAL ms 播一次 blade（白刃战循环音）
+  //   2. 上一帧有战斗、这一帧战斗结束 → 立即停（自然衰减）
+  //   3. world.history 新增的 unitDied/cause==='combat' 事件 → 播一次 hurt（击杀音）
+  // 实现：
+  //   - 独立的 setInterval（80ms 检查一次），不依赖 hud 的节流刷新（hud 100ms+ 一次，
+  //     跟音频循环节奏不齐，会出现节奏抖动）
+  //   - 死亡事件直接从 world.history 增量读取（与 renderEvents 同一份增量，
+  //     不重复触发）
+  const BLADE_INTERVAL = 1500; // 毫秒；combat 状态下 blade 的循环间隔（用户要求更长间隔）
+  const COMBAT_CHECK_INTERVAL = 80; // 检查战斗状态的频率
+  const combatSfx = {
+    bladeTimer: null,
+    inCombatLastCheck: false,
+    lastBladeAt: 0,
+  };
+
+  function isInCombat() {
+    for (const u of world.units) {
+      if (u.state === 'combat') return true;
+    }
+    return false;
+  }
+
+  function checkCombatSfx() {
+    const inCombat = isInCombat();
+    if (!inCombat) {
+      // 战斗结束（或从未开打）：blade 自然停止，无需额外操作
+      combatSfx.inCombatLastCheck = false;
+      return;
+    }
+    const now = performance.now();
+    if (now - combatSfx.lastBladeAt >= BLADE_INTERVAL) {
+      window.playSfx?.('blade');
+      combatSfx.lastBladeAt = now;
+    }
+    combatSfx.inCombatLastCheck = true;
+  }
+
+  function checkDeathSfx() {
+    // 增量读 world.history（用独立的 lastDeathIndex，与 renderEvents 互不影响）
+    if (!combatSfx.lastDeathIndex) combatSfx.lastDeathIndex = 0;
+    const newEvents = world.history.slice(combatSfx.lastDeathIndex);
+    combatSfx.lastDeathIndex = world.history.length;
+    // 单帧多单位同时阵亡只播一次 hurt（避免叠加噪音）
+    let anyCombatDeath = false;
+    for (const event of newEvents) {
+      if (event.type === 'unitDied' && event.cause === 'combat') {
+        anyCombatDeath = true;
+      }
+    }
+    if (anyCombatDeath) window.playSfx?.('hurt');
+  }
+
+  // 启动两个独立定时器（用变量保存 ID，createHud 返回时由调用方清理）
+  const combatSfxIntervals = [
+    setInterval(checkCombatSfx, COMBAT_CHECK_INTERVAL),
+    setInterval(checkDeathSfx, values.performance.hudRefreshMs),
+  ];
+  function clearCombatSfx() {
+    combatSfxIntervals.forEach(clearInterval);
   }
 
   function formatTime(seconds) {
@@ -269,7 +463,10 @@ export function createHud(scene, world, controller, selection, orders) {
 
   // 计时与顶栏
   function renderTimer() {
-    els.timer.textContent = formatTime(world.time);
+    const text = formatTime(world.time);
+    els.timer.textContent = text;
+    // 左上角复古计时器（vgClockText）同步 world.time，受暂停/加速控制，与战场节奏一致
+    if (els.vgClockText) els.vgClockText.textContent = text;
   }
 
   function renderTopBarUI() {
@@ -388,5 +585,10 @@ export function createHud(scene, world, controller, selection, orders) {
   renderTopBarUI(); // 初始渲染（不弹 toast）
   renderVictoryConditions();
 
-  return { update, showToast };
+  // 暴露 destroy 方法：GameScene 在 SHUTDOWN 时调用，清理战斗音效的 setInterval
+  function destroy() {
+    clearCombatSfx();
+  }
+
+  return { update, showToast, destroy };
 }
