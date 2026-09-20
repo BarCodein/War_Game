@@ -56,18 +56,21 @@ function defendVictory(world, mess) {
 }
 
 // 进攻胜利判定：mess.faction 指进攻方
-// - 时限内拿下全部据点（mess.points 全部归属进攻方）→ 进攻方胜
+// - 拿下全部据点（mess.points 全部归属进攻方）→ 进攻方胜
 // - 超过时限仍未拿下 → 另一方（防守方）胜
+// ⚠️ 顺序要紧：**先判据点、再判超时**。反过来的话，"刚好在时限那一 tick 拿下最后一个据点"
+//    会被超时分支判成失败——玩家明明赢了却看到失败结算（渡江战役实测踩到）。
 function attackVictory(world, mess) {
   if (world.winner || !mess) return;
   const fac = mess.faction;
-  if (Number.isFinite(mess.time) && world.time > mess.time) {
-    endGame(world, fac === 'blue' ? 'red' : 'blue');
+  const points = mess.points ?? [];
+  if (points.length > 0 && points.every(point => point.faction === fac)) {
+    endGame(world, fac);
     return;
   }
-  const points = mess.points ?? [];
-  if (points.length === 0) return; // 没有可争夺的据点 → 不做任务判定
-  if (points.every(point => point.faction === fac)) endGame(world, fac);
+  if (Number.isFinite(mess.time) && world.time > mess.time) {
+    endGame(world, fac === 'blue' ? 'red' : 'blue');
+  }
 }
 
 // 歼灭判定：mess.faction 指我方；胜利条件是**消灭全部指定单位**（而不是消灭全部敌军）。

@@ -54,6 +54,24 @@
                        "difficulty":  "教学",
                        "order":  6,
                        "description":  "阻止黄维兵团北进增援徐州战场，将其歼灭在双堆集"
+                   },
+                   {
+                       "id":  "dujiang_battle",
+                       "name":  "渡江战役",
+                       "subtitle":  "DUJIANG BATTLE",
+                       "type":  "offensive",
+                       "difficulty":  "普通",
+                       "order":  7,
+                       "description":  "突破国民党军长江防线，夺取南京正面渡口并解放南京"
+                   },
+                   {
+                       "id":  "pingjin_battle",
+                       "name":  "平津战役",
+                       "subtitle":  "PINGJIN BATTLE",
+                       "type":  "offensive",
+                       "difficulty":  "普通",
+                       "order":  8,
+                       "description":  "先打两头、后取中间：限时攻克天津、夺取张家口，促成北平和平解放"
                    }
                ]
 }

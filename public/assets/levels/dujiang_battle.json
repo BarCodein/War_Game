@@ -1,0 +1,222 @@
+{
+  "version": 1,
+  "id": "dujiang_battle",
+  "name": "渡江战役",
+  "subtitle": "DUJIANG BATTLE",
+  "type": "offensive",
+  "difficulty": "普通",
+  "order": 7,
+  "description": "突破国民党军长江防线，解放南京（渡口 p8 是绕不开的战术要点，但不计入胜负判定）。",
+  "map": "/assets/maps/dujiang.json",
+
+  "anchors": {
+    "nanjing": { "cityId": "c18" },
+    "nanjingFord": { "capturePointId": "p8" },
+    "riverLineCenter": { "spawnId": "s46" },
+    "riverLineWest": { "spawnId": "s44" },
+    "riverLineEast": { "spawnId": "s45" },
+    "westBank": { "spawnId": "s41" },
+    "eastBank": { "spawnId": "s42" },
+    "eastReserve": { "spawnId": "s43" },
+    "northMain": { "spawnId": "s38" },
+    "northWest": { "spawnId": "s37" },
+    "northEast": { "spawnId": "s34" },
+    "redDepth": { "spawnId": "s32" }
+  },
+
+  "forces": [
+    {
+      "faction": "blue",
+      "group": "crossingWest",
+      "at": { "anchor": "northWest" },
+      "units": [
+        { "type": "light", "count": 4, "spacing": { "x": 32, "y": 0 } },
+        { "type": "heavy", "count": 2, "offset": { "x": 0, "y": 42 }, "spacing": { "x": 32, "y": 0 } }
+      ]
+    },
+    {
+      "faction": "blue",
+      "group": "crossingMain",
+      "at": { "anchor": "northMain" },
+      "units": [
+        { "type": "light", "count": 5, "spacing": { "x": 32, "y": 0 } },
+        { "type": "heavy", "count": 3, "offset": { "x": 0, "y": -42 }, "spacing": { "x": 32, "y": 0 } }
+      ]
+    },
+    {
+      "faction": "blue",
+      "group": "crossingEast",
+      "at": { "anchor": "northEast" },
+      "units": [
+        { "type": "light", "count": 4, "spacing": { "x": 32, "y": 0 } },
+        { "type": "heavy", "count": 2, "offset": { "x": 0, "y": 42 }, "spacing": { "x": 32, "y": 0 } }
+      ]
+    },
+
+    {
+      "faction": "red",
+      "group": "nanjingLine",
+      "at": { "anchor": "riverLineCenter" },
+      "units": [
+        { "type": "heavy", "count": 2, "spacing": { "x": 30, "y": 0 } },
+        { "type": "light", "count": 1, "offset": { "x": 0, "y": 36 }, "spacing": { "x": 30, "y": 0 } }
+      ]
+    },
+    {
+      "faction": "red",
+      "group": "nanjingMobile",
+      "at": { "anchor": "nanjing" },
+      "units": [
+        { "type": "heavy", "count": 1, "spacing": { "x": 32, "y": 0 } },
+        { "type": "light", "count": 1, "offset": { "x": 0, "y": 34 }, "spacing": { "x": 32, "y": 0 } }
+      ]
+    },
+    {
+      "faction": "red",
+      "group": "westLine",
+      "at": { "anchor": "riverLineWest" },
+      "units": [
+        { "type": "heavy", "count": 1, "spacing": { "x": 30, "y": 0 } },
+        { "type": "light", "count": 2, "offset": { "x": 0, "y": 36 }, "spacing": { "x": 30, "y": 0 } }
+      ]
+    },
+    {
+      "faction": "red",
+      "group": "eastLine",
+      "at": { "anchor": "riverLineEast" },
+      "units": [
+        { "type": "heavy", "count": 1, "spacing": { "x": 30, "y": 0 } },
+        { "type": "light", "count": 2, "offset": { "x": 0, "y": 36 }, "spacing": { "x": 30, "y": 0 } }
+      ]
+    },
+    {
+      "faction": "red",
+      "group": "flankWest",
+      "at": { "anchor": "westBank" },
+      "units": [
+        { "type": "heavy", "count": 1, "spacing": { "x": 30, "y": 0 } },
+        { "type": "light", "count": 2, "offset": { "x": 0, "y": 36 }, "spacing": { "x": 30, "y": 0 } }
+      ]
+    },
+    {
+      "faction": "red",
+      "group": "flankEast",
+      "at": { "anchor": "eastBank" },
+      "units": [
+        { "type": "heavy", "count": 1, "spacing": { "x": 30, "y": 0 } },
+        { "type": "light", "count": 2, "offset": { "x": 0, "y": 36 }, "spacing": { "x": 30, "y": 0 } }
+      ]
+    },
+    {
+      "faction": "red",
+      "group": "reserveEast",
+      "at": { "anchor": "eastReserve" },
+      "units": [
+        { "type": "light", "count": 2, "offset": { "x": -44, "y": 0 }, "spacing": { "x": 32, "y": 0 } }
+      ]
+    },
+    {
+      "faction": "red",
+      "group": "reserveWest",
+      "at": { "anchor": "redDepth" },
+      "units": [
+        { "type": "light", "count": 2, "spacing": { "x": 32, "y": 0 } }
+      ]
+    }
+  ],
+
+  "ai": {
+    "faction": "red",
+    "preset": "cautious",
+    "fallback": { "anchor": "nanjing" },
+    "triggers": [
+      {
+        "id": "defend_river_line",
+        "at": { "time": 0 },
+        "actions": [
+          { "type": "hold", "units": { "group": "nanjingLine" } },
+          { "type": "hold", "units": { "group": "nanjingMobile" } },
+          { "type": "hold", "units": { "group": "westLine" } },
+          { "type": "hold", "units": { "group": "eastLine" } },
+          { "type": "hold", "units": { "group": "flankWest" } },
+          { "type": "hold", "units": { "group": "flankEast" } },
+          { "type": "hold", "units": { "group": "reserveEast" } },
+          { "type": "hold", "units": { "group": "reserveWest" } }
+        ]
+      }
+    ],
+    "rules": [
+      {
+        "id": "ford_lost",
+        "when": { "capturePoint": "p8", "owner": "enemy" },
+        "repeatEvery": 25,
+        "then": [
+          { "type": "attackNearest", "units": { "group": "nanjingMobile" } },
+          { "type": "engage", "target": { "anchor": "nanjingFord" }, "units": { "group": "eastLine" } },
+          { "type": "engage", "target": { "anchor": "nanjingFord" }, "units": { "group": "flankEast" } },
+          { "type": "engage", "target": { "anchor": "nanjingFord" }, "units": { "group": "reserveEast" } }
+        ],
+        "otherwise": [
+          { "type": "attackMove", "target": { "anchor": "nanjing" }, "units": { "group": "nanjingMobile" } }
+        ]
+      },
+      {
+        "id": "west_point_lost",
+        "when": { "city": "c28", "owner": "enemy" },
+        "repeatEvery": 25,
+        "then": [
+          { "type": "attackNearest", "units": { "group": "nanjingMobile" } },
+          { "type": "engage", "target": { "cityId": "c28" }, "units": { "group": "flankWest" } },
+          { "type": "engage", "target": { "cityId": "c28" }, "units": { "group": "reserveWest" } }
+        ],
+        "otherwise": [
+          { "type": "attackMove", "target": { "anchor": "nanjing" }, "units": { "group": "nanjingMobile" } }
+        ]
+      },
+      {
+        "id": "east_point_lost",
+        "when": { "capturePoint": "p11", "owner": "enemy" },
+        "repeatEvery": 25,
+        "then": [
+          { "type": "attackNearest", "units": { "group": "nanjingMobile" } },
+          { "type": "engage", "target": { "capturePointId": "p11" }, "units": { "group": "flankEast" } }
+        ],
+        "otherwise": [
+          { "type": "attackMove", "target": { "anchor": "nanjing" }, "units": { "group": "nanjingMobile" } }
+        ]
+      },
+      {
+        "id": "nanjing_contested",
+        "when": { "capturePoint": "p9", "owner": "enemy" },
+        "repeatEvery": 20,
+        "then": [
+          { "type": "attackNearest", "units": { "group": "nanjingMobile" } },
+          { "type": "engage", "target": { "anchor": "nanjing" }, "units": { "group": "nanjingLine" } },
+          { "type": "engage", "target": { "anchor": "nanjing" }, "units": { "group": "westLine" } },
+          { "type": "engage", "target": { "anchor": "nanjing" }, "units": { "group": "eastLine" } },
+          { "type": "engage", "target": { "anchor": "nanjing" }, "units": { "group": "flankWest" } },
+          { "type": "engage", "target": { "anchor": "nanjing" }, "units": { "group": "flankEast" } }
+        ],
+        "otherwise": [
+          { "type": "attackMove", "target": { "anchor": "nanjing" }, "units": { "group": "nanjingMobile" } }
+        ]
+      },
+      {
+        "id": "nanjing_lost",
+        "when": { "city": "c18", "owner": "enemy" },
+        "then": [
+          { "type": "engage", "target": { "anchor": "nanjing" } }
+        ]
+      },
+      {
+        "id": "consolidate_when_weak",
+        "when": { "ownUnitsBelow": 12 },
+        "then": [
+          { "type": "engage", "target": { "anchor": "nanjing" } }
+        ]
+      }
+    ]
+  },
+
+  "victory": { "mode": "attack", "faction": "blue", "points": ["p9"] }
+}
