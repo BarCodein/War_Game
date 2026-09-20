@@ -1,4 +1,4 @@
-// ============================================================
+﻿// ============================================================
 // 睡衣登山大赛 - 横板爬山跑酷 (像素风)
 // 主角: 穿睡衣的士兵 | 武器: 步枪 + 大刀
 // 目标: 在规定时间内爬上山顶
@@ -554,27 +554,15 @@ let rockTimer = rand(150, 300)
 // ---------- 成就系统 ----------
 const CLIMB_STATS_KEY = 'war-of-dots.climb-stats'
 const CLIMB_ACHIEVEMENTS = [
-  { id: 'climb-first-checkpoint', name: '初露锋芒', stars: 1, desc: '到达第一个检查点，登山之路迈出坚实的第一步。', hint: '到达第一个检查点' },
-  { id: 'climb-veteran', name: '登山达人', stars: 2, desc: '累计登顶三次，睡衣登山界的常客。', hint: '累计登顶3次' },
+  { id: 'climb-veteran', name: '捉蒋大师', stars: 2, desc: '累计登顶三次，捉蒋行动的老手。', hint: '累计登顶3次' },
   { id: 'climb-speedster', name: '极速攀登', stars: 3, desc: '60秒内登顶，风一般的男子。', hint: '60秒内登顶' },
-  { id: 'climb-barehand', name: '赤手空拳', stars: 2, desc: '不射击也不挥刀，仅凭拳脚登顶。', hint: '不射击也不使用大刀通关' },
-  { id: 'climb-lucky', name: '幸运儿', stars: 1, desc: '全程未受任何伤害就登顶，运气也是实力的一部分。', hint: '单局不被任何伤害通关' },
-  { id: 'climb-comeback', name: '越挫越勇', stars: 2, desc: '单局死亡3次以上仍登顶，不屈不挠。', hint: '单局死亡3次以上仍登顶' },
   { id: 'climb-rock-kill', name: '大石碎胸口', stars: 1, desc: '引导敌人被天降巨石砸死，借刀杀人。', hint: '引导敌人被落石砸死' },
   { id: 'climb-peaceful', name: '和平解决', stars: 2, desc: '不杀一个敌人就登顶，以和为贵。', hint: '不击杀任何敌人通关' },
   { id: 'climb-sword-only', name: '大刀进行曲', stars: 2, desc: '仅用大刀通关，子弹一颗不发。', hint: '仅用大刀通关（不射击）' },
-  { id: 'climb-sharpshooter', name: '神射手', stars: 2, desc: '每一发子弹都命中敌人，弹无虚发。', hint: '射击命中率100%通关' },
-  { id: 'climb-collector', name: '收藏家', stars: 1, desc: '到达全部检查点，一个不落。', hint: '到达所有检查点' },
-  { id: 'climb-expert-killer', name: '歼敌专家', stars: 2, desc: '单局击杀10个以上敌人，战功赫赫。', hint: '单局击杀10个以上' },
   { id: 'climb-champion', name: '睡衣登山大赛冠军', stars: 3, desc: '在西安事变的登山小游戏里登顶成功。', hint: '登顶成功' },
   { id: 'climb-speedrun', name: '神兵天降', stars: 2, desc: '90秒内快速登顶，兵贵神速。', hint: '90秒内登顶' },
   { id: 'climb-flawless', name: '毫发无伤', stars: 3, desc: '全程零死亡登顶，身法如仙。', hint: '零死亡登顶' },
   { id: 'climb-slaughter', name: '斩尽杀绝', stars: 2, desc: '击杀沿途所有敌人，一个不留。', hint: '击杀所有敌人' },
-  { id: 'climb-melee', name: '刀枪不入', stars: 1, desc: '不发射一颗子弹，只用大刀通关。', hint: '不射击通关' },
-  { id: 'climb-persistent', name: '屡败屡战', stars: 1, desc: '失败后再次挑战，最终登顶成功。', hint: '失败后最终登顶' },
-  { id: 'climb-rocked', name: '机械降神', stars: 1, desc: '被从天而降的巨石砸中，体验了一把神罚。', hint: '被落石砸死' },
-  { id: 'climb-shot', name: '枪林弹雨', stars: 1, desc: '在敌人的弹雨中倒下，虽败犹荣。', hint: '被敌人子弹打死' },
-  { id: 'climb-fell', name: '一失足成千古恨', stars: 1, desc: '脚下一空，坠入万丈深渊。', hint: '掉出地图摔死' },
   { id: 'climb-early', name: '出师未捷身先死', stars: 1, desc: '还没到第一个检查点就倒下了，长使英雄泪满襟。', hint: '第一个检查点前死亡' },
 ]
 let climbStats = {

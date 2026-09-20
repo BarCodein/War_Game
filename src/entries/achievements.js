@@ -59,8 +59,9 @@ function cardHtml(achievement) {
 
 async function main() {
   // 判断是否从登山小游戏进入
-  const fromClimb = document.referrer.includes('climb') ||
-    (window.location.search.includes('from=climb'))
+  const urlParams = new URLSearchParams(window.location.search)
+  const fromClimb = urlParams.get('from') === 'climb' ||
+    document.referrer.includes('climb')
 
   // 根据来源设置返回按钮
   const backLink = document.getElementById('achBackLink')
@@ -68,6 +69,9 @@ async function main() {
     if (fromClimb) {
       backLink.href = '/climb/climb.html'
       backLink.textContent = '← 返回小游戏'
+    } else {
+      backLink.href = '/index.html'
+      backLink.textContent = '← 返回首页'
     }
   }
 

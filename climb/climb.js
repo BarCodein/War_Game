@@ -1,4 +1,4 @@
-// ============================================================
+﻿// ============================================================
 // 睡衣登山大赛 - 横板爬山跑酷 (像素风)
 // 主角: 穿睡衣的士兵 | 武器: 步枪 + 大刀
 // 目标: 在规定时间内爬上山顶
@@ -554,16 +554,10 @@ let rockTimer = rand(150, 300)
 // ---------- 成就系统 ----------
 const CLIMB_STATS_KEY = 'war-of-dots.climb-stats'
 const CLIMB_ACHIEVEMENTS = [
-  { id: 'climb-first-checkpoint', name: '初露锋芒', stars: 1, desc: '到达第一个检查点，登山之路迈出坚实的第一步。', hint: '到达第一个检查点' },
   { id: 'climb-champion', name: '睡衣登山大赛冠军', stars: 3, desc: '在西安事变的登山小游戏里登顶成功。', hint: '登顶成功' },
   { id: 'climb-speedrun', name: '神兵天降', stars: 2, desc: '90秒内快速登顶，兵贵神速。', hint: '90秒内登顶' },
   { id: 'climb-flawless', name: '毫发无伤', stars: 3, desc: '全程零死亡登顶，身法如仙。', hint: '零死亡登顶' },
   { id: 'climb-slaughter', name: '斩尽杀绝', stars: 2, desc: '击杀沿途所有敌人，一个不留。', hint: '击杀所有敌人' },
-  { id: 'climb-melee', name: '刀枪不入', stars: 1, desc: '不发射一颗子弹，只用大刀通关。', hint: '不射击通关' },
-  { id: 'climb-persistent', name: '屡败屡战', stars: 1, desc: '失败后再次挑战，最终登顶成功。', hint: '失败后最终登顶' },
-  { id: 'climb-rocked', name: '机械降神', stars: 1, desc: '被从天而降的巨石砸中，体验了一把神罚。', hint: '被落石砸死' },
-  { id: 'climb-shot', name: '枪林弹雨', stars: 1, desc: '在敌人的弹雨中倒下，虽败犹荣。', hint: '被敌人子弹打死' },
-  { id: 'climb-fell', name: '一失足成千古恨', stars: 1, desc: '脚下一空，坠入万丈深渊。', hint: '掉出地图摔死' },
   { id: 'climb-early', name: '出师未捷身先死', stars: 1, desc: '还没到第一个检查点就倒下了，长使英雄泪满襟。', hint: '第一个检查点前死亡' },
 ]
 let climbStats = {

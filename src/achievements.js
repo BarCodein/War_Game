@@ -1,4 +1,4 @@
-// 成就系统（gdd.md §11）：成就定义 + 解锁判定。
+﻿// 成就系统（gdd.md §11）：成就定义 + 解锁判定。
 //
 // 纯函数、无 DOM：页面（src/entries/achievements.js）只负责把这里的结果画出来，
 // 判定逻辑因此可以单测（tests/unit/achievements.test.js）。
@@ -156,16 +156,8 @@ export const ACHIEVEMENTS = [
   },
   // ---------- 登山小游戏成就 ----------
   {
-    id: 'climb-first-checkpoint',
-    name: '初露锋芒',
-    stars: 1,
-    desc: '到达第一个检查点，登山之路迈出坚实的第一步。',
-    hint: '到达第一个检查点',
-    condition: ({ climbStats }) => climbStats?.reachedFirstCheckpoint === true,
-  },
-  {
     id: 'climb-veteran',
-    name: '登山达人',
+    name: '捉蒋大师',
     stars: 2,
     desc: '累计登顶三次，睡衣登山界的常客。',
     hint: '累计登顶3次',
@@ -178,30 +170,6 @@ export const ACHIEVEMENTS = [
     desc: '60秒内登顶，风一般的男子。',
     hint: '60秒内登顶',
     condition: ({ climbStats }) => climbStats?.bestTime != null && climbStats.bestTime <= 60,
-  },
-  {
-    id: 'climb-barehand',
-    name: '赤手空拳',
-    stars: 2,
-    desc: '不射击也不挥刀，仅凭拳脚登顶。',
-    hint: '不射击也不使用大刀通关',
-    condition: ({ climbStats }) => climbStats?.noWeapon === true,
-  },
-  {
-    id: 'climb-lucky',
-    name: '幸运儿',
-    stars: 1,
-    desc: '全程未受任何伤害就登顶，运气也是实力的一部分。',
-    hint: '单局不被任何伤害通关',
-    condition: ({ climbStats }) => climbStats?.noDamage === true,
-  },
-  {
-    id: 'climb-comeback',
-    name: '越挫越勇',
-    stars: 2,
-    desc: '单局死亡3次以上仍登顶，不屈不挠。',
-    hint: '单局死亡3次以上仍登顶',
-    condition: ({ climbStats }) => (climbStats?.maxDeathsInRun || 0) >= 3,
   },
   {
     id: 'climb-rock-kill',
@@ -226,30 +194,6 @@ export const ACHIEVEMENTS = [
     desc: '仅用大刀通关，子弹一颗不发。',
     hint: '仅用大刀通关（不射击）',
     condition: ({ climbStats }) => climbStats?.onlyMelee === true,
-  },
-  {
-    id: 'climb-sharpshooter',
-    name: '神射手',
-    stars: 2,
-    desc: '每一发子弹都命中敌人，弹无虚发。',
-    hint: '射击命中率100%通关',
-    condition: ({ climbStats }) => climbStats?.sharpshooter === true,
-  },
-  {
-    id: 'climb-collector',
-    name: '收藏家',
-    stars: 1,
-    desc: '到达全部检查点，一个不落。',
-    hint: '到达所有检查点',
-    condition: ({ climbStats }) => climbStats?.collector === true,
-  },
-  {
-    id: 'climb-expert-killer',
-    name: '歼敌专家',
-    stars: 2,
-    desc: '单局击杀10个以上敌人，战功赫赫。',
-    hint: '单局击杀10个以上',
-    condition: ({ climbStats }) => (climbStats?.maxKillsInRun || 0) >= 10,
   },
   {
     id: 'climb-champion',
@@ -282,46 +226,6 @@ export const ACHIEVEMENTS = [
     desc: '击杀沿途所有敌人，一个不留。',
     hint: '击杀所有敌人',
     condition: ({ climbStats }) => climbStats?.slaughter === true,
-  },
-  {
-    id: 'climb-melee',
-    name: '刀枪不入',
-    stars: 1,
-    desc: '不发射一颗子弹，只用大刀通关。',
-    hint: '不射击通关',
-    condition: ({ climbStats }) => climbStats?.melee === true,
-  },
-  {
-    id: 'climb-persistent',
-    name: '屡败屡战',
-    stars: 1,
-    desc: '失败后再次挑战，最终登顶成功。',
-    hint: '失败后最终登顶',
-    condition: ({ climbCleared, climbStats }) => (climbCleared === true || climbStats?.bestTime != null) && climbStats?.failedBefore === true,
-  },
-  {
-    id: 'climb-rocked',
-    name: '机械降神',
-    stars: 1,
-    desc: '被从天而降的巨石砸中，体验了一把神罚。',
-    hint: '被落石砸死',
-    condition: ({ climbStats }) => climbStats?.rocked === true,
-  },
-  {
-    id: 'climb-shot',
-    name: '枪林弹雨',
-    stars: 1,
-    desc: '在敌人的弹雨中倒下，虽败犹荣。',
-    hint: '被敌人子弹打死',
-    condition: ({ climbStats }) => climbStats?.shotDeath === true,
-  },
-  {
-    id: 'climb-fell',
-    name: '一失足成千古恨',
-    stars: 1,
-    desc: '脚下一空，坠入万丈深渊。',
-    hint: '掉出地图摔死',
-    condition: ({ climbStats }) => climbStats?.fell === true,
   },
   {
     id: 'climb-early',
