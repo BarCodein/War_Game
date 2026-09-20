@@ -35,131 +35,156 @@
     <section class="hero hero-compact">
         <div class="hero-content">
             <h1>&#9876; 开发进度 &#9876;</h1>
-            <p class="subtitle">稳步推进，每一步都脚踏实地</p>
+            <p class="subtitle">阶段 0–6 功能实现全部完成 · 进入交付验收收尾（截至 2026-09-12）</p>
         </div>
     </section>
 
     <!-- ==================== 总体进度 ==================== -->
     <section class="section">
         <h2 class="section-title">总体进度</h2>
-        <p class="section-desc">截至2026年9月</p>
+        <p class="section-desc">核心玩法与文档已就绪，剩余为跨浏览器验收与部署质量收尾</p>
 
         <div class="container-narrow">
             <div class="progress-bar">
                 <div class="track">
-                    <div class="fill" style="width:45%;">45%</div>
+                    <div class="fill" style="width:92%;">92%</div>
                 </div>
-                <span class="label">总体进度：45%</span>
+                <span class="label">MVP 验收标准：44 / 48 项已完成</span>
             </div>
 
             <div class="progress-card-grid">
                 <div class="card progress-card">
                     <div class="card-body">
-                        <h3>策划设计</h3>
-                        <div class="progress-ring">80%</div>
-                        <p>核心玩法、兵种设计、关卡规划已完成</p>
+                        <h3>模拟核心与规则</h3>
+                        <div class="progress-ring">100%</div>
+                        <p>世界容器、固定步长 tick 编排、统一命令接口与 7 个规则系统（移动 / 战斗 / 士气 / 补给 / 占领 / 迷雾 / 胜负）已完成，可 headless 跑完整一局。</p>
                     </div>
                 </div>
                 <div class="card progress-card">
                     <div class="card-body">
-                        <h3>美术设计</h3>
-                        <div class="progress-ring progress-ring--red">50%</div>
-                        <p>角色原画、UI界面设计进行中</p>
+                        <h3>渲染层与输入</h3>
+                        <div class="progress-ring progress-ring--green-light">100%</div>
+                        <p>地形 / 迷雾 / 单位 / 城市 / 占领点 / 控制线 / HUD 与场景已完成；选择、命令、快捷键、暂停与倍速、脚本敌军已接入。</p>
                     </div>
                 </div>
                 <div class="card progress-card">
                     <div class="card-body">
-                        <h3>程序开发</h3>
-                        <div class="progress-ring progress-ring--green-light">30%</div>
-                        <p>核心引擎和基础框架搭建中</p>
+                        <h3>地图编辑器</h3>
+                        <div class="progress-ring">100%</div>
+                        <p>地形绘制、对象放置、城市阵营设置、可玩性校验、localStorage 与导入导出、一键试玩往返全闭环已完成。</p>
                     </div>
                 </div>
                 <div class="card progress-card">
                     <div class="card-body">
-                        <h3>音效制作</h3>
-                        <div class="progress-ring progress-ring--red-light">20%</div>
-                        <p>背景音乐和基础音效开始制作</p>
+                        <h3>测试</h3>
+                        <div class="progress-ring progress-ring--green-light">92%</div>
+                        <p>Vitest 与 Playwright 基线已建立，共 22 个测试文件 / 138 个用例；当前仍有 10 个失败用例待随规则定稿修复。</p>
+                    </div>
+                </div>
+                <div class="card progress-card">
+                    <div class="card-body">
+                        <h3>文档与验收</h3>
+                        <div class="progress-ring progress-ring--red-light">92%</div>
+                        <p>README / GDD / 架构 / 验收标准 / 代码结构 / 开发计划齐全；48 项验收已完成 44 项，GDD 仍有合并冲突标记待清理。</p>
+                    </div>
+                </div>
+                <div class="card progress-card">
+                    <div class="card-body">
+                        <h3>性能</h3>
+                        <div class="progress-ring progress-ring--green-light">100%</div>
+                        <p>500 活动单位模拟 tick 平均 4.06ms / p95 5.60ms，达标（预算 8ms）；60FPS 待真实 GPU 三浏览器确认。</p>
                     </div>
                 </div>
             </div>
         </div>
     </section>
 
-    <!-- ==================== 开发时间线 ==================== -->
+    <!-- ==================== 开发历程 ==================== -->
     <section class="section">
-        <h2 class="section-title">开发时间线</h2>
-        <p class="section-desc">记录每一个重要的里程碑</p>
+        <h2 class="section-title">开发历程</h2>
+        <p class="section-desc">基于 Git 提交记录整理（2026-09-03 至 09-11，日志截至 09-12）</p>
 
         <div class="timeline">
             <div class="timeline-item">
-                <div class="date">2026年3月</div>
+                <div class="date">2026-09-03 <span class="timeline-status done">已完成</span></div>
                 <div class="content">
-                    <h4>项目启动</h4>
-                    <p>团队组建完成，确定游戏方向为红色战争RTS，完成初步可行性分析和项目规划。</p>
+                    <h4>可运行原型</h4>
+                    <p>建立 README 项目说明；完成可启动的早期游戏原型；加入单位撤退、控制区域与战争迷雾等核心玩法概念。</p>
                 </div>
             </div>
             <div class="timeline-item">
-                <div class="date">2026年4月</div>
+                <div class="date">2026-09-04 <span class="timeline-status done">已完成</span></div>
                 <div class="content">
-                    <h4>策划设计阶段</h4>
-                    <p>完成游戏核心玩法设计文档，确定兵种体系、资源系统和科技树框架。</p>
+                    <h4>工程化迁移与 MVP 核心</h4>
+                    <p>需求 / 架构文档、GDD 与数值集中配置；Vite + Phaser 骨架；headless 模拟层与脚本敌军；Phaser 渲染与输入接入；地图编辑器与性能基线；自动化测试覆盖主要流程。</p>
                 </div>
             </div>
             <div class="timeline-item">
-                <div class="date">2026年5月</div>
+                <div class="date">2026-09-05 <span class="timeline-status done">已完成</span></div>
                 <div class="content">
-                    <h4>美术概念设计</h4>
-                    <p>完成主要角色和场景的概念设计，确立游戏的视觉风格和色彩方案。</p>
+                    <h4>视觉表现与页面结构</h4>
+                    <p>调整单位外观、HUD 与战斗表现；重整代码与页面结构，增加主页、游戏页、编辑器页、团队页及对应入口。</p>
                 </div>
             </div>
             <div class="timeline-item">
-                <div class="date">2026年6月</div>
+                <div class="date">2026-09-06 <span class="timeline-status done">已完成</span></div>
                 <div class="content">
-                    <h4>技术原型开发</h4>
-                    <p>搭建基础游戏引擎框架，实现核心单位移动和攻击逻辑的原型验证。</p>
+                    <h4>团队与故事内容</h4>
+                    <p>重构介绍页面，补充团队成员资料；接入故事页与项目介绍页内容。</p>
                 </div>
             </div>
             <div class="timeline-item">
-                <div class="date">2026年7月</div>
+                <div class="date">2026-09-09 <span class="timeline-status done">已完成</span></div>
                 <div class="content">
-                    <h4>UI界面设计</h4>
-                    <p>完成游戏主界面、战斗界面和菜单系统的设计稿，开始前端界面开发。</p>
+                    <h4>战役入口、认证与战斗规则</h4>
+                    <p>增加注册页、战役选择页与认证流程；调整攻击 / 移动 / 攻击移动的士气消耗与 DPS、移动速度配置，修复士气 NaN。</p>
                 </div>
             </div>
             <div class="timeline-item">
-                <div class="date">2026年8月</div>
+                <div class="date">2026-09-10 <span class="timeline-status done">已完成</span></div>
                 <div class="content">
-                    <h4>后端架构搭建</h4>
-                    <p>完成服务器架构设计，实现用户注册登录系统和基础数据存储功能。</p>
+                    <h4>失控状态与多路径指挥</h4>
+                    <p>加入单位失控状态；完成路径队列与 Shift 连续路径指令；优化多单位路径规划。</p>
                 </div>
             </div>
             <div class="timeline-item">
-                <div class="date">2026年9月（当前）</div>
+                <div class="date">2026-09-11 <span class="timeline-status done">已完成</span></div>
                 <div class="content">
-                    <h4>核心功能开发</h4>
-                    <p>正在进行兵种训练系统、资源采集系统和战斗系统的开发与测试。</p>
+                    <h4>资源、地图尺度与撤退平衡</h4>
+                    <p>单位改为纹理、使用战场背景图；逻辑网格调整为 10px、扩大地图并优化迷雾算法；撤退速度调为正常的 60%；合并远程变更形成当前 develop 顶端。</p>
                 </div>
             </div>
-            <div class="timeline-item">
-                <div class="date">2026年10月（计划）</div>
-                <div class="content">
-                    <h4>多人对战系统</h4>
-                    <p>计划完成多人在线对战功能，实现实时同步和匹配系统。</p>
-                </div>
-            </div>
-            <div class="timeline-item">
-                <div class="date">2026年11月（计划）</div>
-                <div class="content">
-                    <h4>内测与优化</h4>
-                    <p>计划进行内部测试，收集反馈并进行性能优化和平衡性调整。</p>
-                </div>
-            </div>
+        </div>
+    </section>
+
+    <!-- ==================== 验收与收尾 ==================== -->
+    <section class="section">
+        <h2 class="section-title">当前状态与收尾待办</h2>
+        <p class="section-desc">MVP 功能基本完成，处于文档冲突清理、跨浏览器验证与部署质量收尾阶段</p>
+        <div class="about-section">
+            <h3>已达成</h3>
+            <ul class="about-list">
+                <li><strong>功能实现</strong>：阶段 0–6 全部完成（需求文档 / 工程骨架 / 纯模拟层 / 渲染输入 / 教学战役 / 地图编辑器 / 性能验收）。</li>
+                <li><strong>内容</strong>：三关（断裂峡谷 / 宿北战役 / 塔山阻击战）数据化可通关，另含双堆集战役脚本；15 个静态页面一次性构建产出。</li>
+                <li><strong>性能</strong>：500 单位 tick 平均 4.06ms（预算 8ms）达标；64px 空间分区、纹理烘焙已落地。</li>
+                <li><strong>测试</strong>：22 个测试文件 / 138 个用例，覆盖模拟规则、编辑器、关卡数据契约与 500 单位性能基线，另有 4 个浏览器流程用例。</li>
+            </ul>
+        </div>
+        <div class="about-section">
+            <h3>待处理事项</h3>
+            <ul class="about-list">
+                <li><strong>文档冲突</strong>：清理 <code>docs/gdd.md</code> 与 <code>tests/unit/movement.test.js</code> 残留的合并冲突标记，确定 10px / 20px 逻辑网格及水域规则的最终版本。</li>
+                <li><strong>测试全绿</strong>：随规则定稿逐项修复当前 10 个失败用例（配置 / GDD 镜像、i18n、迷雾、战斗、士气、补给），先修复移动测试语法问题。</li>
+                <li><strong>跨浏览器验收</strong>：在 Chromium / Firefox / Edge 上完成 <code>#bench</code>、教学战役、编辑器与 1280×720 / 1920×1080 布局验证（G3 / G4 / G5 / H4 共 4 项）。</li>
+                <li><strong>部署质量</strong>：修复成员页脚本缺少 <code>type="module"</code>、背景图片路径未解析与部分 bundle 超过 500kB 的构建警告。</li>
+                <li><strong>产品范围</strong>：英文 i18n 仅为预留、完整战役 / 回放 / 在线功能不在 MVP 内。</li>
+            </ul>
         </div>
     </section>
 
     <!-- ==================== 页脚 ==================== -->
     <footer class="footer">
-        <p>&copy; 2026 沙盘战争项目组 | 红色战争RTS游戏 </p>
+        <p>&copy; 2026 沙盘战争项目组（六区） | 浏览器端红色战争 RTS 游戏 </p>
     </footer>
 
     <script src="/audio.js"></script>
