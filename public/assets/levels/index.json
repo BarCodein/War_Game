@@ -56,6 +56,7 @@
                        "description":  "阻止黄维兵团北进增援徐州战场，将其歼灭在双堆集"
                    },
                    {
+
                        "id":  "pingjin_battle",
                        "name":  "平津战役",
                        "subtitle":  "PINGJIN BATTLE",
@@ -72,6 +73,7 @@
                        "difficulty":  "普通",
                        "order":  8,
                        "description":  "突破国民党军长江防线，夺取南京正面渡口并解放南京"
+
                    }
                ]
 }

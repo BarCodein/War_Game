@@ -370,20 +370,20 @@ function buildStoryOverlay(opts) {
   style.textContent = `
     #tutorialStoryOverlay {
       position: fixed; inset: 0; z-index: 10000;
-      background: #111 center/cover no-repeat;
-      font-family: SimHei, "Microsoft YaHei", sans-serif;
+      background: #150d06 center/cover no-repeat;
+      font-family: "STKaiti","KaiTi","SimHei","Microsoft YaHei",sans-serif;
       overflow: hidden; animation: storyFadeIn .6s ease;
     }
     #tutorialStoryOverlay::before {
       content: ""; position: fixed; inset: 0;
-      background: rgba(0,0,0,.55); z-index: 0;
+      background: rgba(18,10,4,.5); z-index: 0;
     }
     @keyframes storyFadeIn { from { opacity: 0; } to { opacity: 1; } }
     #tutorialStoryOverlay.closing { animation: storyFadeOut .5s ease forwards; }
     @keyframes storyFadeOut { to { opacity: 0; visibility: hidden; } }
     .story-alert-flash {
       position: fixed; inset: 0; z-index: 1;
-      background: radial-gradient(ellipse at center, transparent 40%, rgba(255,0,0,.45));
+      background: radial-gradient(ellipse at center, transparent 40%, rgba(200,30,20,.42));
       animation: alertPulse .8s infinite; display: none;
     }
     .story-alert-flash.active { display: block; }
@@ -397,46 +397,49 @@ function buildStoryOverlay(opts) {
     }
     .story-skip-btn {
       position: fixed; top: 20px; right: 20px; z-index: 10;
-      padding: 8px 18px; font-size: 14px;
-      background: rgba(0,0,0,.5); color: #aaa;
-      border: 1px solid rgba(150,150,150,.4);
+      padding: 8px 18px; font-size: 14px; letter-spacing: 2px;
+      background: rgba(30,19,9,.7); color: #e8d9b0;
+      border: 1px solid #c9a24a;
       border-radius: 4px; cursor: pointer; font-family: inherit;
     }
-    .story-skip-btn:hover { color: #fff; border-color: rgba(200,200,200,.6); }
+    .story-skip-btn:hover { color: #fff; border-color: #e8c879; background: rgba(60,38,16,.8); }
     .story-panel {
       position: fixed; left: 0; right: 0; bottom: 0; z-index: 5;
       padding: 30px 36px 40px;
-      background: linear-gradient(to top, rgba(0,0,0,.88), rgba(0,0,0,.35));
-      border-top: 1px solid rgba(100,180,255,.35);
+      background: linear-gradient(to top, rgba(22,14,6,.96), rgba(22,14,6,.42));
+      border-top: 2px solid #c9a24a;
+      box-shadow: inset 0 1px 0 rgba(255,210,150,.18), 0 -8px 24px rgba(0,0,0,.5);
       cursor: pointer;
     }
     .story-text {
       max-width: 900px; margin: 0 auto;
-      font-size: 21px; color: #fff; line-height: 1.9;
-      text-shadow: 0 2px 10px rgba(0,0,0,.8);
+      font-size: 21px; color: #f4ecd0; line-height: 1.9;
+      text-shadow: 0 2px 10px rgba(0,0,0,.85);
       min-height: 80px;
     }
     .story-talker {
-      color: #ffb347; font-weight: bold; display: block;
+      color: #c9a24a; font-weight: bold; display: block;
       margin-bottom: 10px; font-size: 23px;
+      text-shadow: 0 1px 4px rgba(0,0,0,.6);
     }
     .story-cursor {
       display: inline-block; width: 2px; height: 20px;
-      background: #ffb347; margin-left: 2px; vertical-align: middle;
+      background: #c9a24a; margin-left: 2px; vertical-align: middle;
       animation: cursorBlink .6s step-end infinite;
     }
     @keyframes cursorBlink { 0%,100%{opacity:1} 50%{opacity:0} }
     .story-tip {
       max-width: 900px; margin: 16px auto 0;
-      font-size: 14px; color: #bbb;
+      font-size: 14px; color: #b9a87a; letter-spacing: 1px;
     }
     .story-start-btn {
       display: none; margin: 24px auto 0; padding: 12px 40px;
-      font-size: 19px; background: linear-gradient(90deg, #113366, #2255aa);
-      color: #fff; border: 1px solid #4488dd; border-radius: 6px;
+      font-size: 19px; background: linear-gradient(90deg, #6f2417, #9c3a26);
+      color: #f4ecd0; border: 1px solid #c9a24a; border-radius: 6px;
       cursor: pointer; letter-spacing: 4px; font-family: inherit;
+      box-shadow: 0 3px 12px rgba(0,0,0,.5);
     }
-    .story-start-btn:hover { background: linear-gradient(90deg, #1a4488, #3366cc); }
+    .story-start-btn:hover { background: linear-gradient(90deg, #8a2c1c, #b8472f); }
   `;
   document.head.appendChild(style);
 
@@ -712,22 +715,24 @@ function buildPanel() {
     #tutorialChecklist {
       position: fixed; right: 16px; top: 96px; z-index: 9999;
       width: 300px; max-height: calc(100vh - 140px); overflow-y: auto;
-      background: linear-gradient(160deg, rgba(10,22,30,.96), rgba(14,30,38,.94));
-      border: 1px solid rgba(120,200,180,.35);
-      border-radius: 10px; box-shadow: 0 8px 32px rgba(0,0,0,.5);
-      color: #d8ece6; font-family: "PingFang SC","Microsoft YaHei",Arial,sans-serif;
-      pointer-events: auto; backdrop-filter: blur(6px);
+      background: linear-gradient(160deg, rgba(30,19,9,.96), rgba(16,10,4,.95));
+      border: 1px solid #6b4a22;
+      border-radius: 6px; box-shadow:
+        inset 0 0 0 1px rgba(201,162,74,.22),
+        0 8px 28px rgba(0,0,0,.55);
+      color: #f4ecd0; font-family: "STKaiti","KaiTi","SimHei","Microsoft YaHei",sans-serif;
+      pointer-events: auto;
     }
     #tutorialChecklist::-webkit-scrollbar { width: 5px; }
-    #tutorialChecklist::-webkit-scrollbar-thumb { background: rgba(120,200,180,.3); border-radius: 3px; }
+    #tutorialChecklist::-webkit-scrollbar-thumb { background: rgba(201,162,74,.4); border-radius: 3px; }
     .tut-header {
-      padding: 14px 16px 10px; border-bottom: 1px solid rgba(120,200,180,.2);
+      padding: 14px 16px 10px; border-bottom: 1px solid rgba(201,162,74,.25);
     }
     .tut-header .tut-tag {
-      font-size: 10px; letter-spacing: 3px; color: #6ec9b0; font-weight: 700;
+      font-size: 10px; letter-spacing: 3px; color: #c9a24a; font-weight: 700;
     }
     .tut-header h3 {
-      margin: 4px 0 0; font-size: 17px; font-weight: 700; color: #e8f7f2;
+      margin: 4px 0 0; font-size: 17px; font-weight: 700; color: #f4ecd0;
     }
     .tut-progress-bar {
       height: 5px; margin-top: 10px; background: rgba(255,255,255,.08);
@@ -735,7 +740,7 @@ function buildPanel() {
     }
     .tut-progress-bar i {
       display: block; height: 100%; width: 0%;
-      background: linear-gradient(90deg, #4ec9a0, #7ee0c0);
+      background: linear-gradient(90deg, #6f8f4a, #b9d08a);
       transition: width .35s ease;
     }
     .tut-step-list { padding: 6px 0; }
@@ -744,65 +749,65 @@ function buildPanel() {
       padding: 9px 16px; cursor: default; transition: background .2s;
       border-left: 3px solid transparent;
     }
-    .tut-step:hover { background: rgba(255,255,255,.03); }
+    .tut-step:hover { background: rgba(255,255,255,.04); }
     .tut-step.active {
-      background: rgba(78,201,160,.1); border-left-color: #4ec9a0;
+      background: rgba(111,143,74,.14); border-left-color: #6f8f4a;
     }
-    .tut-step.done { opacity: .55; }
+    .tut-step.done { opacity: .6; }
     .tut-check {
       flex-shrink: 0; width: 20px; height: 20px; margin-top: 1px;
-      border: 2px solid rgba(120,200,180,.4); border-radius: 5px;
+      border: 2px solid rgba(201,162,74,.55); border-radius: 5px;
       display: flex; align-items: center; justify-content: center;
       font-size: 13px; font-weight: 700; color: transparent;
       transition: all .25s;
     }
     .tut-step.done .tut-check {
-      background: #4ec9a0; border-color: #4ec9a0; color: #0a1e18;
+      background: #c9a24a; border-color: #c9a24a; color: #1c1207;
     }
     .tut-step.active .tut-check {
-      border-color: #4ec9a0; box-shadow: 0 0 8px rgba(78,201,160,.5);
+      border-color: #6f8f4a; box-shadow: 0 0 8px rgba(111,143,74,.55);
       animation: tutPulse 1.6s ease-in-out infinite;
     }
     @keyframes tutPulse {
-      0%,100% { box-shadow: 0 0 4px rgba(78,201,160,.3); }
-      50% { box-shadow: 0 0 12px rgba(78,201,160,.7); }
+      0%,100% { box-shadow: 0 0 4px rgba(111,143,74,.35); }
+      50% { box-shadow: 0 0 12px rgba(111,143,74,.75); }
     }
     .tut-step-body { flex: 1; min-width: 0; }
     .tut-step-title {
-      font-size: 13.5px; font-weight: 600; color: #c8e6dd;
+      font-size: 13.5px; font-weight: 600; color: #e8d9b0;
       display: flex; align-items: center; gap: 6px;
     }
-    .tut-step.active .tut-step-title { color: #eafff8; }
+    .tut-step.active .tut-step-title { color: #fff7e6; }
     .tut-step-num {
-      font-size: 10px; color: #5a9a88; font-weight: 700;
-      background: rgba(120,200,180,.1); padding: 1px 5px; border-radius: 3px;
+      font-size: 10px; color: #b9a87a; font-weight: 700;
+      background: rgba(201,162,74,.12); padding: 1px 5px; border-radius: 3px;
     }
     .tut-step-desc {
-      font-size: 11.5px; color: #7aa89a; line-height: 1.5; margin-top: 3px;
+      font-size: 11.5px; color: #b9a87a; line-height: 1.5; margin-top: 3px;
       display: none;
     }
     .tut-step.active .tut-step-desc { display: block; }
     .tut-current-hint {
       margin: 0 16px 12px; padding: 8px 11px;
-      background: rgba(78,201,160,.1); border-left: 3px solid #4ec9a0;
-      border-radius: 0 5px 5px 0; font-size: 12px; color: #a8e0cc;
+      background: rgba(111,143,74,.14); border-left: 3px solid #6f8f4a;
+      border-radius: 0 5px 5px 0; font-size: 12px; color: #cfe0b0;
       line-height: 1.5;
     }
     .tut-current-hint.flash {
-      background: rgba(255,180,80,.15); border-left-color: #ffb450; color: #ffd89a;
+      background: rgba(244,190,79,.15); border-left-color: #f4be4f; color: #ffe2a8;
     }
     .tut-footer {
-      padding: 10px 16px; border-top: 1px solid rgba(120,200,180,.2);
-      font-size: 11px; color: #5a8a7c; display: flex; justify-content: space-between;
+      padding: 10px 16px; border-top: 1px solid rgba(201,162,74,.25);
+      font-size: 11px; color: #b9a87a; display: flex; justify-content: space-between;
     }
     .tut-footer button {
-      background: none; border: 1px solid rgba(120,200,180,.3); color: #8ac4b0;
+      background: none; border: 1px solid rgba(201,162,74,.4); color: #c9a24a;
       font-size: 11px; padding: 3px 10px; border-radius: 4px; cursor: pointer;
       font-family: inherit;
     }
-    .tut-footer button:hover { background: rgba(120,200,180,.1); }
-    #tutorialChecklist.all-done { border-color: rgba(78,201,160,.6); }
-    #tutorialChecklist.all-done .tut-header h3 { color: #7ee0c0; }
+    .tut-footer button:hover { background: rgba(201,162,74,.12); }
+    #tutorialChecklist.all-done { border-color: rgba(201,162,74,.6); }
+    #tutorialChecklist.all-done .tut-header h3 { color: #e8c879; }
   `;
   document.head.appendChild(style);
 

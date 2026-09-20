@@ -1,4 +1,4 @@
-// ============================================================
+﻿// ============================================================
 // 睡衣登山大赛 - 横板爬山跑酷 (像素风)
 // 主角: 穿睡衣的士兵 | 武器: 步枪 + 大刀
 // 目标: 在规定时间内爬上山顶
@@ -557,11 +557,7 @@ const CLIMB_STATS_KEY = 'climb-stats'
 const ACH_UNLOCKED_NAME = 'ach-unlocked'
 const CLIMB_CLEARED_NAME = 'climb-cleared'
 const CLIMB_ACHIEVEMENTS = [
-  { id: 'climb-veteran', name: '捉蒋大师', stars: 2, desc: '累计登顶三次，捉蒋行动的老手。', hint: '累计登顶3次' },
-  { id: 'climb-speedster', name: '极速攀登', stars: 3, desc: '60秒内登顶，风一般的男子。', hint: '60秒内登顶' },
-  { id: 'climb-rock-kill', name: '大石碎胸口', stars: 1, desc: '引导敌人被天降巨石砸死，借刀杀人。', hint: '引导敌人被落石砸死' },
-  { id: 'climb-peaceful', name: '和平解决', stars: 2, desc: '不杀一个敌人就登顶，以和为贵。', hint: '不击杀任何敌人通关' },
-  { id: 'climb-sword-only', name: '大刀进行曲', stars: 2, desc: '仅用大刀通关，子弹一颗不发。', hint: '仅用大刀通关（不射击）' },
+
   { id: 'climb-champion', name: '睡衣登山大赛冠军', stars: 3, desc: '在西安事变的登山小游戏里登顶成功。', hint: '登顶成功' },
   { id: 'climb-speedrun', name: '神兵天降', stars: 2, desc: '90秒内快速登顶，兵贵神速。', hint: '90秒内登顶' },
   { id: 'climb-flawless', name: '毫发无伤', stars: 3, desc: '全程零死亡登顶，身法如仙。', hint: '零死亡登顶' },

@@ -1,4 +1,4 @@
-// 成就系统（gdd.md §11）：成就定义 + 解锁判定。
+﻿// 成就系统（gdd.md §11）：成就定义 + 解锁判定。
 //
 // 纯函数、无 DOM：页面（src/entries/achievements.js）只负责把这里的结果画出来，
 // 判定逻辑因此可以单测（tests/unit/achievements.test.js）。

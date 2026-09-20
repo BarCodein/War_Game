@@ -265,6 +265,10 @@ export function createHud(scene, world, controller, selection, orders) {
     }
     panel.style.display = '';
 
+    // 教学关（?level= 含 tutorial）→ 面板打「训练」绶带标记
+    const lvl = new URLSearchParams(window.location.search).get('level') || '';
+    panel.classList.toggle('is-tutorial', lvl.includes('tutorial'));
+
     const tasks = buildVgTasks(mess);
     // 用签名比对避免每帧重写 innerHTML（会打断用户点击三角的交互状态）。
     // 签名必须包含 done 与文案全文：文案里有实时数字（剩余时间/据点数/歼灭数），
@@ -393,42 +397,30 @@ export function createHud(scene, world, controller, selection, orders) {
 
   // ---------- 战斗音效 ----------
   // 规则：
-  //   1. 任一存活单位 state==='combat' → 每隔 BLADE_INTERVAL ms 播一次 blade（白刃战循环音）
-  //   2. 上一帧有战斗、这一帧战斗结束 → 立即停（自然衰减）
+  //   1. 每一个蓝兵（faction==='blue'）从「非战斗」进入「战斗」(state==='combat') 的瞬间
+  //      → 各播放一次 blade（白刃战起手音），不循环
+  //   2. 同一蓝兵脱离战斗后再次进入战斗 → 再播放一次（按 unit.id 去重，阵亡单位自动移出）
   //   3. world.history 新增的 unitDied/cause==='combat' 事件 → 播一次 hurt（击杀音）
   // 实现：
-  //   - 独立的 setInterval（80ms 检查一次），不依赖 hud 的节流刷新（hud 100ms+ 一次，
-  //     跟音频循环节奏不齐，会出现节奏抖动）
-  //   - 死亡事件直接从 world.history 增量读取（与 renderEvents 同一份增量，
-  //     不重复触发）
-  const BLADE_INTERVAL = 750; // 毫秒；combat 状态下 blade 的循环间隔
+  //   - 独立的 setInterval（80ms 检查一次），逐个蓝兵比较上一帧的战斗状态，仅在「上升沿」
+  //     （非战斗→战斗）触发，因此同一蓝兵持续战斗期间不会重复播放。
+  //   - 死亡事件直接从 world.history 增量读取（与 renderEvents 同一份增量，不重复触发）
   const COMBAT_CHECK_INTERVAL = 80; // 检查战斗状态的频率
+  // 当前处于战斗状态的蓝兵 id 集合；每帧重建，脱离战斗/阵亡的蓝兵自然不再跟踪
   const combatSfx = {
-    bladeTimer: null,
-    inCombatLastCheck: false,
-    lastBladeAt: 0,
+    blueCombatIds: new Set(),
   };
 
-  function isInCombat() {
-    for (const u of world.units) {
-      if (u.state === 'combat') return true;
-    }
-    return false;
-  }
-
   function checkCombatSfx() {
-    const inCombat = isInCombat();
-    if (!inCombat) {
-      // 战斗结束（或从未开打）：blade 自然停止，无需额外操作
-      combatSfx.inCombatLastCheck = false;
-      return;
+    const current = new Set();
+    for (const u of world.units) {
+      if (u.faction === 'blue' && u.state === 'combat') current.add(u.id);
     }
-    const now = performance.now();
-    if (now - combatSfx.lastBladeAt >= BLADE_INTERVAL) {
-      window.playSfx?.('blade');
-      combatSfx.lastBladeAt = now;
+    // 本帧处于战斗、且上一帧未记录的蓝兵 = 刚进入战斗 → 各播一次 blade
+    for (const id of current) {
+      if (!combatSfx.blueCombatIds.has(id)) window.playSfx?.('blade', 0.45); // 刀剑音量降至 45%
     }
-    combatSfx.inCombatLastCheck = true;
+    combatSfx.blueCombatIds = current;
   }
 
   function checkDeathSfx() {

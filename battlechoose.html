@@ -676,6 +676,23 @@
   <script src="/audio.js"></script>
   <script src="/bgm-controller.js"></script>
   <script>
+    // 视频-BGM 互斥（v5：localStorage 标记）。cutsceneVid 是 battlechoose 唯一的过场视频。
+    (function () {
+      var KEY = 'war-of-dots.video-playing';
+      function set(on) { try { localStorage.setItem(KEY, on ? '1' : '0'); } catch (e) {} }
+      var v = document.getElementById('cutsceneVid');
+      if (v && !v.__bgmVideoLock) {
+        v.__bgmVideoLock = true;
+        v.addEventListener('play',  function () { set(true); });
+        v.addEventListener('ended', function () { set(false); });
+        v.addEventListener('pause', function () { if (!v.ended) set(false); });
+        if (!v.paused && !v.ended) set(true);
+      }
+      window.addEventListener('pagehide', function () { set(false); });
+      window.addEventListener('beforeunload', function () { set(false); });
+    })();
+  </script>
+  <script>
     // UI 音效：导航返回 / 缩放控件 / 关卡点 / 进入战役
     window.bindSfx({
       '.battle-nav a': 'click',

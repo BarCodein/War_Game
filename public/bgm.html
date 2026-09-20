@@ -24,13 +24,39 @@
 </style>
 </head>
 <body>
-<audio id="bgm" src="/assets/bgm/jiangshanruciduojiao.mp3" loop preload="auto" muted></audio>
+<audio id="bgm" loop preload="auto" muted></audio>
 <script>
 (function () {
   'use strict';
   var audio = document.getElementById('bgm');
-  audio.volume = 0.4;
-  var STORAGE_KEY = 'war-of-dots.bgm';
+  // 每页通过 ?song= 指定要播放的 BGM（默认《江山如此多娇》）。
+  // 若 URL 没指定，去 localStorage 找"上一首在播的歌"（任意 war-of-dots.bgm.* 键里 paused=false 的那首），
+  // 让 result-video / ending 这类"无 BGM 控件但需跨页接管 BGM"的页面能接力正确歌曲。
+  var explicitSong = new URLSearchParams(location.search).get('song');
+  var song;
+  if (explicitSong) {
+    song = explicitSong.replace(/[^a-zA-Z0-9_-]/g, '');
+  } else {
+    song = 'jiangshanruciduojiao';
+    try {
+      for (var i = 0; i < localStorage.length; i++) {
+        var k = localStorage.key(i);
+        if (k.indexOf('war-of-dots.bgm.') !== 0) continue;
+        var s = JSON.parse(localStorage.getItem(k) || 'null');
+        if (s && s.paused === false) {
+          song = k.slice('war-of-dots.bgm.'.length);
+          break;
+        }
+      }
+    } catch (e) {}
+  }
+  audio.src = '/assets/bgm/' + song + '.mp3';
+  audio.load();
+  // 各歌音量：默认 0.4；《在太行山上》用户要求"大点声"，单独调高
+  var VOLUMES = { zaitaihangshandshang: 0.8 };
+  audio.volume = (Object.prototype.hasOwnProperty.call(VOLUMES, song)) ? VOLUMES[song] : 0.4;
+  // 续播进度按「歌曲」分别存储，避免不同歌之间错位续播
+  var STORAGE_KEY = 'war-of-dots.bgm.' + song;
 
   // 加载时从 localStorage 接力
   try {
@@ -71,6 +97,42 @@
     } catch (e) {}
   }, 500);
 
+  // 视频-BGM 互斥（轮询 localStorage 标记，零跨 frame 依赖）：
+  //   当任意含 <video> 的页面有 video 在播时，写 localStorage.war-of-dots.video-playing = '1'；
+  //   视频结束/暂停时写 '0'。bgm.html 每 100ms 检查这个标记，
+  //   若 BGM 当前在响 + 标记为 '1' → 暂停 + 记 __wasPlayingBeforeVideo；
+  //   若标记为 '0' 且之前被 video 暂停过 → 恢复。
+  //   这种方式不依赖 postMessage 跨 frame 寻址，最稳。
+  (function () {
+    var VIDEO_FLAG_KEY = 'war-of-dots.video-playing';
+    // 读初始状态：若进入页面时视频已经在播（不太可能，但兜底），立即让位
+    try {
+      if (localStorage.getItem(VIDEO_FLAG_KEY) === '1') {
+        audio.__wasPlayingBeforeVideo = !audio.paused && !audio.muted;
+        audio.pause();
+      }
+    } catch (e) {}
+    setInterval(function () {
+      try {
+        var flag = localStorage.getItem(VIDEO_FLAG_KEY);
+        if (flag === '1') {
+          if (!audio.paused && !audio.muted) {
+            // 之前在响 → 记下"原状态"并让位
+            audio.__wasPlayingBeforeVideo = true;
+          }
+          audio.pause();
+        } else if (flag === '0' || flag === null) {
+          if (audio.__wasPlayingBeforeVideo) {
+            audio.__wasPlayingBeforeVideo = false;
+            unmute();
+            var p4 = audio.play();
+            if (p4 && p4.catch) p4.catch(function () {});
+          }
+        }
+      } catch (e) {}
+    }, 100);
+  })();
+
   // 父页面 postMessage 协议：
   //   { cmd: 'start' }     — 用户首次交互后解锁（unmute + play）
   //   { cmd: 'play' }      — 播放
@@ -102,6 +164,25 @@
           t: audio.currentTime || 0,
           muted: audio.muted
         }, '*');
+      } catch (err) {}
+    } else if (msg.cmd === 'video-state') {
+      // 父页面 / 同源任一含 video 的页面通知：
+      //   playing=true  → BGM 必须让位（视频要出声），记下"原本在播"
+      //   playing=false → 若"原本在播"则恢复；用户已手动暂停的 BGM 不恢复
+      try {
+        if (msg.playing) {
+          // 记下"是否本就在播"：只对未暂停、未手动静音的 BGM 记为 true
+          // （用户已显式暂停的 BGM 视频结束后不会恢复）
+          audio.__wasPlayingBeforeVideo = !audio.paused && !audio.muted;
+          audio.pause();
+        } else {
+          if (audio.__wasPlayingBeforeVideo) {
+            audio.__wasPlayingBeforeVideo = false;
+            unmute();
+            var p3 = audio.play();
+            if (p3 && p3.catch) p3.catch(function () {});
+          }
+        }
       } catch (err) {}
     }
   });
