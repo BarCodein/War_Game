@@ -94,6 +94,36 @@
     @media (max-width: 720px) {
       .ach-grid { grid-template-columns: 1fr; }
     }
+
+    /* 返回按钮样式（和"进入战役"一致） */
+    .battle-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 14px 40px;
+      font-family: "SimHei", sans-serif;
+      font-size: 1rem;
+      letter-spacing: 3px;
+      color: #f1e9d2;
+      background: linear-gradient(180deg, #8b2222 0%, #6b1818 100%);
+      border: 2px solid #c8a84e;
+      border-radius: 3px;
+      text-decoration: none;
+      cursor: pointer;
+      box-shadow:
+        inset 0 0 0 1px rgba(255, 255, 255, 0.15),
+        inset 0 -3px 6px rgba(0, 0, 0, 0.4),
+        0 4px 12px rgba(40, 25, 12, 0.35);
+      transition: all .2s ease;
+    }
+    .battle-btn:hover {
+      transform: translateY(-2px);
+      box-shadow:
+        inset 0 0 0 1px rgba(255, 255, 255, 0.25),
+        inset 0 -3px 6px rgba(0, 0, 0, 0.4),
+        0 8px 20px rgba(40, 25, 12, 0.5);
+      color: #fff;
+    }
   </style>
 </head>
 <body>
@@ -103,7 +133,7 @@
     </header>
     <section class="home-hero" style="align-items: stretch; padding-top: 24px;">
       <div class="intro-content">
-        <a class="back-link" id="achBackLink" href="/">← 返回首页</a>
+        <a class="battle-btn" id="achBackLink" href="/" style="text-decoration:none; display:inline-flex; align-items:center; justify-content:center; margin-bottom: 20px;">← 返回首页</a>
 
         <div class="intro-section">
           <h2>成就</h2>
@@ -134,7 +164,7 @@
   <script type="module" src="/src/entries/achievements.js"></script>
   <script>
     // UI 音效：返回首页
-    window.bindSfx && window.bindSfx('.back-link', 'click');
+    window.bindSfx && window.bindSfx('#achBackLink', 'click');
   </script>
 </body>
 </html>
