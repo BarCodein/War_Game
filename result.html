@@ -287,6 +287,10 @@
       }
     };
 
+    /* 结局关卡：打完这一关就算全战役通关，主按钮不再是"下一战场"，而是"进入结局"。
+       关卡 id 与 public/assets/levels/index.json 里的 id 必须一致（单测守着这条）。 */
+    var ENDING_LEVEL = 'dujiang_battle';
+
     (function () {
       var params = new URLSearchParams(window.location.search);
       var result = params.get('result') === 'victory' ? 'victory' : 'defeat';
@@ -442,6 +446,12 @@
           }
 
           if (result === 'victory') {
+            if (levelId === ENDING_LEVEL) {
+              /* 通关最后一战：原"返回战役选择"位置改跳结局页（ending.html 里也有返回按钮） */
+              primary.textContent = '结局';
+              primary.setAttribute('href', './ending.html');
+              return;
+            }
             var next = current >= 0 ? levels[current + 1] : null;
             if (next) {
               primary.textContent = '下一战场';
@@ -460,8 +470,14 @@
         .catch(function () {
           if (timeText) subtitleEl.textContent = '用时 ' + timeText;
           if (result === 'victory') {
-            primary.textContent = '返回战役选择';
-            primary.setAttribute('href', './battlechoose.html');
+            if (levelId === ENDING_LEVEL) {
+              /* 索引拉不到时也要能进结局（离线 / 资源挂掉时走这条） */
+              primary.textContent = '进入结局';
+              primary.setAttribute('href', './ending.html');
+            } else {
+              primary.textContent = '返回战役选择';
+              primary.setAttribute('href', './battlechoose.html');
+            }
           } else if (levelId) {
             primary.setAttribute('href', './game.html?level=' + encodeURIComponent(levelId));
           }

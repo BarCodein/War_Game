@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { PROGRESS_KEY } from '../../src/achievements.js';
 
 // 静态页面的"契约"测试。
@@ -74,6 +74,10 @@ describe('战役页面：关卡 id 的多重兜底契约', () => {
     for (const id of progression) {
       expect(indexIds.has(id), `解锁链里的关卡不在 index.json：${id}`).toBe(true);
     }
+    // 顺序必须与 levels/index.json 的排列一致（"先平津、后渡江"这类调整要两处同步；
+    // index 顺序也是结算页"下一战场"的依据）
+    expect(progression).toEqual(index.levels.map(level => level.id).filter(id => progression.includes(id)));
+    expect(index.levels.map(level => level.order)).toEqual(index.levels.map((_, i) => i + 1));
     // 常开集合：教学关在索引里；西安是没有关卡文件的登山小游戏
     for (const id of always) {
       expect(indexIds.has(id) || id === 'xian_battle', `常开集合里的未知关卡：${id}`).toBe(true);
@@ -96,10 +100,57 @@ describe('战役页面：关卡 id 的多重兜底契约', () => {
     expect(html).not.toContain('pinLockedHint'); // 旧的浮动提示已换成置灰按钮
   });
 
-  it('战役流程页面（battlechoose / result / climb）带未登录守卫', () => {
-    // 这三个是 classic script 页面，不能 import /src/auth.js，所以各带一份同样的内联守卫：
+  it('ending.html 与 battlebackground.html 同源，素材留位、按钮回战役选择', () => {
+    const ending = read('ending.html');
+    const background = read('battlebackground.html');
+    // 结构同源：同一套 class 骨架 + 同一个页面级 CSS 文件
+    for (const cls of ['battle-nav', 'battle-hero', 'hero-eyebrow', 'hero-subtitle',
+      'bbg-intro-overlay', 'bbg-intro-video', 'bbg-intro-content', 'cut-eyebrow',
+      'bbg-shell', 'bbg-section', 'bbg-img-box', 'bbg-text', 'bbg-start']) {
+      expect(ending, `ending.html 缺结构 ${cls}`).toContain(cls);
+      expect(background, `battlebackground.html 缺结构 ${cls}`).toContain(cls);
+    }
+    expect(ending).toContain('./members/css/battlepages.css');
+    // 富文本渲染：不然 <br>/<strong> 会被当普通文字显示出来
+    expect(ending).toContain('/richText.js');
+    expect(ending).toContain('window.richText');
+    // 文案字典 + 三重兜底（?ending= → #ending= → 字典第一项）
+    expect(ending).toContain('var ENDING_DATA');
+    expect(ending).toContain("params.get('ending')");
+    expect(ending).toContain("hashParams.get('ending')");
+    expect(ending).toContain('Object.keys(ENDING_DATA)[0]');
+    // 素材：结局视频与结局图都要真实存在，否则"自动播放"和首屏图都会挂
+    expect(ending).toContain("video: './assets/video/end.mp4'");
+    expect(ending).toContain("mapImg: './assets/picture/ending_pic.jpeg'");
+    expect(existsSync(new URL('../../assets/video/end.mp4', import.meta.url))).toBe(true);
+    expect(existsSync(new URL('../../assets/picture/ending_pic.jpeg', import.meta.url))).toBe(true);
+    // 视频源必须由脚本设到 <video> 自身并 load()：写死 <source> + autoplay 会让浏览器
+    // 在解析时就完成资源选择，之后再改 src 不生效（battlebackground 踩过的坑）
+    expect(ending).toMatch(/<video id="endingIntroVid" autoplay playsinline><\/video>/);
+    expect(ending).not.toMatch(/<video[^>]*>\s*<source/);
+    expect(ending).toContain('video.load()');
+    // 按钮就是原来 result.html 上的"返回战役选择"
+    expect(ending).toMatch(/id="endingBack"[^>]*href="\.\/battlechoose\.html"/);
+    expect(ending).toContain('返回战役选择');
+  });
+
+  it('result.html 把渡江战役的胜利接到结局页', () => {
+    const html = read('result.html');
+    expect(html).toContain("var ENDING_LEVEL = 'dujiang_battle'");
+    expect(html).toContain("primary.setAttribute('href', './ending.html')");
+    expect(html).toContain('进入结局');
+    const index = JSON.parse(read('public/assets/levels/index.json'));
+    const ids = index.levels.map(level => level.id);
+    expect(ids).toContain('dujiang_battle');
+    // 写死的结局触发点要求渡江就是最后一战；以后在渡江之后再加关卡，
+    // 这里会红：要么把 ENDING_LEVEL 改成新的最后一关，要么改成"取索引最后一条"。
+    expect(ids[ids.length - 1], '渡江之后又加了关卡：结局触发点需要同步').toBe('dujiang_battle');
+  });
+
+  it('战役流程页面（battlechoose / result / ending / climb）带未登录守卫', () => {
+    // 这几个是 classic script 页面，不能 import /src/auth.js，所以各带一份同样的内联守卫：
     // 没有会话 → 跳登录页并带 next。守卫必须出现在页面脚本/游戏脚本之前。
-    for (const file of ['battlechoose.html', 'result.html', 'climb/climb.html']) {
+    for (const file of ['battlechoose.html', 'result.html', 'ending.html', 'climb/climb.html']) {
       const html = read(file);
       expect(html, file).toContain("localStorage.getItem('war-of-dots.session')");
       expect(html, file).toContain("'/login.html?next='");
