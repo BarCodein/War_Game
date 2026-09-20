@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>沙盘战争 — 结局</title>
+  <link rel="stylesheet" href="./members/css/battlepages.css">
+</head>
+<body>
+
+  <!-- 未登录守卫：与 battlechoose / result 同一套（classic script 页面不能 import /src/auth.js） -->
+  <script>
+    (function () {
+      try {
+        var session = JSON.parse(localStorage.getItem('war-of-dots.session') || 'null');
+        if (session && session.username) return;
+        var next = window.location.pathname + window.location.search + window.location.hash;
+        window.location.replace('/login.html?next=' + encodeURIComponent(next));
+      } catch (e) {
+        window.location.replace('/login.html');
+      }
+    })();
+  </script>
+
+  <!-- ==================== 导航条 ==================== -->
+  <nav class="battle-nav">
+    <div class="battle-nav-inner">
+      <a class="battle-nav-back" href="./battlechoose.html">&larr; 返回关卡</a>
+      <a class="battle-nav-brand" href="./index.html">
+        <span class="nav-mark">&#9876;</span> 沙盘战争
+      </a>
+    </div>
+  </nav>
+
+  <!-- ==================== 页面标题（JS 按 ENDING_DATA 填充） ==================== -->
+  <section class="battle-hero">
+    <span class="hero-eyebrow">CAMPAIGN COMPLETE</span>
+    <h1 id="endingTitle"></h1>
+    <p class="hero-subtitle" id="endingSubtitle"></p>
+  </section>
+
+  <!-- ==================== 结局视频（结构与 battlebackground.html 的入场视频一致） ====================
+       进入页面先播放结局视频（全屏覆盖，带声音）。
+       视频开头 5 秒显示标题，之后渐隐，视频继续播放；
+       点击任意位置可随时跳过；视频播完 / 出错（素材缺失）时淡出，进入下方内容区。
+       ★ 接入方式：视频 src 由 JS 从 ENDING_DATA.video 填充（当前 = ./assets/video/end.mp4）。
+         ENDING_DATA.video 置空 → 不自动播放，标题卡显示 2.6 秒后直接进内容区。
+  =============================================================== -->
+  <div class="bbg-intro-overlay" id="endingIntroOverlay">
+    <div class="bbg-intro-video">
+      <!-- 不写死 <source>：视频源由下面的脚本设置到 video.src 并 load()，
+           否则浏览器在解析时就用它开始资源选择，之后再改 src 不生效（同 battlebackground）。 -->
+      <video id="endingIntroVid" autoplay playsinline></video>
+    </div>
+    <!-- 开场标题：视频开头显示，5 秒后渐隐 -->
+    <div class="bbg-intro-content" id="endingIntroContent">
+      <span class="cut-eyebrow">CAMPAIGN COMPLETE</span>
+      <h1 id="endingIntroTitle"></h1>
+      <p id="endingIntroSubtitle"></p>
+    </div>
+  </div>
+
+  <div class="bbg-shell">
+
+    <!-- ==================== 战役成果 ==================== -->
+    <section class="bbg-section">
+      <h2>战役成果</h2>
+      
+      <div class="bbg-text" id="endingResult"></div>
+    </section>
+
+    <!-- ==================== 历史意义 ==================== -->
+    <section class="bbg-section">
+      <h2>历史意义</h2>
+      <div class="bbg-text" id="endingMeaning"></div>
+    </section>
+
+    <!-- ==================== 尾声 ==================== -->
+    <section class="bbg-section">
+      <h2>未完待续</h2>
+      <div class="bbg-text" id="endingEpilogue"></div>
+    </section>
+
+    <div class="bbg-img-box">
+        <!-- ★ 结局画面（JS 从 ENDING_DATA.mapImg 填充；当前是占位图 assets/picture/ending_pic.jpeg） -->
+        <img id="endingSituation" src="" alt="战役结局画面">
+     </div>
+
+    <!-- ==================== 返回战役选择 ==================== -->
+    <div class="bbg-start">
+      <a class="battle-btn" id="endingBack" href="./battlechoose.html">返回战役选择</a>
+    </div>
+
+  </div>
+
+  <!-- 轻量富文本渲染：先转义再放行白名单标签（<br>/<strong>…），
+       必须在下面的结局数据脚本之前同步加载，保证 window.richText 已就绪 -->
+  <script src="/richText.js"></script>
+  <script>
+    /* =========================================================
+       结局数据字典（与 battlebackground.html 的 CAMPAIGNS 同一种模式）：
+       页面框架对所有结局都一样，只是画面与文案不同。
+       现在只有一个通用结局；将来要分结局就在这里加键，
+       并用 ?ending=<key> / #ending=<key> 切换。
+       ========================================================= */
+    var ENDING_DATA = {
+      ending: {
+        title: '全战役通关',
+        subtitle: '1946年12月 — 1949年4月 · 从宿北到渡江',
+        video: './assets/video/end.mp4',
+        mapImg: './assets/picture/end.jpeg',
+        mapAlt: '一定要解放台湾',
+        resultHtml:
+          '<strong>作战成果：</strong>宿北战役全歼整编第69师；塔山阻击战守住锦州门户；双堆集围歼黄维第十二兵团；' +
+          '平津战役夺取天津、张家口，促成北平和平解放；渡江战役突破长江防线，解放南京。<br><br>' +
+          '<strong>我方部队：</strong>华东野战军、中原野战军、东北野战军与华北军区部队，' +
+          '以及推着小推车支前的亿万民众。',
+        meaning:
+          '从1946年12月到1949年4月，人民解放军由战略防御转入战略进攻，再由战略决战走向战略追击。' +
+          '宿北、塔山、双堆集、平津、渡江——战士们在每一处战场都洒下了热血，' +
+          '也把希望和未来洒向了辽阔的祖国大地。<br><br>',
+        epilogue:
+          '多少事，从来急<br>天地转，光阴迫<br>'+
+          '一万年太久，只争朝夕<br><br>'+
+          '一定要解放台湾！<br><br>' ,
+        backHref: './battlechoose.html'
+      }
+    };
+
+    /* ---------- 按 ?ending= 填充页面内容（缺省用字典里的第一个结局） ---------- */
+    (function () {
+      var params = new URLSearchParams(window.location.search);
+      var hashParams = new URLSearchParams(String(window.location.hash || '').replace(/^#/, ''));
+
+      // 结局 key 三重兜底：?ending= → #ending= → 字典第一项。
+      // 兜底必须能接住"没有 key 或 key 写错"的情况：直接读字典里不存在的键会让
+      // data 为 undefined，下面第一行就抛错，整页文案/图/按钮全都不设置。
+      var requested = params.get('ending') || hashParams.get('ending') || '';
+      var key = ENDING_DATA[requested] ? requested : null;
+      var data = ENDING_DATA[key] || ENDING_DATA[Object.keys(ENDING_DATA)[0]];
+      if (!data) return;
+
+      document.title = '沙盘战争 — ' + data.title;
+      document.getElementById('endingTitle').textContent = data.title;
+      document.getElementById('endingSubtitle').textContent = data.subtitle;
+      document.getElementById('endingIntroTitle').textContent = data.title;
+      document.getElementById('endingIntroSubtitle').textContent = data.subtitle;
+      // 显式说明"没找到那个结局"，不静默显示别的
+      if (requested && !key) {
+        document.getElementById('endingSubtitle').textContent =
+          data.subtitle + '（未找到结局「' + requested + '」，显示默认结局）';
+      }
+
+      var situation = document.getElementById('endingSituation');
+      situation.src = data.mapImg;
+      situation.alt = data.mapAlt;
+
+      // 三个文本字段允许写少量富文本（<br> 换行、<strong> 加粗），统一走 richText()
+      var render = window.richText || function (text) { return String(text == null ? '' : text); };
+      document.getElementById('endingResult').innerHTML = render(data.resultHtml);
+      document.getElementById('endingMeaning').innerHTML = render(data.meaning);
+      document.getElementById('endingEpilogue').innerHTML = render(data.epilogue);
+
+      // 返回战役选择（结构同 battlebackground 的"开始指挥"）
+      var backBtn = document.getElementById('endingBack');
+      if (backBtn && data.backHref) backBtn.setAttribute('href', data.backHref);
+
+      // 视频源：必须设到 <video> 自身并调用 load()（同 battlebackground 的说明）
+      var video = document.getElementById('endingIntroVid');
+      if (video && data.video) {
+        video.src = data.video;
+        video.load();
+      }
+    })();
+
+    /* =========================================================
+       结局视频播放控制（逻辑与 battlebackground 的入场视频一致）：
+       - play 后 5 秒 → 渐隐标题（视频继续）
+       - ended → 淡出整个 overlay，滚到内容区
+       - 点击任意位置 → 立即淡出
+       - error（素材缺失/解码失败）→ 直接结束，不卡死
+       - ENDING_DATA.video 为空 → 不播放，标题卡 2.6 秒后进内容区
+       ========================================================= */
+    (function () {
+      var overlay = document.getElementById('endingIntroOverlay');
+      var video = document.getElementById('endingIntroVid');
+      var content = document.getElementById('endingIntroContent');
+      if (!overlay) return;
+
+      var finished = false;
+      var titleHidden = false;
+      function hideTitle() {
+        if (titleHidden || !content) return;
+        titleHidden = true;
+        content.classList.add('fade-out');
+      }
+      function endIntro() {
+        if (finished) return;
+        finished = true;
+        hideTitle();
+        overlay.classList.add('fade-out');
+        setTimeout(function () {
+          if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+          var firstSection = document.querySelector('.bbg-shell .bbg-section');
+          if (firstSection) firstSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }, 700);
+      }
+
+      // 点击 overlay 任意位置 → 跳过
+      overlay.addEventListener('click', endIntro);
+
+      if (video && video.getAttribute('src')) {
+        video.addEventListener('error', endIntro);
+        video.addEventListener('play', function () {
+          setTimeout(hideTitle, 5000);
+        });
+        var p = video.play();
+        if (p && typeof p.catch === 'function') {
+          p.catch(function () {
+            video.muted = false;
+            var p2 = video.play();
+            if (p2 && typeof p2.catch === 'function') {
+              p2.catch(endIntro);
+            }
+          });
+        }
+        video.addEventListener('ended', endIntro);
+      } else {
+        setTimeout(hideTitle, 5000);
+        setTimeout(endIntro, 2600);
+      }
+    })();
+  </script>
+
+  <script src="/audio.js"></script>
+  <script>
+    // UI 音效：导航返回 / 返回战役选择
+    window.bindSfx({
+      '.battle-nav a': 'click',
+      '#endingBack': 'button'
+    });
+  </script>
+</body>
+</html>

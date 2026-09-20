@@ -156,6 +156,21 @@
   </style>
 </head>
 <body>
+  <script>
+    /* 未登录守卫：本页是 classic script 页面（不能 import /src/auth.js），
+       这里做与 src/auth.js 的 requireAuth() 同一套判断：没有会话 → 跳登录页并带 next。
+       必须放在 climb.js 之前——否则小游戏会先启动再被弹走。 */
+    (function () {
+      try {
+        var session = JSON.parse(localStorage.getItem('war-of-dots.session') || 'null');
+        if (session && session.username) return;
+        var next = window.location.pathname + window.location.search + window.location.hash;
+        window.location.replace('/login.html?next=' + encodeURIComponent(next));
+      } catch (e) {
+        window.location.replace('/login.html');
+      }
+    })();
+  </script>
   <div id="wrap">
     <canvas></canvas>
 
@@ -203,6 +218,8 @@
     </div>
   </div>
 
+  <!-- 按账号隔离的本地存储（classic script 版；与 src/user-storage.js 同逻辑） -->
+  <script src="/user-storage.js"></script>
   <script src="climb.js?v=2"></script>
 </body>
 </html>

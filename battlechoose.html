@@ -55,6 +55,21 @@
   </style>
 </head>
 <body>
+  <script>
+    /* 未登录守卫：本页是 classic script 页面（不能 import /src/auth.js），
+       这里做与 src/auth.js 的 requireAuth() 同一套判断：没有会话 → 跳登录页并带 next。
+       放在最前面，避免先渲染再被弹走。 */
+    (function () {
+      try {
+        var session = JSON.parse(localStorage.getItem('war-of-dots.session') || 'null');
+        if (session && session.username) return;
+        var next = window.location.pathname + window.location.search + window.location.hash;
+        window.location.replace('/login.html?next=' + encodeURIComponent(next));
+      } catch (e) {
+        window.location.replace('/login.html');
+      }
+    })();
+  </script>
 
   <!-- ==================== 过场动画遮罩 ====================
        从首页「⚔战役」进入本页时先播放开场视频（带声音），
@@ -178,6 +193,8 @@
     </div>
   </section>
 
+  <!-- 按账号隔离的本地存储（classic script 版；与 src/user-storage.js 同逻辑） -->
+  <script src="/user-storage.js"></script>
   <script>
     /* =========================================================
        关卡选择页交互逻辑
@@ -428,25 +445,17 @@
       var mapImg = document.getElementById('mapImg');
       if (mapImg && mapImg.complete) {
         resetMap();
-        var sp = document.querySelector('.battle-pin[data-level="2"]');
-        if (sp && !isTutorialCompleted()) requestAnimationFrame(function () { positionGuideElements(sp); });
       } else if (mapImg) {
-        mapImg.addEventListener('load', function () {
-          resetMap();
-          var sp = document.querySelector('.battle-pin[data-level="2"]');
-          if (sp && !isTutorialCompleted()) requestAnimationFrame(function () { positionGuideElements(sp); });
-        });
+        mapImg.addEventListener('load', resetMap);
         mapImg.addEventListener('error', resetMap);
       } else {
         resetMap();
       }
 
-      // 窗口尺寸变化时，重新 clamp 防越界 + 重新定位引导元素
+      // 窗口尺寸变化时，重新 clamp 防越界
       window.addEventListener('resize', function () {
         clampPan();
         applyTransform();
-        var subeiPin = document.querySelector('.battle-pin[data-level="2"]');
-        if (subeiPin && !isTutorialCompleted()) positionGuideElements(subeiPin);
       });
 
       /* ---------- 关卡点交互 ---------- */
@@ -483,38 +492,128 @@
 
       var pins = document.querySelectorAll('.battle-pin');
 
+      /* ---------- 关卡解锁：按顺序开放 ----------
+         · 链条 PROGRESSION = 战役关卡按 levels/index.json 的顺序串起来，**通关前一关**才开下一关；
+         · 教学关（基础教学 / 地形与补给）与西安事变始终开放；断裂峡谷不在地图 pin 上、不进链条；
+         · 通关信号 = 胜利时 HUD 写入的 war-of-dots.campaign-progress[levelId].completed（失败不写）。 */
+      var PROGRESSION = ['subei_battle', 'tashan_battle', 'shuangduiji_battle', 'pingjin_battle', 'dujiang_battle'];
+      var ALWAYS_UNLOCKED = ['fracture-canyon-tutorial', 'tactical-training-tutorial', 'xian_battle'];
+      var PROGRESS_NAME = 'campaign-progress';
+
+      function loadProgress() {
+        // 进度按账号隔离：真正的键 = war-of-dots.u.<账号>.campaign-progress
+        if (!window.UserStorage) {
+          console.warn('[battlechoose] 缺少 /user-storage.js，解锁进度按"空"处理');
+          return {};
+        }
+        window.UserStorage.migrateLegacy(); // 首次升级后把旧版全局进度迁给当前账号
+        var saved = window.UserStorage.readJSON(PROGRESS_NAME, {});
+        return saved && typeof saved === 'object' ? saved : {};
+      }
+
+      function isCleared(levelId) {
+        var record = loadProgress()[levelId];
+        return Boolean(record && (record.completed === true || (record.wins || 0) > 0));
+      }
+
+      function isUnlocked(levelId) {
+        if (!levelId) return true;                              // 没有关卡 id 的条目不锁
+        if (ALWAYS_UNLOCKED.indexOf(levelId) >= 0) return true; // 教学关与西安始终开
+        var index = PROGRESSION.indexOf(levelId);
+        if (index < 0) return true;                             // 不在链条里的关卡不锁（防漏写）
+        if (index === 0) return true;                           // 链条首关始终开
+        return isCleared(PROGRESSION[index - 1]);
+      }
+
+      // 上一关的中文名（提示文案用）
+      function previousLevelName(levelId) {
+        var index = PROGRESSION.indexOf(levelId);
+        if (index <= 0) return '';
+        var prev = PROGRESSION[index - 1];
+        var key = Object.keys(battleData).find(function (k) { return battleData[k].level === prev; });
+        return key === undefined ? prev : battleData[key].name;
+      }
+
+      // 把解锁状态刷到 pin 上：锁定 → 灰化 + 锁图标 + aria-disabled
+      function refreshPinLocks() {
+        pins.forEach(function (pin) {
+          var data = battleData[pin.getAttribute('data-level')];
+          var unlocked = isUnlocked(data ? data.level : null);
+          pin.classList.toggle('locked', !unlocked);
+          pin.classList.toggle('unlocked', unlocked);
+          if (unlocked) pin.removeAttribute('aria-disabled');
+          else pin.setAttribute('aria-disabled', 'true');
+          var icon = pin.querySelector('.pin-lock-icon');
+          if (!unlocked && !icon) {
+            icon = document.createElement('span');
+            icon.className = 'pin-lock-icon';
+            pin.appendChild(icon);
+          } else if (unlocked && icon) {
+            icon.parentNode.removeChild(icon);
+          }
+        });
+      }
+
+      refreshPinLocks();
+      // 从战场返回（前进/后退缓存）时进度可能刚更新，重新算一次
+      window.addEventListener('pageshow', refreshPinLocks);
+
       pins.forEach(function (pin) {
         pin.addEventListener('click', function (e) {
           e.stopPropagation();
           var lv = pin.getAttribute('data-level');
+          var data = battleData[lv] || { name: '未知战役', date: '', desc: '', level: null };
 
-          // 高亮当前 pin
+          // 高亮当前 pin（未解锁的也能看卡片）
           pins.forEach(function (p) { p.classList.remove('current'); });
           pin.classList.add('current');
 
           // 填充预览卡
-          var data = battleData[lv] || { name: '未知战役', date: '', desc: '', level: null };
           previewName.textContent = data.name;
           previewDate.textContent = data.date;
           previewDesc.textContent = data.desc;
-          previewEnter.href = battleHref(data.level);
-          rememberLevel(data.level);
           preview.classList.add('show');
-
-          // 教学关卡：点击"进入战役"不跳 battlebackground，直接在本页显示 loading 后进游戏
-          if (data.level === 'fracture-canyon-tutorial' || data.level === 'tactical-training-tutorial') {
-            previewEnter.onclick = function (e) {
-              e.preventDefault();
-              startTutorialLoading(data.level);
-            };
-          } else {
-            previewEnter.onclick = null;
-          }
+          applyEnterState(data, !pin.classList.contains('locked'));
 
           // 自动放大聚焦到该关卡
           autoFocusPin(pin);
         });
       });
+
+      /**
+       * "进入战役"按钮状态：
+       *   已解锁 → 正常可点（教学关走本页 overlay，其余跳 battlebackground）；
+       *   未解锁 → 卡片照常打开，按钮置灰、文案改"未解锁"、去掉 href 且点不动，
+       *            鼠标悬停用 title 说明要先通关哪一关。
+       */
+      function applyEnterState(data, unlocked) {
+        if (!unlocked) {
+          previewEnter.classList.add('disabled');
+          previewEnter.setAttribute('aria-disabled', 'true');
+          previewEnter.removeAttribute('href');
+          var prev = previousLevelName(data.level);
+          previewEnter.title = prev ? '先通关「' + prev + '」才能进入' : '尚未解锁';
+          previewEnter.textContent = '未解锁';
+          previewEnter.onclick = function (e) { e.preventDefault(); };
+          return;
+        }
+        previewEnter.classList.remove('disabled');
+        previewEnter.removeAttribute('aria-disabled');
+        previewEnter.removeAttribute('title');
+        previewEnter.innerHTML = '进入战役 &rarr;';
+        previewEnter.href = battleHref(data.level);
+        rememberLevel(data.level);
+
+        // 教学关卡：点击"进入战役"不跳 battlebackground，直接在本页显示 loading 后进游戏
+        if (data.level === 'fracture-canyon-tutorial' || data.level === 'tactical-training-tutorial') {
+          previewEnter.onclick = function (e) {
+            e.preventDefault();
+            startTutorialLoading(data.level);
+          };
+        } else {
+          previewEnter.onclick = null;
+        }
+      }
 
       function autoFocusPin(pin) {
         var rect = viewport.getBoundingClientRect();

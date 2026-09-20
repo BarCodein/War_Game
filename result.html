@@ -193,6 +193,21 @@
   </style>
 </head>
 <body>
+  <script>
+    /* 未登录守卫：本页是 classic script 页面（不能 import /src/auth.js），
+       这里做与 src/auth.js 的 requireAuth() 同一套判断：没有会话 → 跳登录页并带 next。
+       放在最前面，避免先渲染再被弹走。 */
+    (function () {
+      try {
+        var session = JSON.parse(localStorage.getItem('war-of-dots.session') || 'null');
+        if (session && session.username) return;
+        var next = window.location.pathname + window.location.search + window.location.hash;
+        window.location.replace('/login.html?next=' + encodeURIComponent(next));
+      } catch (e) {
+        window.location.replace('/login.html');
+      }
+    })();
+  </script>
 
   <!-- ==================== 顶部导航条（同 battlebackground） ==================== -->
   <nav class="battle-nav">
@@ -244,7 +259,12 @@
 
   </div>
 
+  <!-- 按账号隔离的本地存储（classic script 版；与 src/user-storage.js 同逻辑） -->
+  <script src="/user-storage.js"></script>
   <script>
+    // 进度类数据统一走按账号隔离的存储层（键 = war-of-dots.u.<账号>.<数据名>）
+    var store = window.UserStorage;
+
     /* =========================================================
        结算数据字典：新增结算类型在这里加一条。
        原因支持多行：字符串里用 \n 换行即可。
@@ -266,6 +286,10 @@
         reason: '我方基地失守。\n部队已失去作战能力，本场战役未能达成目标。'
       }
     };
+
+    /* 结局关卡：打完这一关就算全战役通关，主按钮不再是"下一战场"，而是"进入结局"。
+       关卡 id 与 public/assets/levels/index.json 里的 id 必须一致（单测守着这条）。 */
+    var ENDING_LEVEL = 'dujiang_battle';
 
     (function () {
       var params = new URLSearchParams(window.location.search);
@@ -304,7 +328,7 @@
       }
       if (levelId) {
         try {
-          var all = JSON.parse(localStorage.getItem('war-of-dots.level-stats') || '{}');
+          var all = store.readJSON('level-stats', {}) || {};
           var entry = all[levelId] || {};
           var seconds = timeToSeconds(timeText);
           var ownLoss = params.has('casualtiesBlue')
@@ -319,13 +343,13 @@
             }
           }
           all[levelId] = entry;
-          localStorage.setItem('war-of-dots.level-stats', JSON.stringify(all));
+          store.writeJSON('level-stats', all);
         } catch (e) { /* 本地存储不可用时忽略 */ }
       }
 
       // 失败标记（用于"胜败乃兵家常事"成就）
       if (result === 'defeat') {
-        try { localStorage.setItem('war-of-dots.has-defeat', '1'); } catch (e) {}
+        try { store.writeFlag('has-defeat'); } catch (e) {}
       }
 
       /* =========================================================
@@ -355,25 +379,22 @@
       }
       function checkNewAchievements() {
         import('/src/achievements.js').then(function(mod) {
-          var ACH_UNLOCKED_KEY = 'war-of-dots.ach-unlocked';
-          function readJSON(key, fb) {
-            try { var r = localStorage.getItem(key); return r ? JSON.parse(r) : fb; } catch (e) { return fb; }
-          }
-          var prevUnlocked = readJSON(ACH_UNLOCKED_KEY, {});
+          // 全部进度类数据都走账号命名空间（store = window.UserStorage，见脚本顶部）
+          var prevUnlocked = store.readJSON('ach-unlocked', {}) || {};
           var list = mod.evaluateAchievements({
-            progress: readJSON('war-of-dots.campaign-progress', {}),
-            stats: readJSON('war-of-dots.level-stats', {}),
+            progress: store.readJSON('campaign-progress', {}),
+            stats: store.readJSON('level-stats', {}),
             levels: [],
-            climbCleared: localStorage.getItem('war-of-dots.climb-cleared') === '1',
-            climbStats: readJSON('war-of-dots.climb-stats', null),
-            customMapSaved: Boolean(localStorage.getItem('war-of-dots.custom-map')),
-            hasDefeat: localStorage.getItem('war-of-dots.has-defeat') === '1',
+            climbCleared: store.readFlag('climb-cleared'),
+            climbStats: store.readJSON('climb-stats', null),
+            customMapSaved: Boolean(store.readJSON('custom-map', null)),
+            hasDefeat: store.readFlag('has-defeat'),
           });
           var newAchs = list.filter(function(a) { return a.unlocked && !prevUnlocked[a.id]; });
           if (newAchs.length > 0) {
             var unlocked = Object.assign({}, prevUnlocked);
             newAchs.forEach(function(a) { unlocked[a.id] = true; });
-            localStorage.setItem(ACH_UNLOCKED_KEY, JSON.stringify(unlocked));
+            store.writeJSON('ach-unlocked', unlocked);
             newAchs.forEach(function(a, i) {
               setTimeout(function() { showAchievementPopup(a); }, i * 3800 + 800);
             });
@@ -425,6 +446,12 @@
           }
 
           if (result === 'victory') {
+            if (levelId === ENDING_LEVEL) {
+              /* 通关最后一战：原"返回战役选择"位置改跳结局页（ending.html 里也有返回按钮） */
+              primary.textContent = '结局';
+              primary.setAttribute('href', './ending.html');
+              return;
+            }
             var next = current >= 0 ? levels[current + 1] : null;
             if (next) {
               primary.textContent = '下一战场';
@@ -443,8 +470,14 @@
         .catch(function () {
           if (timeText) subtitleEl.textContent = '用时 ' + timeText;
           if (result === 'victory') {
-            primary.textContent = '返回战役选择';
-            primary.setAttribute('href', './battlechoose.html');
+            if (levelId === ENDING_LEVEL) {
+              /* 索引拉不到时也要能进结局（离线 / 资源挂掉时走这条） */
+              primary.textContent = '进入结局';
+              primary.setAttribute('href', './ending.html');
+            } else {
+              primary.textContent = '返回战役选择';
+              primary.setAttribute('href', './battlechoose.html');
+            }
           } else if (levelId) {
             primary.setAttribute('href', './game.html?level=' + encodeURIComponent(levelId));
           }

@@ -1,19 +1,15 @@
 // 成就页（achievements.html）入口：读取本地战绩 → 判定成就 → 渲染卡片。
 // 判定逻辑在 src/achievements.js（纯函数、已单测），这里只做 DOM 与本地存储读取。
+// 存储按**账号**隔离（src/user-storage.js）：PROGRESS_KEY 等常量只是"数据名"，
+// 真正的 localStorage 键要经 userKey()/readJSON() 拼上账号前缀。
 import {
   evaluateAchievements, summarizeAchievements,
   PROGRESS_KEY, LEVEL_STATS_KEY, CLIMB_CLEARED_KEY, CLIMB_STATS_KEY, CUSTOM_MAP_KEY,
 } from '../achievements.js';
 import { LEVELS_INDEX_PATH } from '../simulation/level.js';
+import { migrateLegacy, readFlag, readJSON } from '../user-storage.js';
 
-function readJSON(key, fallback) {
-  try {
-    const raw = localStorage.getItem(key);
-    return raw ? JSON.parse(raw) : fallback;
-  } catch {
-    return fallback; // 存储损坏时按"没有数据"处理，不让整页崩掉
-  }
-}
+migrateLegacy(); // 首次升级后把旧版全局进度迁给当前账号
 
 async function loadLevels() {
   try {
@@ -80,10 +76,10 @@ async function main() {
     progress: readJSON(PROGRESS_KEY, {}),
     stats: readJSON(LEVEL_STATS_KEY, {}),
     levels,
-    climbCleared: localStorage.getItem(CLIMB_CLEARED_KEY) === '1',
+    climbCleared: readFlag(CLIMB_CLEARED_KEY),
     climbStats: readJSON(CLIMB_STATS_KEY, null),
-    customMapSaved: Boolean(localStorage.getItem(CUSTOM_MAP_KEY)),
-    hasDefeat: localStorage.getItem('war-of-dots.has-defeat') === '1',
+    customMapSaved: Boolean(readJSON(CUSTOM_MAP_KEY, null)),
+    hasDefeat: readFlag('has-defeat'),
   });
 
   const summary = summarizeAchievements(list);

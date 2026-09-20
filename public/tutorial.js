@@ -1,4 +1,4 @@
-﻿(function(){
+(function(){
 "use strict";
 console.log("%c[教学系统] tutorial.js 已加载", "color:#4ec9a0;font-weight:bold");
 
@@ -922,11 +922,12 @@ function finishTutorial() {
   state.finished = true;
   for (let i = 0; i < steps.length; i++) state.completed[i] = true;
   renderSteps();
-  // 标记教学关卡完成
+  // 标记教学关卡完成（进度按账号隔离，见 public/user-storage.js）
   try {
-    const prog = JSON.parse(localStorage.getItem("war-of-dots.campaign-progress") || "{}");
+    const store = window.UserStorage;
+    const prog = store.readJSON("campaign-progress", {}) || {};
     prog[currentLevelId] = Object.assign({}, prog[currentLevelId] || {}, { completed: true, wins: 1 });
-    localStorage.setItem("war-of-dots.campaign-progress", JSON.stringify(prog));
+    store.writeJSON("campaign-progress", prog);
   } catch (_) {}
   // 隐藏教学面板，播放结束剧情
   const panel = document.getElementById("tutorialChecklist");
