@@ -119,18 +119,24 @@ describe('战役页面：关卡 id 的多重兜底契约', () => {
     expect(ending).toContain("params.get('ending')");
     expect(ending).toContain("hashParams.get('ending')");
     expect(ending).toContain('Object.keys(ENDING_DATA)[0]');
-    // 素材：结局视频与结局图都要真实存在，否则"自动播放"和首屏图都会挂。
-    // 路径从页面里取，不写死文件名——结局图换过一次（占位图 → 正式图 end.jpeg），
-    // 写死的话换图就会变成一条假红。
+    // 素材：结局视频与结局图都要有真家伙，否则"自动播放"和首屏图都会挂。
+    // 路径从页面里取，不写死文件名——结局图与视频源都换过，写死就会变成假红。
     const assetOf = (field) => {
-      const match = ending.match(new RegExp(`${field}:\\s*'(\\.?[^']+)'`));
+      const match = ending.match(new RegExp(`${field}:\\s*'([^']+)'`));
       expect(match, `ending.html 里找不到 ${field}`).not.toBeNull();
       return match[1].replace(/^\.\//, '');
     };
-    for (const field of ['video', 'mapImg']) {
-      const asset = assetOf(field);
-      expect(existsSync(new URL(`../../${asset}`, import.meta.url)), `${field} 素材不存在：${asset}`).toBe(true);
-    }
+    // 结局图必须在本仓库里（首屏就要用，不能依赖网络）
+    const mapAsset = assetOf('mapImg');
+    expect(/^https?:\/\//.test(mapAsset), '结局图不应是外链').toBe(false);
+    expect(existsSync(new URL(`../../${mapAsset}`, import.meta.url)), `结局图不存在：${mapAsset}`).toBe(true);
+    // 视频允许放远端（团队把素材放在自己服务器上），但仓库里必须留一份备用源兜底，
+    // 否则远端一慢/一挂，遮罩就只能停在黑屏上（ending.html 里的 data-fallback 逻辑用它）
+    const fallback = ending.match(/videoFallback:\s*'([^']+)'/);
+    expect(fallback, 'ending.html 缺少 videoFallback 兜底源').not.toBeNull();
+    const fallbackAsset = fallback[1].replace(/^\.\//, '');
+    expect(existsSync(new URL(`../../${fallbackAsset}`, import.meta.url)), `备用视频不存在：${fallbackAsset}`).toBe(true);
+    expect(ending).toContain('data-fallback');
     // 视频源必须由脚本设到 <video> 自身并 load()：写死 <source> + autoplay 会让浏览器
     // 在解析时就完成资源选择，之后再改 src 不生效（battlebackground 踩过的坑）
     expect(ending).toMatch(/<video id="endingIntroVid" autoplay playsinline><\/video>/);

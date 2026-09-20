@@ -23,9 +23,10 @@
     loading: 'loading.mp3',         // 加载中
     startup: 'startup.mp3',         // 开机 / 进入
     shutdown: 'shutdown.mp3',       // 关机 / 退出
-    // 战斗音效（hud.js 战斗循环 + 击杀触发）
-    blade: 'blade.mp3',             // 短兵相接（白刃战循环音）
-    hurt: 'hurt.mp3',               // 敌军被击败
+    // 战斗音效：目前**没有页面在播**——局内的"单位接触战斗音"和"单位阵亡音"
+    // 已按需求从 hud.js 移除，这里保留映射与素材，需要时在 hud.js 里重新触发即可。
+    blade: 'blade.mp3',             // 短兵相接（原：进入白刃战时播一次）
+    hurt: 'hurt.mp3',               // 敌军被击败（原：有单位阵亡时播一次）
     gunshot: 'gunshot.mp3',         // 远距射击（预留）
     explosion: 'explosion.mp3'      // 爆炸（预留）
   };

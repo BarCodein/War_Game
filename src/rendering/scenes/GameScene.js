@@ -144,7 +144,7 @@ export class GameScene extends Phaser.Scene {
         delete window.__game;
       });
     }
-    // 场景关闭时清理 HUD 的 setInterval（战斗音效的循环检测），避免重玩时叠加
+    // 场景关闭时清理 HUD 资源（重玩时不留残留状态）
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.hud?.destroy?.();
     });

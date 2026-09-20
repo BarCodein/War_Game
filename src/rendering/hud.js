@@ -396,56 +396,13 @@ export function createHud(scene, world, controller, selection, orders) {
   }
 
   // ---------- 战斗音效 ----------
-  // 规则：
-  //   1. 每一个蓝兵（faction==='blue'）从「非战斗」进入「战斗」(state==='combat') 的瞬间
-  //      → 各播放一次 blade（白刃战起手音），不循环
-  //   2. 同一蓝兵脱离战斗后再次进入战斗 → 再播放一次（按 unit.id 去重，阵亡单位自动移出）
-  //   3. world.history 新增的 unitDied/cause==='combat' 事件 → 播一次 hurt（击杀音）
-  // 实现：
-  //   - 独立的 setInterval（80ms 检查一次），逐个蓝兵比较上一帧的战斗状态，仅在「上升沿」
-  //     （非战斗→战斗）触发，因此同一蓝兵持续战斗期间不会重复播放。
-  //   - 死亡事件直接从 world.history 增量读取（与 renderEvents 同一份增量，不重复触发）
-  const COMBAT_CHECK_INTERVAL = 80; // 检查战斗状态的频率
-  // 当前处于战斗状态的蓝兵 id 集合；每帧重建，脱离战斗/阵亡的蓝兵自然不再跟踪
-  const combatSfx = {
-    blueCombatIds: new Set(),
-  };
-
-  function checkCombatSfx() {
-    const current = new Set();
-    for (const u of world.units) {
-      if (u.faction === 'blue' && u.state === 'combat') current.add(u.id);
-    }
-    // 本帧处于战斗、且上一帧未记录的蓝兵 = 刚进入战斗 → 各播一次 blade
-    for (const id of current) {
-      if (!combatSfx.blueCombatIds.has(id)) window.playSfx?.('blade', 0.45); // 刀剑音量降至 45%
-    }
-    combatSfx.blueCombatIds = current;
-  }
-
-  function checkDeathSfx() {
-    // 增量读 world.history（用独立的 lastDeathIndex，与 renderEvents 互不影响）
-    if (!combatSfx.lastDeathIndex) combatSfx.lastDeathIndex = 0;
-    const newEvents = world.history.slice(combatSfx.lastDeathIndex);
-    combatSfx.lastDeathIndex = world.history.length;
-    // 单帧多单位同时阵亡只播一次 hurt（避免叠加噪音）
-    let anyCombatDeath = false;
-    for (const event of newEvents) {
-      if (event.type === 'unitDied' && event.cause === 'combat') {
-        anyCombatDeath = true;
-      }
-    }
-    if (anyCombatDeath) window.playSfx?.('hurt');
-  }
-
-  // 启动两个独立定时器（用变量保存 ID，createHud 返回时由调用方清理）
-  const combatSfxIntervals = [
-    setInterval(checkCombatSfx, COMBAT_CHECK_INTERVAL),
-    setInterval(checkDeathSfx, values.performance.hudRefreshMs),
-  ];
-  function clearCombatSfx() {
-    combatSfxIntervals.forEach(clearInterval);
-  }
+  // 【已移除】原先这里有两个 setInterval：
+  //   1. 蓝兵「非战斗 → 战斗」上升沿播一次 blade（白刃战接触音，音量 0.45）
+  //   2. world.history 新增 unitDied/cause==='combat' 事件时播一次 hurt（阵亡音）
+  // 按需求去掉了这两个音效（局内打起来太吵）：接触与阵亡不再发声。
+  // 据点易主的 explosion 音效不在这里，仍在 renderEvents() 里触发，未受影响。
+  // 素材与 playSfx 映射（public/audio.js 的 blade / hurt）都保留着，
+  // 要恢复的话按上面的规则重新加回检测即可（git 历史里能找到完整实现）。
 
   function formatTime(seconds) {
     const minutes = Math.floor(seconds / 60).toString().padStart(2, '0');
@@ -577,10 +534,10 @@ export function createHud(scene, world, controller, selection, orders) {
   renderTopBarUI(); // 初始渲染（不弹 toast）
   renderVictoryConditions();
 
-  // 暴露 destroy 方法：GameScene 在 SHUTDOWN 时调用，清理战斗音效的 setInterval
-  function destroy() {
-    clearCombatSfx();
-  }
+  // 暴露 destroy 方法：GameScene 在 SHUTDOWN 时调用。
+  // HUD 目前没有需要清理的定时器（战斗音效那两个 setInterval 已移除），
+  // 保留这个钩子是为了以后再加 HUD 级定时器时有统一的清理入口。
+  function destroy() {}
 
   return { update, showToast, destroy };
 }
