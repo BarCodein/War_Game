@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { advance, makePlainMap, makeWorld } from './helpers.js';
+import { updateVictory } from '../../src/simulation/systems/victory.js';
 
 function twoCityMap() {
   return makePlainMap({
@@ -118,6 +119,15 @@ describe('victory：关卡任务规则（world.mess）', () => {
     expect(world.winner).toBeNull();
     advance(world, 0.7);
     expect(world.winner).toBe('red');
+  });
+
+  it('进攻方刚好在时限之后拿下全部据点：先判据点再判超时，仍算攻方胜', () => {
+    const world = makeWorld(pointMap());
+    world.capturePoints[0].faction = 'blue'; // 据点已全部到手
+    world.mess = { mode: 'attack', faction: 'blue', time: 1, points: [world.capturePoints[0]] };
+    world.time = 5;                          // 且时间已经越过时限
+    updateVictory(world);                    // 顺序：先判据点 → 判胜（旧实现会先判超时 → 判负）
+    expect(world.winner).toBe('blue');
   });
 
   it('歼灭战：消灭全部「指定单位」即获胜（未被指定的敌军不影响判定）', () => {
