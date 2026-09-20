@@ -58,8 +58,17 @@
       "group": "nanjingLine",
       "at": { "anchor": "riverLineCenter" },
       "units": [
-        { "type": "heavy", "count": 4, "spacing": { "x": 30, "y": 0 } },
-        { "type": "light", "count": 4, "offset": { "x": 0, "y": 36 }, "spacing": { "x": 30, "y": 0 } }
+        { "type": "heavy", "count": 2, "spacing": { "x": 30, "y": 0 } },
+        { "type": "light", "count": 1, "offset": { "x": 0, "y": 36 }, "spacing": { "x": 30, "y": 0 } }
+      ]
+    },
+    {
+      "faction": "red",
+      "group": "nanjingMobile",
+      "at": { "anchor": "nanjing" },
+      "units": [
+        { "type": "heavy", "count": 1, "spacing": { "x": 32, "y": 0 } },
+        { "type": "light", "count": 1, "offset": { "x": 0, "y": 34 }, "spacing": { "x": 32, "y": 0 } }
       ]
     },
     {
@@ -119,12 +128,14 @@
   "ai": {
     "faction": "red",
     "preset": "cautious",
+    "fallback": { "anchor": "nanjing" },
     "triggers": [
       {
         "id": "defend_river_line",
         "at": { "time": 0 },
         "actions": [
           { "type": "hold", "units": { "group": "nanjingLine" } },
+          { "type": "hold", "units": { "group": "nanjingMobile" } },
           { "type": "hold", "units": { "group": "westLine" } },
           { "type": "hold", "units": { "group": "eastLine" } },
           { "type": "hold", "units": { "group": "flankWest" } },
@@ -138,35 +149,56 @@
       {
         "id": "ford_lost",
         "when": { "capturePoint": "p8", "owner": "enemy" },
+        "repeatEvery": 25,
         "then": [
+          { "type": "attackNearest", "units": { "group": "nanjingMobile" } },
           { "type": "engage", "target": { "anchor": "nanjingFord" }, "units": { "group": "eastLine" } },
           { "type": "engage", "target": { "anchor": "nanjingFord" }, "units": { "group": "flankEast" } },
           { "type": "engage", "target": { "anchor": "nanjingFord" }, "units": { "group": "reserveEast" } }
+        ],
+        "otherwise": [
+          { "type": "attackMove", "target": { "anchor": "nanjing" }, "units": { "group": "nanjingMobile" } }
         ]
       },
       {
         "id": "west_point_lost",
         "when": { "city": "c28", "owner": "enemy" },
+        "repeatEvery": 25,
         "then": [
+          { "type": "attackNearest", "units": { "group": "nanjingMobile" } },
           { "type": "engage", "target": { "cityId": "c28" }, "units": { "group": "flankWest" } },
           { "type": "engage", "target": { "cityId": "c28" }, "units": { "group": "reserveWest" } }
+        ],
+        "otherwise": [
+          { "type": "attackMove", "target": { "anchor": "nanjing" }, "units": { "group": "nanjingMobile" } }
         ]
       },
       {
         "id": "east_point_lost",
         "when": { "capturePoint": "p11", "owner": "enemy" },
+        "repeatEvery": 25,
         "then": [
+          { "type": "attackNearest", "units": { "group": "nanjingMobile" } },
           { "type": "engage", "target": { "capturePointId": "p11" }, "units": { "group": "flankEast" } }
+        ],
+        "otherwise": [
+          { "type": "attackMove", "target": { "anchor": "nanjing" }, "units": { "group": "nanjingMobile" } }
         ]
       },
       {
         "id": "nanjing_contested",
         "when": { "capturePoint": "p9", "owner": "enemy" },
+        "repeatEvery": 20,
         "then": [
+          { "type": "attackNearest", "units": { "group": "nanjingMobile" } },
+          { "type": "engage", "target": { "anchor": "nanjing" }, "units": { "group": "nanjingLine" } },
           { "type": "engage", "target": { "anchor": "nanjing" }, "units": { "group": "westLine" } },
           { "type": "engage", "target": { "anchor": "nanjing" }, "units": { "group": "eastLine" } },
           { "type": "engage", "target": { "anchor": "nanjing" }, "units": { "group": "flankWest" } },
           { "type": "engage", "target": { "anchor": "nanjing" }, "units": { "group": "flankEast" } }
+        ],
+        "otherwise": [
+          { "type": "attackMove", "target": { "anchor": "nanjing" }, "units": { "group": "nanjingMobile" } }
         ]
       },
       {
