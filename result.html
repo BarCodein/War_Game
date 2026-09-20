@@ -471,8 +471,9 @@
           if (timeText) subtitleEl.textContent = '用时 ' + timeText;
           if (result === 'victory') {
             if (levelId === ENDING_LEVEL) {
-              /* 索引拉不到时也要能进结局（离线 / 资源挂掉时走这条） */
-              primary.textContent = '进入结局';
+              /* 索引拉不到时也要能进结局（离线 / 资源挂掉时走这条）；
+                 按钮文案与上面正常分支保持一致 */
+              primary.textContent = '结局';
               primary.setAttribute('href', './ending.html');
             } else {
               primary.textContent = '返回战役选择';

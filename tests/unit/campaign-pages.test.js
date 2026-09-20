@@ -119,11 +119,18 @@ describe('战役页面：关卡 id 的多重兜底契约', () => {
     expect(ending).toContain("params.get('ending')");
     expect(ending).toContain("hashParams.get('ending')");
     expect(ending).toContain('Object.keys(ENDING_DATA)[0]');
-    // 素材：结局视频与结局图都要真实存在，否则"自动播放"和首屏图都会挂
-    expect(ending).toContain("video: './assets/video/end.mp4'");
-    expect(ending).toContain("mapImg: './assets/picture/ending_pic.jpeg'");
-    expect(existsSync(new URL('../../assets/video/end.mp4', import.meta.url))).toBe(true);
-    expect(existsSync(new URL('../../assets/picture/ending_pic.jpeg', import.meta.url))).toBe(true);
+    // 素材：结局视频与结局图都要真实存在，否则"自动播放"和首屏图都会挂。
+    // 路径从页面里取，不写死文件名——结局图换过一次（占位图 → 正式图 end.jpeg），
+    // 写死的话换图就会变成一条假红。
+    const assetOf = (field) => {
+      const match = ending.match(new RegExp(`${field}:\\s*'(\\.?[^']+)'`));
+      expect(match, `ending.html 里找不到 ${field}`).not.toBeNull();
+      return match[1].replace(/^\.\//, '');
+    };
+    for (const field of ['video', 'mapImg']) {
+      const asset = assetOf(field);
+      expect(existsSync(new URL(`../../${asset}`, import.meta.url)), `${field} 素材不存在：${asset}`).toBe(true);
+    }
     // 视频源必须由脚本设到 <video> 自身并 load()：写死 <source> + autoplay 会让浏览器
     // 在解析时就完成资源选择，之后再改 src 不生效（battlebackground 踩过的坑）
     expect(ending).toMatch(/<video id="endingIntroVid" autoplay playsinline><\/video>/);
@@ -138,7 +145,8 @@ describe('战役页面：关卡 id 的多重兜底契约', () => {
     const html = read('result.html');
     expect(html).toContain("var ENDING_LEVEL = 'dujiang_battle'");
     expect(html).toContain("primary.setAttribute('href', './ending.html')");
-    expect(html).toContain('进入结局');
+    // 按钮文案：正常分支与"索引拉不到"的兜底分支必须一致
+    expect(html.match(/primary\.textContent = '结局'/g)).toHaveLength(2);
     const index = JSON.parse(read('public/assets/levels/index.json'));
     const ids = index.levels.map(level => level.id);
     expect(ids).toContain('dujiang_battle');

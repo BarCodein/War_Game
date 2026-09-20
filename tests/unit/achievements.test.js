@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  ACHIEVEMENTS, evaluateAchievements, summarizeAchievements,
+  ACHIEVEMENTS, evaluateAchievements, summarizeAchievements, CAMPAIGN_EXCLUDED_LEVELS,
   PROGRESS_KEY, LEVEL_STATS_KEY, CLIMB_CLEARED_KEY, CUSTOM_MAP_KEY,
 } from '../../src/achievements.js';
 import { readFileSync } from 'node:fs';
@@ -8,6 +8,9 @@ import { readFileSync } from 'node:fs';
 const read = (path) => readFileSync(new URL(`../../${path}`, import.meta.url), 'utf8');
 const LEVELS = [{ id: 'fracture-canyon' }, { id: 'subei_battle' }, { id: 'tashan_battle' }];
 const byId = (list, id) => list.find(item => item.id === id);
+// 「苦行东南山」判定：直接给一段 progress + 关卡索引
+const allCampaignsUnlocked = (progress, levels) =>
+  byId(evaluateAchievements({ progress, levels }), 'all-campaigns').unlocked;
 
 describe('成就定义', () => {
   it('每条成就都有 id / 名称 / 星级 1~3 / 说明 / 达成条件', () => {
@@ -29,6 +32,9 @@ describe('成就定义', () => {
     expect(names).toContain('宿北战役');
     expect(names).toContain('塔山战役');
     expect(names).toContain('睡衣登山大赛冠军');
+    // 战役全通已更名为「苦行东南山」
+    expect(names).toContain('苦行东南山');
+    expect(names).not.toContain('战役全通');
   });
 
   it('进度类存储都走账号命名空间，各写入方用的数据名一致', () => {
@@ -80,10 +86,32 @@ describe('成就判定', () => {
     expect(summarizeAchievements(list).earnedStars).toBe(1 + 2);
   });
 
-  it('全部关卡通关 → 战役全通解锁（关卡索引为空时不误判为"全通"）', () => {
+  it('全部关卡通关 → 苦行东南山解锁（关卡索引为空时不误判为"全通"）', () => {
     const progress = Object.fromEntries(LEVELS.map(level => [level.id, { completed: true }]));
     expect(byId(evaluateAchievements({ progress, levels: LEVELS }), 'all-campaigns').unlocked).toBe(true);
     expect(byId(evaluateAchievements({ progress, levels: [] }), 'all-campaigns').unlocked).toBe(false);
+  });
+
+  it('苦行东南山不含断裂峡谷：没打 fracture-canyon 也算全通，少打一场战役则不算', () => {
+    // 口径：战役 = 关卡索引 − CAMPAIGN_EXCLUDED_LEVELS
+    expect(CAMPAIGN_EXCLUDED_LEVELS).toContain('fracture-canyon');
+    const index = JSON.parse(read('public/assets/levels/index.json')).levels;
+    // 被剔除的关卡必须真实存在，否则这条配置是死代码（写错 id 会静默失效）
+    for (const id of CAMPAIGN_EXCLUDED_LEVELS) {
+      expect(index.map(level => level.id), `CAMPAIGN_EXCLUDED_LEVELS 里的 ${id} 不在关卡索引里`).toContain(id);
+    }
+
+    // 索引里除断裂峡谷外全部通关（断裂峡谷故意没打）→ 解锁
+    const withoutCanyon = Object.fromEntries(
+      index.filter(level => !CAMPAIGN_EXCLUDED_LEVELS.includes(level.id))
+        .map(level => [level.id, { completed: true }]),
+    );
+    expect(allCampaignsUnlocked(withoutCanyon, index)).toBe(true);
+
+    // 少打一场真实战役（渡江）→ 不解锁
+    const missingOne = { ...withoutCanyon };
+    delete missingOne.dujiang_battle;
+    expect(allCampaignsUnlocked(missingOne, index)).toBe(false);
   });
 
   it('登山登顶 / 编辑器存图 各自解锁对应成就', () => {

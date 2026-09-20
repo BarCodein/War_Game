@@ -41,6 +41,14 @@ function summarizeStats(stats) {
 }
 
 /**
+ * 「苦行东南山」的口径：战役 = 关卡索引里的关卡，但**不含断裂峡谷**。
+ * `fracture-canyon` 不是战役选择页上的战役（地图上没有 pin，只会作为演练场
+ * 出现在结算页的"下一战场"链里），要求它跟这条成就的语义对不上。
+ * 显式列出来，免得以后有人以为这是漏写。
+ */
+export const CAMPAIGN_EXCLUDED_LEVELS = ['fracture-canyon'];
+
+/**
  * 成就定义。`hint` 是未解锁时显示的达成条件；`condition(ctx)` 返回是否解锁。
  * 数字阈值（比如 3 分钟、伤亡 100）暂定，方便后续按手感调整。
  */
@@ -127,12 +135,17 @@ export const ACHIEVEMENTS = [
   },
   {
     id: 'all-campaigns',
-    name: '战役全通',
+    name: '苦行东南山',
     stars: 3,
-    desc: '把战役选择页上的每一场战役都打完。',
-    hint: '通关关卡索引中的全部战役',
-    condition: ({ levels, progress }) => levels.length > 0
-      && levels.every(level => progress?.[level.id]?.completed === true),
+    desc: '把战役选择页上的每一场战役都打完，断裂峡谷演练场不计在内。',
+    hint: '通关全部战役（不含断裂峡谷）',
+    condition: ({ levels, progress }) => {
+      const campaigns = (Array.isArray(levels) ? levels : [])
+        .filter(level => !CAMPAIGN_EXCLUDED_LEVELS.includes(level.id));
+      // 空索引不算"全通"（关卡列表没加载出来时不能白送这条成就）
+      return campaigns.length > 0
+        && campaigns.every(level => progress?.[level.id]?.completed === true);
+    },
   },
   {
     id: 'swift',
@@ -246,7 +259,7 @@ export const ACHIEVEMENTS = [
  * @param {object} input
  * @param {object} input.progress    war-of-dots.campaign-progress（关卡 id → { completed, wins }）
  * @param {object} input.stats       war-of-dots.level-stats（关卡 id → { cleared, bestTime, bestCasualties }）
- * @param {Array}  input.levels      关卡索引（[{ id, name, ... }]）
+ * @param {Array}  input.levels      关卡索引（[{ id, name, ... }]）；「苦行东南山」会剔除 CAMPAIGN_EXCLUDED_LEVELS
  * @param {boolean} input.climbCleared / input.customMapSaved
  * @returns {Array} 每条成就 + `unlocked`
  */
