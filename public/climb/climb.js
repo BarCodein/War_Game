@@ -1,4 +1,4 @@
-﻿// ============================================================
+// ============================================================
 // 睡衣登山大赛 - 横板爬山跑酷 (像素风)
 // 主角: 穿睡衣的士兵 | 武器: 步枪 + 大刀
 // 目标: 在规定时间内爬上山顶
@@ -552,7 +552,10 @@ let fallRocks = []
 let rockTimer = rand(150, 300)
 
 // ---------- 成就系统 ----------
-const CLIMB_STATS_KEY = 'war-of-dots.climb-stats'
+// 进度类数据按账号隔离：统一走 window.UserStorage（public/user-storage.js，climb.html 里先加载）
+const CLIMB_STATS_KEY = 'climb-stats'
+const ACH_UNLOCKED_NAME = 'ach-unlocked'
+const CLIMB_CLEARED_NAME = 'climb-cleared'
 const CLIMB_ACHIEVEMENTS = [
   { id: 'climb-veteran', name: '捉蒋大师', stars: 2, desc: '累计登顶三次，捉蒋行动的老手。', hint: '累计登顶3次' },
   { id: 'climb-speedster', name: '极速攀登', stars: 3, desc: '60秒内登顶，风一般的男子。', hint: '60秒内登顶' },
@@ -583,29 +586,25 @@ const unlockedThisRun = new Set()
 
 function loadClimbStats() {
   try {
-    const raw = localStorage.getItem(CLIMB_STATS_KEY)
-    if (raw) {
-      const saved = JSON.parse(raw)
-      climbStats = { ...climbStats, ...saved }
-    }
+    const saved = window.UserStorage.readJSON(CLIMB_STATS_KEY, null)
+    if (saved) climbStats = { ...climbStats, ...saved }
   } catch (e) {}
 }
 function saveClimbStats() {
-  try { localStorage.setItem(CLIMB_STATS_KEY, JSON.stringify(climbStats)) } catch (e) {}
+  try { window.UserStorage.writeJSON(CLIMB_STATS_KEY, climbStats) } catch (e) {}
 }
 function isAchievementUnlocked(id) {
   try {
-    const raw = localStorage.getItem('war-of-dots.ach-unlocked')
-    if (raw) return JSON.parse(raw)[id] === true
+    const obj = window.UserStorage.readJSON(ACH_UNLOCKED_NAME, null)
+    if (obj) return obj[id] === true
   } catch (e) {}
   return false
 }
 function markAchievementUnlocked(id) {
   try {
-    const raw = localStorage.getItem('war-of-dots.ach-unlocked')
-    const obj = raw ? JSON.parse(raw) : {}
+    const obj = window.UserStorage.readJSON(ACH_UNLOCKED_NAME, {}) || {}
     obj[id] = true
-    localStorage.setItem('war-of-dots.ach-unlocked', JSON.stringify(obj))
+    window.UserStorage.writeJSON(ACH_UNLOCKED_NAME, obj)
   } catch (e) {}
 }
 // 成就弹窗 + 音效接口（音频稍后替换）
@@ -876,8 +875,8 @@ function onPlayerWin() {
   if (climbStats.sharpshooter) unlockAchievement('climb-sharpshooter')
   if (climbStats.collector) unlockAchievement('climb-collector')
   if ((climbStats.maxKillsInRun || 0) >= 10) unlockAchievement('climb-expert-killer')
-  // 兼容旧成就系统的 climb-cleared 标记
-  try { localStorage.setItem('war-of-dots.climb-cleared', '1') } catch (e) {}
+  // 兼容旧成就系统的 climb-cleared 标记（按账号存）
+  try { window.UserStorage.writeFlag(CLIMB_CLEARED_NAME) } catch (e) {}
   saveClimbStats()
 }
 

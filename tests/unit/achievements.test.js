@@ -31,13 +31,30 @@ describe('成就定义', () => {
     expect(names).toContain('睡衣登山大赛冠军');
   });
 
-  it('存储键与写入方（result.html / climb.js / editorToolbar.js）一致', () => {
-    // 结算页与登山小游戏是 classic script，键名只能各写一份——这里守住不漂移
-    expect(read('result.html')).toContain(`'${LEVEL_STATS_KEY}'`);
-    expect(read('public/climb/climb.js')).toContain(`'${CLIMB_CLEARED_KEY}'`);
-    expect(read('src/rendering/editorToolbar.js')).toContain(`'${CUSTOM_MAP_KEY}'`);
-    expect(PROGRESS_KEY).toBe('war-of-dots.campaign-progress'); // battlechoose-data.js 也在用
-    expect(read('src/entries/battlechoose-data.js')).toContain(`'${PROGRESS_KEY}'`);
+  it('进度类存储都走账号命名空间，各写入方用的数据名一致', () => {
+    // 常量是"数据名"：真正的键 = war-of-dots.u.<账号>.<数据名>（src/user-storage.js）
+    expect(PROGRESS_KEY).toBe('campaign-progress');
+    expect(LEVEL_STATS_KEY).toBe('level-stats');
+    expect(CLIMB_CLEARED_KEY).toBe('climb-cleared');
+    expect(CUSTOM_MAP_KEY).toBe('custom-map');
+
+    // 模块化页面 import 存储层
+    expect(read('src/entries/battlechoose-data.js')).toContain("readJSON('campaign-progress'");
+    expect(read('src/entries/achievements.js')).toContain("from '../user-storage.js'");
+    expect(read('src/rendering/editorToolbar.js')).toContain("from '../user-storage.js'");
+    // classic script 页面用 window.UserStorage（public/user-storage.js 副本）
+    expect(read('result.html')).toContain("store.readJSON('level-stats'");
+    expect(read('result.html')).toContain("store.writeFlag('has-defeat')");
+    expect(read('battlechoose.html')).toContain('window.UserStorage.readJSON(PROGRESS_NAME');
+    expect(read('public/tutorial.js')).toContain('window.UserStorage');
+    expect(read('public/climb/climb.js')).toContain('window.UserStorage');
+
+    // 不允许再直接读写"全局进度键"（那正是不同账号共享进度的原因）——单双引号都要抓
+    for (const file of ['result.html', 'battlechoose.html', 'public/tutorial.js', 'public/climb/climb.js']) {
+      expect(read(file)).not.toMatch(
+        /localStorage\.(getItem|setItem)\((['"])war-of-dots\.(campaign-progress|level-stats|ach-unlocked|climb-cleared|climb-stats|custom-map|has-defeat)\2/,
+      );
+    }
   });
 });
 

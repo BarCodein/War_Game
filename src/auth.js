@@ -1,5 +1,6 @@
 // 登录注册界面逻辑
 
+import { migrateLegacy } from './user-storage.js';
 
 const USERS_KEY = 'war-of-dots.users';
 const SESSION_KEY = 'war-of-dots.session';
@@ -59,6 +60,8 @@ export function login(username, password) {
 
 export function setSession(username) {
   localStorage.setItem(SESSION_KEY, JSON.stringify({ username, loggedInAt: Date.now() }));
+  // 升级后第一次登录：把旧版**全局**进度迁给这个账号（之后旧键删掉，其他账号从零开始）
+  migrateLegacy();
 }
 
 export function logout() {
@@ -97,4 +100,6 @@ export function requireAuth() {
 // 所有引入本模块的页面默认受保护；登录页跳过守卫。
 if (!isLoginPage()) {
   requireAuth();
+  // 已登录的页面加载时也顺手迁一次旧版全局进度（用户可能直接进战斗页而不是先回首页）
+  if (isAuthenticated()) migrateLegacy();
 }

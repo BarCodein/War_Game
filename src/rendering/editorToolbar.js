@@ -1,22 +1,20 @@
 import { t } from '../i18n/index.js';
 import { createNewMap } from '../editor/editorStore.js';
+import { readJSON, writeJSON } from '../user-storage.js';
 
 // 编辑器工具栏（DOM）：保存/载入（localStorage）、导出（下载 JSON）、导入（文件 API）、
 // 新建对话框、试玩入口与校验状态栏。操作只改 editorStore，画布刷新由 EditorScene 回调完成。
+// 自定义地图按账号存（war-of-dots.u.<账号>.custom-map），同一台机器换账号互不覆盖。
 
-const STORAGE_KEY = 'war-of-dots.custom-map';
+const STORAGE_NAME = 'custom-map';
 
 export function saveToStorage(mapData) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify({ savedAt: Date.now(), mapData }));
+  writeJSON(STORAGE_NAME, { savedAt: Date.now(), mapData });
 }
 
 export function loadFromStorage() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? JSON.parse(raw).mapData : null;
-  } catch {
-    return null;
-  }
+  const saved = readJSON(STORAGE_NAME, null);
+  return saved?.mapData ?? null;
 }
 
 // 尺寸预设：游戏画布固定 1280×800，比它小的地图会被编辑器补齐（见 editor/mapResize.js），

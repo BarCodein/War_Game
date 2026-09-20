@@ -1,21 +1,25 @@
-﻿// 成就系统（gdd.md §11）：成就定义 + 解锁判定。
+// 成就系统（gdd.md §11）：成就定义 + 解锁判定。
 //
 // 纯函数、无 DOM：页面（src/entries/achievements.js）只负责把这里的结果画出来，
 // 判定逻辑因此可以单测（tests/unit/achievements.test.js）。
 //
 // **星级**：每条成就自带 1~3 星（稀有度），解锁后计入总星数；页面上显示"已解锁 X/Y · 星数 A/B"。
-// 全部数据来自本地存储（无后端）：
-//   war-of-dots.campaign-progress  关卡通关记录（battlechoose-data.js 写入）
-//   war-of-dots.level-stats        每关最佳战绩：是否通关 / 最快用时 / 最低伤亡（result.html 写入）
-//   war-of-dots.climb-cleared      西安事变登山小游戏登顶标记（climb.js 写入）
-//   war-of-dots.custom-map         地图编辑器保存过自定义地图（editorToolbar.js 写入）
-
-export const PROGRESS_KEY = 'war-of-dots.campaign-progress';
-export const LEVEL_STATS_KEY = 'war-of-dots.level-stats';
-export const CLIMB_CLEARED_KEY = 'war-of-dots.climb-cleared';
-export const CLIMB_STATS_KEY = 'war-of-dots.climb-stats';
-export const ACH_UNLOCKED_KEY = 'war-of-dots.ach-unlocked';
-export const CUSTOM_MAP_KEY = 'war-of-dots.custom-map';
+// 全部数据来自本地存储（无后端），并且**按账号隔离**（src/user-storage.js）：
+// 下面这些常量是"数据名"，真正的 localStorage 键 = `war-of-dots.u.<账号>.<数据名>`，
+// 要经 userKey()/readJSON() 拼装；classic script 页面用 public/user-storage.js 的同名副本。
+//   campaign-progress  关卡通关记录（battlechoose-data.js 写入）
+//   level-stats        每关最佳战绩：是否通关 / 最快用时 / 最低伤亡（result.html 写入）
+//   climb-cleared      西安事变登山小游戏登顶标记（climb.js 写入）
+//   climb-stats        登山小游戏的累计数据（climb.js 写入）
+//   ach-unlocked       已解锁成就（result.html / climb.js 写入）
+//   custom-map         地图编辑器保存过自定义地图（editorToolbar.js 写入）
+//   has-defeat         打过败仗（result.html 写入）
+export const PROGRESS_KEY = 'campaign-progress';
+export const LEVEL_STATS_KEY = 'level-stats';
+export const CLIMB_CLEARED_KEY = 'climb-cleared';
+export const CLIMB_STATS_KEY = 'climb-stats';
+export const ACH_UNLOCKED_KEY = 'ach-unlocked';
+export const CUSTOM_MAP_KEY = 'custom-map';
 
 // 判定用的"战绩汇总"，由 evaluateAchievements 从原始数据算好再交给各条件
 function summarizeStats(stats) {

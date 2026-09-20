@@ -76,7 +76,8 @@ test.describe('地图编辑器', () => {
         spawns: [{ id: 's1', faction: 'blue', x: 100, y: 600 }, { id: 's2', faction: 'red', x: 1100, y: 100 }],
         capturePoints: [], objectives: [],
       };
-      localStorage.setItem('war-of-dots.custom-map', JSON.stringify({ savedAt: Date.now(), mapData: tiny }));
+      // 进度类数据按账号存（playwright.config.js 里的会话用户是 e2e-user → 归一化 e2e_user）
+      localStorage.setItem('war-of-dots.u.e2e_user.custom-map', JSON.stringify({ savedAt: Date.now(), mapData: tiny }));
     });
     await page.click('[data-action="load"]');
     const info = await page.evaluate(() => ({
