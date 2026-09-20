@@ -1,4 +1,4 @@
-import { values } from '../config/index.js';
+﻿import { values } from '../config/index.js';
 
 // 游戏控制器：暂停、游戏速度与**开局准备阶段**（REQUIREMENTS.md §4.5、gdd.md §11）。
 // 状态被 GameScene 读取（暂停时跳过模拟 tick；准备阶段只走倒计时），HUD 通过 onChange 订阅刷新。
@@ -37,6 +37,11 @@ export function createGameController({ prepSeconds = values.prep.seconds } = {})
     skipPrep() {
       if (prepRemaining === 0) return;
       prepRemaining = 0;
+      notify();
+    },
+    // 重置准备阶段倒计时到完整时间（教学剧情结束后用）
+    resetPrep() {
+      prepRemaining = Math.max(0, prepSeconds);
       notify();
     },
     togglePause() {
