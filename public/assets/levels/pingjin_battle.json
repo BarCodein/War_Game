@@ -1,0 +1,196 @@
+{
+  "version": 1,
+  "id": "pingjin_battle",
+  "name": "平津战役",
+  "subtitle": "PINGJIN BATTLE",
+  "type": "offensive",
+  "difficulty": "普通",
+  "order": 8,
+  "description": "先打两头、后取中间：限时攻克天津、夺取张家口，促成北平和平解放。",
+  "map": "/assets/maps/pingjin.json",
+
+  "anchors": {
+    "zhangjiakou": { "cityId": "c18" },
+    "zhangjiakouGate": { "capturePointId": "p9" },
+    "zhangjiakouGarrison": { "spawnId": "s50" },
+    "zhangjiakouNorth": { "spawnId": "s47" },
+    "northwestBase": { "cityId": "c25" },
+    "beiping": { "cityId": "c30" },
+    "beipingGate": { "capturePointId": "p8" },
+    "beipingGarrison": { "spawnId": "s48" },
+    "beipingNorth": { "spawnId": "s38" },
+    "beipingWatch": { "spawnId": "s52" },
+    "tianjin": { "cityId": "c31" },
+    "tianjinGate": { "capturePointId": "p11" },
+    "tianjinGarrison": { "spawnId": "s49" },
+    "reliefLanding": { "cityId": "c33" }
+  },
+
+  "forces": [
+    {
+      "faction": "blue",
+      "group": "zhangjiakouForce",
+      "at": { "anchor": "zhangjiakouNorth" },
+      "units": [
+        { "type": "light", "count": 2, "spacing": { "x": 32, "y": 0 } },
+        { "type": "heavy", "count": 1, "offset": { "x": 0, "y": 40 }, "spacing": { "x": 32, "y": 0 } }
+      ]
+    },
+    {
+      "faction": "blue",
+      "group": "zhangjiakouForce",
+      "at": { "anchor": "northwestBase" },
+      "units": [
+        { "type": "light", "count": 1, "spacing": { "x": 32, "y": 0 } },
+        { "type": "heavy", "count": 1, "offset": { "x": 0, "y": 40 }, "spacing": { "x": 32, "y": 0 } }
+      ]
+    },
+    {
+      "faction": "blue",
+      "group": "beipingNorthForce",
+      "at": { "anchor": "beipingNorth" },
+      "units": [
+        { "type": "light", "count": 4, "spacing": { "x": 32, "y": 0 } },
+        { "type": "heavy", "count": 3, "offset": { "x": 0, "y": 40 }, "spacing": { "x": 32, "y": 0 } }
+      ]
+    },
+    {
+      "faction": "blue",
+      "group": "beipingNorthForce",
+      "at": { "anchor": "beipingWatch" },
+      "units": [
+        { "type": "light", "count": 4, "spacing": { "x": 32, "y": 0 } },
+        { "type": "heavy", "count": 1, "offset": { "x": 0, "y": 40 }, "spacing": { "x": 32, "y": 0 } }
+      ]
+    },
+
+    {
+      "faction": "red",
+      "group": "zhangjiakouGuard",
+      "at": { "anchor": "zhangjiakouGarrison" },
+      "units": [
+        { "type": "heavy", "count": 1, "spacing": { "x": 30, "y": 0 } },
+        { "type": "light", "count": 3, "offset": { "x": 0, "y": 36 }, "spacing": { "x": 30, "y": 0 } }
+      ]
+    },
+    {
+      "faction": "red",
+      "group": "beipingGuard",
+      "at": { "anchor": "beipingGarrison" },
+      "units": [
+        { "type": "heavy", "count": 3, "spacing": { "x": 30, "y": 0 } },
+        { "type": "light", "count": 3, "offset": { "x": 0, "y": 36 }, "spacing": { "x": 30, "y": 0 } }
+      ]
+    },
+    {
+      "faction": "red",
+      "group": "beipingReserve",
+      "at": { "anchor": "beipingGarrison" },
+      "units": [
+        { "type": "heavy", "count": 2, "offset": { "x": 0, "y": -76 }, "spacing": { "x": 30, "y": 0 } },
+        { "type": "light", "count": 2, "offset": { "x": 0, "y": -40 }, "spacing": { "x": 30, "y": 0 } }
+      ]
+    },
+    {
+      "faction": "red",
+      "group": "tianjinGuard",
+      "at": { "anchor": "tianjinGarrison" },
+      "units": [
+        { "type": "heavy", "count": 4, "spacing": { "x": 28, "y": 0 } },
+        { "type": "light", "count": 3, "offset": { "x": 0, "y": 36 }, "spacing": { "x": 28, "y": 0 } },
+        { "type": "light", "count": 2, "offset": { "x": 0, "y": 70 }, "spacing": { "x": 28, "y": 0 } }
+      ]
+    }
+  ],
+
+  "ai": [
+    {
+      "faction": "red",
+      "preset": "cautious",
+      "triggers": [
+        {
+          "id": "defend_three_cities",
+          "at": { "time": 0 },
+          "actions": [
+            { "type": "hold", "units": { "group": "zhangjiakouGuard" } },
+            { "type": "hold", "units": { "group": "beipingGuard" } },
+            { "type": "hold", "units": { "group": "beipingReserve" } },
+            { "type": "hold", "units": { "group": "tianjinGuard" } }
+          ]
+        },
+        {
+          "id": "beiping_reserve_marches_to_zhangjiakou",
+          "at": { "time": 45 },
+          "actions": [
+            { "type": "engage", "target": { "anchor": "zhangjiakou" }, "units": { "group": "beipingReserve" } }
+          ]
+        }
+      ],
+      "rules": [
+        {
+          "id": "zhangjiakou_lost",
+          "when": { "city": "c18", "owner": "enemy" },
+          "repeatEvery": 30,
+          "then": [
+            { "type": "engage", "target": { "anchor": "zhangjiakou" }, "units": { "group": "beipingReserve" } },
+            { "type": "engage", "target": { "anchor": "zhangjiakou" }, "units": { "group": "zhangjiakouGuard" } }
+          ]
+        },
+        {
+          "id": "beiping_gate_lost",
+          "when": { "capturePoint": "p8", "owner": "enemy" },
+          "then": [
+            { "type": "engage", "target": { "anchor": "beiping" }, "units": { "group": "beipingGuard" } }
+          ]
+        },
+        {
+          "id": "tianjin_gate_lost",
+          "when": { "capturePoint": "p11", "owner": "enemy" },
+          "repeatEvery": 25,
+          "then": [
+            { "type": "engage", "target": { "anchor": "tianjin" }, "units": { "group": "tianjinGuard" } }
+          ]
+        },
+        {
+          "id": "consolidate_when_weak",
+          "when": { "ownUnitsBelow": 10 },
+          "then": [
+            { "type": "engage", "target": { "anchor": "beiping" } }
+          ]
+        }
+      ]
+    },
+    {
+      "faction": "blue",
+      "preset": "standard",
+      "triggers": [
+        {
+          "id": "northeast_reinforcement",
+          "at": { "time": 40 },
+          "actions": [
+            {
+              "type": "spawn",
+              "unitType": "light",
+              "count": 5,
+              "at": { "x": 1100, "y": 396 },
+              "group": "relief",
+              "spacing": { "x": 32, "y": 0 },
+              "order": { "type": "attackMove", "target": { "anchor": "tianjin" } }
+            },
+            {
+              "type": "spawn",
+              "unitType": "heavy",
+              "count": 3,
+              "at": { "x": 1100, "y": 444 },
+              "group": "relief",
+              "spacing": { "x": 34, "y": 0 },
+              "order": { "type": "attackMove", "target": { "anchor": "tianjin" } }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+
+  "victory": { "mode": "attack", "faction": "blue", "time": 480, "points": ["c31", "c18"] }
+}

@@ -1,4 +1,4 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
@@ -152,6 +152,11 @@
         <div class="battle-pin unlocked" data-level="6" style="left:146%; top:142%;">
           <span class="pin-dot"></span>
           <span class="pin-label">渡江战役</span>
+        </div>
+        <!-- 第六关：平津战役 —— 跳转链接由脚本里的 battleData[7].level 提供 -->
+        <div class="battle-pin unlocked" data-level="7" style="left:114%; top:94%;">
+          <span class="pin-dot"></span>
+          <span class="pin-label">平津战役</span>
         </div>
 
       </div>
@@ -456,7 +461,8 @@
         2: { name: '宿北战役', date: '1946年12月', desc: '山东野战军与华中野战军联合作战，于江苏宿迁北部歼灭国民党军整编第69师，是解放战争战略防御阶段的重要转折。', level: 'subei_battle' },
         3: { name: '西安', date: '1936年12月', desc: '回忆起了36年12月的西安', level: 'xian_battle' },
         4: { name: '双堆集战役', date: '1948年11月 — 1948年12月', desc: '中原野战军将黄维兵团包围于双堆集，经二十余日激战将其全歼，淮海战役第二阶段胜利结束。', level: 'shuangduiji_battle' },
-        6: { name: '渡江战役', date: '1949年4月 — 1949年6月', desc: '第二、第三和第四野战军一部，在长江中、下游地区进行规模巨大的强渡江河战役。一举突破国民党军的长江防线。', level: 'dujiang_battle' }
+        6: { name: '渡江战役', date: '1949年4月 — 1949年6月', desc: '第二、第三和第四野战军一部，在长江中、下游地区进行规模巨大的强渡江河战役。一举突破国民党军的长江防线。', level: 'dujiang_battle' },
+        7: { name: '平津战役', date: '1948年11月 — 1949年1月', desc: '东北野战军入关会同华北军区部队，先打两头（张家口、天津）、后取中间（北平），促成北平和平解放。', level: 'pingjin_battle' }
       };
 
       function battleHref(level) {
