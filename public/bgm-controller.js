@@ -11,9 +11,9 @@
 //    ——bgm.html 的 audio 元素默认 muted=true，autoplay 一定成功；
 //    一旦收到 start 就 unmute + play，用户就听到声音
 // 4. 按钮点击：toggle 播放/暂停
+// 【修改需求】一旦播放过场视频，BGM暂停，视频结束后不再恢复BGM
 (function () {
   'use strict';
-
   function injectStyle() {
     if (document.getElementById('bgm-controller-style')) return;
     var s = document.createElement('style');
@@ -21,18 +21,16 @@
     s.textContent =
       '.bgm-frame{position:fixed;width:0;height:0;border:0;visibility:hidden;pointer-events:none}' +
       '.bgm-control{position:fixed;right:18px;bottom:18px;z-index:100;display:inline-block;box-sizing:border-box;width:26px;height:26px;padding:0;border-radius:13px;border:1px solid #4a2f12;background:linear-gradient(180deg,#d4b67c 0%,#a37b3a 100%);color:#2b1d12;font-size:13px;font-weight:700;line-height:24px;text-align:center;font-family:"Microsoft YaHei",sans-serif;cursor:pointer;box-shadow:inset 0 1px 0 rgba(255,255,255,.35),inset 0 -2px 4px rgba(0,0,0,.3),0 2px 6px rgba(0,0,0,.5);transition:transform .12s,box-shadow .12s}' +
-      '.bgm-control:hover{background:linear-gradient(180deg,#e0c08a 0%,#b08840 100%);transform:scale(1.04);box-shadow:inset 0 1px 0 rgba(255,255,255,.5),0 4px 10px rgba(0,0,0,.6)}' +
+      '.bgm-control:hover{background:linear-gradient(180deg,#e0c08a 0%,#b08840 100%);transform:scale(1.04);box-shadow:inset 0 1px 0 rgba(255,255,255,.5),0 4px 10 rgba(0,0,0,.6)}' +
       '.bgm-control.is-paused{background:linear-gradient(180deg,#8b7a5a 0%,#5a4a2a 100%);color:#f1e3c4}';
     document.head.appendChild(s);
   }
-
   function inject() {
     // 本页想要哪首 BGM：页面可在引入本脚本前设置 window.BGM_SONG，
     // 默认《江山如此多娇》。game / battlebackground 等页面会设为《在太行山上》。
     var song = (window.BGM_SONG || 'jiangshanruciduojiao').replace(/[^a-zA-Z0-9_-]/g, '');
     // 续播进度按「歌曲」分别存储，避免不同歌之间错位续播
     var storageKey = 'war-of-dots.bgm.' + song;
-
     // 不可见 iframe（?song= 指定播放的歌曲）
     var frame = document.createElement('iframe');
     frame.src = '/bgm.html?song=' + encodeURIComponent(song);
@@ -40,7 +38,6 @@
     frame.setAttribute('aria-hidden', 'true');
     frame.tabIndex = -1;
     document.body.appendChild(frame);
-
     // 右下角控件
     var btn = document.createElement('button');
     btn.className = 'bgm-control is-paused';
@@ -48,7 +45,6 @@
     btn.title = '背景音乐';
     btn.setAttribute('aria-label', '背景音乐 播放/暂停');
     document.body.appendChild(btn);
-
     // 初始状态：从 localStorage 读，决定按钮视觉
     var initialPaused = false;
     try {
@@ -56,7 +52,6 @@
       if (saved && saved.paused) initialPaused = true;
     } catch (e) {}
     updateBtn(btn, initialPaused);
-
     // iframe 加载完成后：给 iframe 发 start（unmute + play）。
     // 这是关键：bgm.html 的 audio 默认 muted=true，autoplay 一定成功；
     // 一旦父页面发 start 把它 unmute，用户进页面就听到声音。
@@ -66,11 +61,8 @@
     frame.addEventListener('load', sendStart);
     // 兜底：如果 iframe 已经 load 完了（罕见），再发一次
     setTimeout(sendStart, 100);
-
-    // 过场视频接管：任何 <video> 开始播放就暂停 BGM，播完/暂停再恢复
-    // （前提是视频开始前 BGM 本就在播，绝不打断用户手动暂停的状态）。
+    // 过场视频接管：一旦视频播放，暂停BGM；视频结束**不再恢复BGM**
     monitorVideos(frame, storageKey);
-
     // 按钮点击：toggle
     btn.addEventListener('click', function (e) {
       e.stopPropagation();
@@ -83,7 +75,6 @@
       } catch (err) { paused = false; }
       updateBtn(btn, !paused);
     });
-
     // 接收 iframe 反馈的播放状态
     window.addEventListener('message', function (e) {
       if (!e.data) return;
@@ -92,7 +83,6 @@
       }
     });
   }
-
   function updateBtn(btn, paused) {
     if (paused) {
       btn.classList.add('is-paused');
@@ -104,50 +94,24 @@
       btn.title = '背景音乐（播放中，点击暂停）';
     }
   }
-
   /* =========================================================
-     monitorVideos — 过场视频与 BGM 的互斥桥
-     规则（见项目 MEMORY）：任何视频播放时 BGM 必须暂停；
-     视频结束/被暂停（跳过）后，若「该界面本就需要播放 BGM」则恢复。
-     实现：
-     - 仅对「引入了本脚本（即带 bgm 控件）的页面」生效：
-       没有 bgm 的页面（game / result-video 等）不会调用本函数，
-       自然「不需要 BGM 也就不恢复」，跨页接力交给 localStorage 续播。
-     - 视频 play → 记录「视频前 BGM 是否在播」，并暂停 BGM；
-     - 视频 ended / pause → 仅当视频前 BGM 在播时才恢复，绝不强行
-       打断用户通过控件手动暂停的 BGM。
-     - 既绑定页面加载时已存在的 <video>，也监听后续动态插入的 <video>。
-     ========================================================= */
+   monitorVideos — 过场视频与 BGM 的互斥桥
+   修改后规则：视频开始播放，直接暂停BGM；视频结束/暂停，**不再恢复BGM**
+  ========================================================= */
   function monitorVideos(frame, storageKey) {
     var STORAGE_KEY = storageKey || 'war-of-dots.bgm';
-    function bgmWasPaused() {
-      try {
-        var s = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
-        return !!(s && s.paused);
-      } catch (e) { return false; }
-    }
     function pauseBgm() {
       try { frame.contentWindow.postMessage({ cmd: 'pause' }, '*'); } catch (e) {}
-    }
-    function resumeBgm() {
-      try { frame.contentWindow.postMessage({ cmd: 'play' }, '*'); } catch (e) {}
     }
     function bindVideo(v) {
       if (!v || v.__bgmVideoBound) return;
       v.__bgmVideoBound = true;
-      var shouldResume = false;
       v.addEventListener('play', function () {
-        shouldResume = !bgmWasPaused(); // 视频开始前 BGM 在播 → 结束后要恢复
+        // 只要视频开始播放，直接暂停BGM，视频结束不再恢复
         pauseBgm();
       });
-      function onStop() {
-        if (shouldResume) resumeBgm();
-      }
-      v.addEventListener('ended', onStop);
-      v.addEventListener('pause', onStop);
       // 绑定瞬间视频已在播放（脚本晚于 video.play 执行）：立即补一次暂停
       if (!v.paused && !v.ended) {
-        shouldResume = !bgmWasPaused();
         pauseBgm();
       }
     }
@@ -170,7 +134,6 @@
       obs.observe(document.documentElement, { childList: true, subtree: true });
     }
   }
-
   if (document.body) {
     injectStyle();
     inject();

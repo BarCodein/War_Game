@@ -626,15 +626,28 @@ h1, h2, h3, h4 {
     height: 100%;
     object-fit: cover;
     display: block;
+    opacity: 0;
+    transition: opacity 1.4s ease;
+}
+.bbg-intro-video.is-ready video {
+    opacity: 1;
 }
 /* 开场标题：视频开头显示，5 秒后渐隐 */
 .bbg-intro-content {
     position: relative;
-    z-index: 2;
+    z-index: 3;
     text-align: center;
     color: var(--cream);
     padding: 24px;
-    transition: opacity 1.2s ease, transform 1.2s ease;
+    opacity: 0;
+    transform: translateY(8px);
+    transition: opacity 1.2s ease 0.4s, transform 1.2s ease 0.4s;
+    text-shadow: 0 2px 18px rgba(0, 0, 0, 0.85);
+    pointer-events: none;
+}
+.bbg-intro-content.is-ready {
+    opacity: 1;
+    transform: translateY(0);
 }
 .bbg-intro-content.fade-out {
     opacity: 0;
