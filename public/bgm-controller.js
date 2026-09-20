@@ -20,16 +20,22 @@
     s.id = 'bgm-controller-style';
     s.textContent =
       '.bgm-frame{position:fixed;width:0;height:0;border:0;visibility:hidden;pointer-events:none}' +
-      '.bgm-control{position:fixed;right:18px;bottom:18px;z-index:100;width:44px;height:44px;border-radius:50%;border:1px solid #4a2f12;background:linear-gradient(180deg,#d4b67c 0%,#a37b3a 100%);color:#2b1d12;font-size:22px;line-height:1;font-family:serif;cursor:pointer;box-shadow:inset 0 1px 0 rgba(255,255,255,.35),inset 0 -2px 4px rgba(0,0,0,.3),0 2px 6px rgba(0,0,0,.5);transition:transform .12s,box-shadow .12s}' +
-      '.bgm-control:hover{background:linear-gradient(180deg,#e0c08a 0%,#b08840 100%);transform:scale(1.05);box-shadow:inset 0 1px 0 rgba(255,255,255,.5),0 4px 10px rgba(0,0,0,.6)}' +
+      '.bgm-control{position:fixed;right:18px;bottom:18px;z-index:100;display:inline-block;box-sizing:border-box;width:26px;height:26px;padding:0;border-radius:13px;border:1px solid #4a2f12;background:linear-gradient(180deg,#d4b67c 0%,#a37b3a 100%);color:#2b1d12;font-size:13px;font-weight:700;line-height:24px;text-align:center;font-family:"Microsoft YaHei",sans-serif;cursor:pointer;box-shadow:inset 0 1px 0 rgba(255,255,255,.35),inset 0 -2px 4px rgba(0,0,0,.3),0 2px 6px rgba(0,0,0,.5);transition:transform .12s,box-shadow .12s}' +
+      '.bgm-control:hover{background:linear-gradient(180deg,#e0c08a 0%,#b08840 100%);transform:scale(1.04);box-shadow:inset 0 1px 0 rgba(255,255,255,.5),0 4px 10px rgba(0,0,0,.6)}' +
       '.bgm-control.is-paused{background:linear-gradient(180deg,#8b7a5a 0%,#5a4a2a 100%);color:#f1e3c4}';
     document.head.appendChild(s);
   }
 
   function inject() {
-    // 不可见 iframe
+    // 本页想要哪首 BGM：页面可在引入本脚本前设置 window.BGM_SONG，
+    // 默认《江山如此多娇》。game / battlebackground 等页面会设为《在太行山上》。
+    var song = (window.BGM_SONG || 'jiangshanruciduojiao').replace(/[^a-zA-Z0-9_-]/g, '');
+    // 续播进度按「歌曲」分别存储，避免不同歌之间错位续播
+    var storageKey = 'war-of-dots.bgm.' + song;
+
+    // 不可见 iframe（?song= 指定播放的歌曲）
     var frame = document.createElement('iframe');
-    frame.src = '/bgm.html';
+    frame.src = '/bgm.html?song=' + encodeURIComponent(song);
     frame.className = 'bgm-frame';
     frame.setAttribute('aria-hidden', 'true');
     frame.tabIndex = -1;
@@ -41,13 +47,12 @@
     btn.type = 'button';
     btn.title = '背景音乐';
     btn.setAttribute('aria-label', '背景音乐 播放/暂停');
-    btn.textContent = '♪';
     document.body.appendChild(btn);
 
     // 初始状态：从 localStorage 读，决定按钮视觉
     var initialPaused = false;
     try {
-      var saved = JSON.parse(localStorage.getItem('war-of-dots.bgm') || 'null');
+      var saved = JSON.parse(localStorage.getItem(storageKey) || 'null');
       if (saved && saved.paused) initialPaused = true;
     } catch (e) {}
     updateBtn(btn, initialPaused);
@@ -62,6 +67,10 @@
     // 兜底：如果 iframe 已经 load 完了（罕见），再发一次
     setTimeout(sendStart, 100);
 
+    // 过场视频接管：任何 <video> 开始播放就暂停 BGM，播完/暂停再恢复
+    // （前提是视频开始前 BGM 本就在播，绝不打断用户手动暂停的状态）。
+    monitorVideos(frame, storageKey);
+
     // 按钮点击：toggle
     btn.addEventListener('click', function (e) {
       e.stopPropagation();
@@ -69,7 +78,7 @@
       // 乐观更新 UI（不阻塞）
       var paused;
       try {
-        var s = JSON.parse(localStorage.getItem('war-of-dots.bgm') || 'null');
+        var s = JSON.parse(localStorage.getItem(storageKey) || 'null');
         paused = s ? !!s.paused : false;
       } catch (err) { paused = false; }
       updateBtn(btn, !paused);
@@ -87,12 +96,78 @@
   function updateBtn(btn, paused) {
     if (paused) {
       btn.classList.add('is-paused');
-      btn.textContent = '♪';
-      btn.title = '背景音乐（已暂停）';
+      btn.textContent = '\u25B6'; // ▶ 播放
+      btn.title = '背景音乐（已暂停，点击播放）';
     } else {
       btn.classList.remove('is-paused');
-      btn.textContent = '♫';
-      btn.title = '背景音乐（播放中）';
+      btn.textContent = '\u23F8'; // ⏸ 暂停
+      btn.title = '背景音乐（播放中，点击暂停）';
+    }
+  }
+
+  /* =========================================================
+     monitorVideos — 过场视频与 BGM 的互斥桥
+     规则（见项目 MEMORY）：任何视频播放时 BGM 必须暂停；
+     视频结束/被暂停（跳过）后，若「该界面本就需要播放 BGM」则恢复。
+     实现：
+     - 仅对「引入了本脚本（即带 bgm 控件）的页面」生效：
+       没有 bgm 的页面（game / result-video 等）不会调用本函数，
+       自然「不需要 BGM 也就不恢复」，跨页接力交给 localStorage 续播。
+     - 视频 play → 记录「视频前 BGM 是否在播」，并暂停 BGM；
+     - 视频 ended / pause → 仅当视频前 BGM 在播时才恢复，绝不强行
+       打断用户通过控件手动暂停的 BGM。
+     - 既绑定页面加载时已存在的 <video>，也监听后续动态插入的 <video>。
+     ========================================================= */
+  function monitorVideos(frame, storageKey) {
+    var STORAGE_KEY = storageKey || 'war-of-dots.bgm';
+    function bgmWasPaused() {
+      try {
+        var s = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
+        return !!(s && s.paused);
+      } catch (e) { return false; }
+    }
+    function pauseBgm() {
+      try { frame.contentWindow.postMessage({ cmd: 'pause' }, '*'); } catch (e) {}
+    }
+    function resumeBgm() {
+      try { frame.contentWindow.postMessage({ cmd: 'play' }, '*'); } catch (e) {}
+    }
+    function bindVideo(v) {
+      if (!v || v.__bgmVideoBound) return;
+      v.__bgmVideoBound = true;
+      var shouldResume = false;
+      v.addEventListener('play', function () {
+        shouldResume = !bgmWasPaused(); // 视频开始前 BGM 在播 → 结束后要恢复
+        pauseBgm();
+      });
+      function onStop() {
+        if (shouldResume) resumeBgm();
+      }
+      v.addEventListener('ended', onStop);
+      v.addEventListener('pause', onStop);
+      // 绑定瞬间视频已在播放（脚本晚于 video.play 执行）：立即补一次暂停
+      if (!v.paused && !v.ended) {
+        shouldResume = !bgmWasPaused();
+        pauseBgm();
+      }
+    }
+    // 现有 video
+    var existing = document.querySelectorAll('video');
+    Array.prototype.forEach.call(existing, bindVideo);
+    // 后续动态插入的 video
+    if (window.MutationObserver) {
+      var obs = new MutationObserver(function (mutations) {
+        mutations.forEach(function (m) {
+          Array.prototype.forEach.call(m.addedNodes || [], function (n) {
+            if (n.nodeType !== 1) return;
+            if (n.tagName === 'VIDEO') bindVideo(n);
+            else if (n.querySelectorAll) {
+              Array.prototype.forEach.call(n.querySelectorAll('video'), bindVideo);
+            }
+          });
+        });
+      });
+      obs.observe(document.documentElement, { childList: true, subtree: true });
     }
   }
 

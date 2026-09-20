@@ -24,13 +24,20 @@
 </style>
 </head>
 <body>
-<audio id="bgm" src="/assets/bgm/jiangshanruciduojiao.mp3" loop preload="auto" muted></audio>
+<audio id="bgm" loop preload="auto" muted></audio>
 <script>
 (function () {
   'use strict';
   var audio = document.getElementById('bgm');
-  audio.volume = 0.4;
-  var STORAGE_KEY = 'war-of-dots.bgm';
+  // 每页通过 ?song= 指定要播放的 BGM（默认《江山如此多娇》）
+  var song = (new URLSearchParams(location.search).get('song') || 'jiangshanruciduojiao').replace(/[^a-zA-Z0-9_-]/g, '');
+  audio.src = '/assets/bgm/' + song + '.mp3';
+  audio.load();
+  // 各歌音量：默认 0.4；《在太行山上》用户要求"大点声"，单独调高
+  var VOLUMES = { zaitaihangshandshang: 0.8 };
+  audio.volume = (Object.prototype.hasOwnProperty.call(VOLUMES, song)) ? VOLUMES[song] : 0.4;
+  // 续播进度按「歌曲」分别存储，避免不同歌之间错位续播
+  var STORAGE_KEY = 'war-of-dots.bgm.' + song;
 
   // 加载时从 localStorage 接力
   try {
