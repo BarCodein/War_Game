@@ -401,7 +401,7 @@ export function createHud(scene, world, controller, selection, orders) {
   //     跟音频循环节奏不齐，会出现节奏抖动）
   //   - 死亡事件直接从 world.history 增量读取（与 renderEvents 同一份增量，
   //     不重复触发）
-  const BLADE_INTERVAL = 1500; // 毫秒；combat 状态下 blade 的循环间隔（用户要求更长间隔）
+  const BLADE_INTERVAL = 750; // 毫秒；combat 状态下 blade 的循环间隔
   const COMBAT_CHECK_INTERVAL = 80; // 检查战斗状态的频率
   const combatSfx = {
     bladeTimer: null,
