@@ -5,6 +5,29 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>沙盘战争 — 结局</title>
   <link rel="stylesheet" href="./members/css/battlepages.css">
+  <style>
+    /* 自动播放被浏览器挡掉时用的"点击播放"提示（否则遮罩停在黑屏上没人知道要干嘛）。
+       放在标题区下方，避免压住 CAMPAIGN COMPLETE / 标题。 */
+    .ending-play {
+      position: absolute;
+      left: 50%;
+      top: 72%;
+      transform: translateX(-50%);
+      z-index: 3;
+      padding: 12px 28px;
+      font-family: "SimHei", "Microsoft YaHei", sans-serif;
+      font-size: 0.95rem;
+      letter-spacing: 3px;
+      color: var(--cream, #f1e3c4);
+      background: rgba(20, 10, 4, 0.72);
+      border: 1px solid var(--brass, #a67c00);
+      border-radius: 3px;
+      cursor: pointer;
+      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.6);
+    }
+    .ending-play:hover { background: rgba(48, 24, 8, 0.88); color: #fff; }
+    .ending-play[hidden] { display: none; }
+  </style>
 </head>
 <body>
 
@@ -58,6 +81,8 @@
       <h1 id="endingIntroTitle"></h1>
       <p id="endingIntroSubtitle"></p>
     </div>
+    <!-- 自动播放被挡掉 / 视频一直加载不出来时的出口：点它才播（点击本身带用户手势，带声音也能播） -->
+    <button class="ending-play" id="endingPlayBtn" type="button" hidden>&#9654; 点击播放结局影像</button>
   </div>
 
   <div class="bbg-shell">
@@ -108,6 +133,9 @@
         title: '全战役通关',
         subtitle: '1946年12月 — 1949年4月 · 从宿北到渡江',
         video: 'http://179.255.122.44/videos/end.mp4',
+        // 备用源：远端慢 / 挂掉时自动切到仓库里的同一份文件（播放控制里有切换逻辑）。
+        // 两份文件名与内容一致，换源不会出现"接不上"的画面。
+        videoFallback: './assets/video/end.mp4',
         mapImg: './assets/picture/end.jpeg',
         mapAlt: '一定要解放台湾',
         resultHtml:
@@ -169,6 +197,8 @@
       var video = document.getElementById('endingIntroVid');
       if (video && data.video) {
         video.src = data.video;
+        // 备用源挂在 data- 属性上，交给下面播放控制里的"远端挂了就换源"逻辑
+        if (data.videoFallback) video.setAttribute('data-fallback', data.videoFallback);
         video.load();
       }
     })();
@@ -209,23 +239,100 @@
       // 点击 overlay 任意位置 → 跳过
       overlay.addEventListener('click', endIntro);
 
-      if (video && video.getAttribute('src')) {
-        video.addEventListener('error', endIntro);
-        video.addEventListener('play', function () {
-          setTimeout(hideTitle, 5000);
+      /* ★ 黑屏的根因就在这两行 class 上：
+         battlepages.css 里 `.bbg-intro-video video` 与 `.bbg-intro-content` 默认
+         `opacity:0`，只有加上 `.is-ready` 才淡入（battlebackground 是在 play 事件里加的）。
+         结局页当初漏了这一步 → 遮罩永远停在 #000 上，看着就是"视频黑屏"。
+         这里在"解出第一帧 / 开始播放 / 1.5 秒兜底"三处都补上，保证任何情况下都有画面或标题。 */
+      var videoBox = document.querySelector('.bbg-intro-video');
+      function revealIntro() {
+        if (videoBox) videoBox.classList.add('is-ready');
+        if (content) content.classList.add('is-ready');
+      }
+
+      // 自动播放被浏览器挡掉时（没有用户手势 + 带声音的 video.play() 会被拒），
+      // 原来这里直接 endIntro()：用户只看到遮罩闪一下、视频根本没看。
+      // 现在改成给出"点击播放 / 点击开启声音"的出口——点击自带用户手势，带声音也能播。
+      var playBtn = document.getElementById('endingPlayBtn');
+      function showPlayHint(text) {
+        if (!playBtn || finished) return;
+        if (text) playBtn.textContent = text;
+        playBtn.hidden = false;
+      }
+      if (playBtn) {
+        playBtn.addEventListener('click', function (e) {
+          e.stopPropagation(); // 别顺手触发"点遮罩 = 跳过"
+          playBtn.hidden = true;
+          video.muted = false; // 点击本身就是用户手势 → 现在可以带声音播
+          var p = video.play();
+          if (p && typeof p.catch === 'function') p.catch(endIntro);
         });
+      }
+
+      // 兜底：1.5 秒还没就绪也先把遮罩内容亮出来，绝不停在纯黑上
+      setTimeout(revealIntro, 1500);
+
+      // 播放尝试：带声音被拒 → 退到静音播（浏览器一定放行），至少让画面出来；
+      // 同时亮出按钮，点一下就把声音打开（视频继续，不重头）。
+      function playVideo() {
         var p = video.play();
         if (p && typeof p.catch === 'function') {
           p.catch(function () {
-            video.muted = false;
+            video.muted = true;
             var p2 = video.play();
-            if (p2 && typeof p2.catch === 'function') {
-              p2.catch(endIntro);
+            if (p2 && typeof p2.then === 'function') {
+              p2.then(function () { showPlayHint('\uD83D\uDD07 点击开启声音'); })
+                .catch(function () { video.muted = false; showPlayHint('\u25B6 点击播放结局影像'); });
+            } else {
+              showPlayHint('\u25B6 点击播放结局影像');
             }
           });
         }
+      }
+
+      if (video && video.getAttribute('src')) {
+        // 远端素材（http://179.255.122.44/videos/end.mp4）万一慢 / 挂：
+        // 自动切一次仓库里的同名备份（data-fallback），再不行才收场——
+        // 无论如何不给用户留一块纯黑屏。
+        var fallbackUsed = false;
+        function useFallback() {
+          var alt = video.getAttribute('data-fallback');
+          if (fallbackUsed || !alt) return false;
+          fallbackUsed = true;
+          video.src = alt;
+          video.load();
+          playVideo();
+          return true;
+        }
+        var stuckTimer = null;
+        function guardNoFrame() {
+          if (finished || video.readyState >= 2) return; // 已经有画面
+          if (useFallback()) { stuckTimer = setTimeout(guardNoFrame, 5000); return; }
+          endIntro();
+        }
+
+        video.addEventListener('error', function () { if (!useFallback()) endIntro(); });
+        video.addEventListener('loadeddata', function () {
+          clearTimeout(stuckTimer);
+          revealIntro();
+        });
+        video.addEventListener('play', function () {
+          // 注意：这里**不能**清掉看门狗——play 事件只表示"调用了 play()"，
+          // 源挂住时它照样会触发（paused 变 false），但一帧都没有。
+          // 只有 loadeddata（真有画面）才算就绪。
+          revealIntro();
+          setTimeout(hideTitle, 5000);
+        });
+        // 5 秒还没解出一帧（源挂了 / 一直缓冲）→ 换备用源；换了再 5 秒还不行 → 收场。
+        // （自动播放被挡不算卡死：那种情况画面已经就绪、readyState 是 4，
+        //   只是没在播，交给上面的"点击播放"处理。）
+        stuckTimer = setTimeout(guardNoFrame, 5000);
+        playVideo();
         video.addEventListener('ended', endIntro);
       } else {
+        // 没有视频源（ENDING_DATA.video 为空）→ 也要把标题卡亮出来，
+        // 否则 CSS 的 opacity:0 会让遮罩同样是一片黑。
+        revealIntro();
         setTimeout(hideTitle, 5000);
         setTimeout(endIntro, 2600);
       }

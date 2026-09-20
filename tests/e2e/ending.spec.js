@@ -33,10 +33,12 @@ test('渡江战役胜利后，结算页主按钮变成"结局"并进入 ending.h
   expect(image.complete).toBe(true);
   expect(image.naturalWidth).toBeGreaterThan(0);
 
-  // 结局视频：源由脚本设到 <video> 自身，按 background 页的规则自动播放
+  // 结局视频：源由脚本设到 <video> 自身（远端为主、仓库内备份兜底），按 background 页的规则自动播放
   const intro = page.locator('#endingIntroVid');
-  await expect(intro).toHaveAttribute('src', './assets/video/end.mp4');
+  await expect(intro).toHaveAttribute('src', /end\.mp4$/);
   await expect(intro).toHaveAttribute('autoplay', '');
+  // 远端挂掉时要能自动换到仓库里的备份（否则遮罩只能停在黑屏上）
+  await expect(intro).toHaveAttribute('data-fallback', './assets/video/end.mp4');
 
   // 点遮罩跳过入场 → overlay 被移除，内容区可交互
   const overlay = page.locator('#endingIntroOverlay');
@@ -55,6 +57,41 @@ test('渡江战役胜利后，结算页主按钮变成"结局"并进入 ending.h
   await expect(page.locator('body')).toBeVisible();
 
   expect(errors).toEqual([]);
+});
+
+test('结局页入场视频不再黑屏：视频层拿到 is-ready，画面不是纯黑', async ({ page }) => {
+  // 回归点：battlepages.css 里 `.bbg-intro-video video` 与 `.bbg-intro-content` 默认
+  // opacity:0，只有加上 .is-ready 才淡入。结局页漏了这一步时，遮罩一直停在 #000 上
+  // ——表现就是"结局视频黑屏"（截图抓不到视频层，所以这里用 canvas 取真实像素）。
+  await page.goto('/ending.html', { waitUntil: 'domcontentloaded' });
+  const intro = page.locator('#endingIntroVid');
+  await expect(page.locator('.bbg-intro-video')).toHaveClass(/is-ready/, { timeout: 10000 });
+  await expect(page.locator('#endingIntroContent')).toHaveClass(/is-ready/, { timeout: 10000 });
+
+  // 视频层淡入到 opacity:1（CSS 里默认是 0）
+  await expect.poll(() => intro.evaluate(v => Number(getComputedStyle(v).opacity)), { timeout: 10000 }).toBe(1);
+
+  // 真解出了一帧（videoWidth>0 且 readyState 足够画）——"黑屏"最直接的证据就是这里不成立
+  await expect.poll(() => intro.evaluate(v => (v.videoWidth > 0 ? v.readyState : -1)), { timeout: 10000 })
+    .toBeGreaterThanOrEqual(2);
+
+  // 再取一次真实像素（0 = 全黑）。远端源是跨域的、没带 CORS 头，canvas 会被污染
+  // （getImageData 抛 SecurityError），那种情况就用上面的 readyState 判断，别把测试写死在本地上。
+  const mean = await intro.evaluate(v => {
+    try {
+      const canvas = document.createElement('canvas');
+      canvas.width = 32; canvas.height = 18;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(v, 0, 0, 32, 18);
+      const data = ctx.getImageData(0, 0, 32, 18).data;
+      let sum = 0;
+      for (let i = 0; i < data.length; i += 4) sum += (data[i] + data[i + 1] + data[i + 2]) / 3;
+      return sum / (data.length / 4);
+    } catch (e) {
+      return null; // 跨域视频：没法取样，交给上面的 readyState 断言
+    }
+  });
+  if (mean !== null) expect(mean, '画面是纯黑的').toBeGreaterThan(20);
 });
 
 test('非最后一战仍是"下一战场"（渡江前一关 → 渡江）', async ({ page }) => {
