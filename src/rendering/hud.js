@@ -299,7 +299,7 @@ export function createHud(scene, world, controller, selection, orders) {
     });
   }
 
-  // 按任务规则 mode 生成真实任务文案（defend 坚守 / attack 夺取 / annihilative 消灭）。
+  // 按任务规则 mode 生成真实任务文案（normal 占领全部城市 / defend 坚守 / attack 夺取 / annihilative 消灭）。
   // 文案走 i18n（vg.* 键），实时 done 按当前据点归属 / 时限 / 歼灭目标回填。
   function buildVgTasks(mess) {
     const fac = mess.faction;          // 玩家视角阵营（defend=防守方，attack/annihilative=我方）
@@ -307,6 +307,17 @@ export function createHud(scene, world, controller, selection, orders) {
     const timeLimit = Number.isFinite(mess.time) ? Math.max(0, Math.round(mess.time)) : null;
     const points = mess.points ?? [];
     const tasks = [];
+
+    if (mess.mode === 'normal') {
+      // 占领全部城市（谁占光谁赢）——normal 不看据点也不看时限
+      const owned = world.cities.filter(city => city.faction === fac).length;
+      const total = world.cities.length;
+      tasks.push({
+        done: total > 0 && owned === total,
+        text: t('vg.mission.captureAllCities', { owned, total }),
+      });
+      return tasks;
+    }
 
     if (mess.mode === 'defend') {
       const held = points.filter(p => p.faction === fac).length;
@@ -344,15 +355,9 @@ export function createHud(scene, world, controller, selection, orders) {
       });
     }
 
-    // 始终补一条通用目标（消灭敌军 / 守住基地），让面板不至于只有孤零零一条
-    const baseCity = world.cities.find(city => city.faction === fac);
-    tasks.push({
-      done: world.winner === fac,
-      text: baseCity
-        ? t('vg.mission.holdBase', { city: baseCity.id })
-        : t('vg.mission.eliminateEnemy'),
-    });
-
+    // 任务面板只列**真正决定胜负**的条目。
+    // 以前这里还会补一条"守住己方基地 {city}"，那是基于旧的"失去全部城市即告负"基础规则；
+    // 现在除 normal 模式外丢光城市不再结束游戏，再挂着它会让玩家以为丢基地就输了，故移除。
     return tasks;
   }
 

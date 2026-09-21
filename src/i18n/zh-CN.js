@@ -1,4 +1,4 @@
-﻿// 中文文案（默认语言）。新增用户可见文本一律经 t() 查表，禁止在模块中硬编码。
+// 中文文案（默认语言）。新增用户可见文本一律经 t() 查表，禁止在模块中硬编码。
 export default {
   'boot.loading': '加载中…',
   // 顶栏
@@ -88,6 +88,8 @@ export default {
   'victory.select': '返回关卡选择',
   'victory.restart': '重新开始',
   // 复古全屏任务面板（vg.*）：由 hud.js 根据 world.mess 的 mode 生成真实任务文案
+  // （只列真正决定胜负的条目：normal 占城 / defend 守点 / attack 夺点 / annihilative 歼灭）
+  'vg.mission.captureAllCities': '占领全部城市（{owned}/{total}）',
   'vg.mission.defendHold': '坚守全部据点（{held}/{total}）',
   'vg.mission.defendSurvive': '坚持到时限结束（剩余 {time}）',
   'vg.mission.attackCapture': '夺取敌军据点（{captured}/{total}）',

@@ -14,7 +14,7 @@ import { validateAiTuning } from './ai/presets.js';
 //   anchors     object    可选：命名锚点表，把常用坐标起名，供 at / target 用 { anchor: '名字' } 引用
 //   forces      Force[]   初始兵力（编队式描述）
 //   ai          AiScript  敌方脚本（事件 → 动作）
-//   victory     object    预留：胜负条件。当前引擎不读取，判定仍见 gdd.md §10（失去全部城市即负）
+//   victory     object    胜负条件（mode/type + faction/time/points）→ buildMission 消费，见 gdd.md §10
 //
 // Force      { faction, at: PointRef, group?: 编队标签, units: [{ type, count, offset?, spacing? }] }
 //            第 i 个单位的落点 = 锚点坐标 + offset + spacing × i（offset / spacing 省略即 0）
@@ -59,10 +59,15 @@ export const LEVEL_TYPES = ['offensive', 'defensive', 'annihilative'];
 export const AI_ACTION_TYPES = ['spawn', 'attackNearest', 'attackMove', 'engage', 'hold', 'retreat'];
 // 条件里的 owner 可写 'self' / 'enemy'（相对脚本阵营，推荐）或直接写 'blue' / 'red' / 'neutral'
 export const AI_CONDITION_OWNERS = ['self', 'enemy', 'blue', 'red', 'neutral'];
-// victory 判定方式：captureAll = 占领全部敌方城市（基础失城判负天然覆盖，不做额外判定）；
-// defend = 坚守时限与据点；attack = 时限内夺取据点；annihilative = 消灭全部**指定单位**。
+// victory 判定方式：
+//   normal        = **占领全部城市**（对方一座城都不剩）即胜：对称判定，谁占光城市谁赢；
+//                   旧的 `captureAll` 写法与**不声明 victory** 都按 normal 处理
+//                   （编辑器试玩也靠它结束，否则那一局永远打不完）。
+//   defend        = 坚守时限与据点；attack = 时限内夺取据点；
+//   annihilative  = 消灭全部**指定单位**（而不是占城）。
+// ★ 除 normal 外没有任何"占光城市即胜"的通用规则：其它模式必须达成各自的预定目标。
 // 见 buildMission 与 systems/victory.js。
-export const VICTORY_MODES = ['captureAll', 'defend', 'attack', 'annihilative'];
+export const VICTORY_MODES = ['normal', 'captureAll', 'defend', 'attack', 'annihilative'];
 // 编队目标标记：带 "objective": "annihilate" 的编队，其部署出的单位就是歼灭胜负条件的目标单位。
 export const OBJECTIVE_ANNIHILATE = 'annihilate';
 export const FORCE_OBJECTIVES = [OBJECTIVE_ANNIHILATE];
@@ -366,19 +371,28 @@ export function parseLevel(data) {
   };
 }
 
-// 关卡 victory → 运行时任务规则（world.mess）。没有任务规则时返回 null。
+// 关卡 victory → 运行时任务规则（world.mess）。
 //   { "victory": { "mode": "defend", "faction": "blue", "time": 300, "points": ["p1", "c2"] } }
-//   - mode  : 'defend'（坚守）| 'attack'（夺取据点）| 'annihilative'（消灭全部指定单位——
-//             指定单位 = 编队上标了 "objective": "annihilate" 的那些单位）。
-//             'captureAll' 与缺省都返回 null——"占领全部敌方城市" 已由基础的失城判负规则覆盖。
+//   - mode  : 'normal'（占领全部城市；`captureAll` 与缺省同义）
+//             | 'defend'（坚守）| 'attack'（夺取据点）
+//             | 'annihilative'（消灭全部指定单位——指定单位 = 编队上标了
+//               "objective": "annihilate" 的那些单位）。
 //   - faction: 判定视角阵营（defend = 防守方，attack / annihilative = 我方），缺省 blue（玩家方）。
-//   - time  : 时限（秒），缺省 null = 不限时。
+//             normal 不看 faction：谁占光城市谁赢。
+//   - time  : 时限（秒），缺省 null = 不限时（normal 不看时限）。
 //   - points: 据点 id 列表（defend / attack 用），先在占领点里找、再在城市里找；
-//             缺省 = 地图上全部占领点。
+//             缺省 = 地图上全部占领点。normal 不用 points。
+// 任何关卡都会拿到一个任务规则（vital：没有它游戏无法结束）；返回 null 只发生在
+// 传入了非法 mode 的脏数据上（正常关卡已由 validateLevel 拦下）。
 export function buildMission(level, world) {
-  const victory = level?.victory;
-  const mode = victory?.mode ?? victory?.type;
-  if (mode !== 'defend' && mode !== 'attack' && mode !== 'annihilative') return null;
+  const victory = level?.victory ?? null;
+  const raw = victory?.mode ?? victory?.type ?? null;
+  // captureAll 与缺省都是 normal 的同义写法
+  const mode = (raw === null || raw === 'captureAll') ? 'normal' : raw;
+  if (!VICTORY_MODES.includes(mode)) return null;
+  if (mode === 'normal') {
+    return { mode, faction: victory?.faction ?? 'blue', time: null, points: [] };
+  }
   const ids = victory.points ?? (world.capturePoints ?? []).map(point => point.id);
   const points = ids
     .map(id => (world.capturePoints ?? []).find(point => point.id === id)

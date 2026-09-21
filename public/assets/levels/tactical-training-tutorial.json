@@ -51,5 +51,5 @@
       {"at": {"time": 99999}, "actions": [{"type": "hold", "at": {"anchor": "redBase"}}]}
     ]
   },
-  "victory": {"mode": "attack", "faction": "blue"}
+  "victory": {"mode": "normal"}
 }

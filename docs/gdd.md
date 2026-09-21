@@ -160,7 +160,7 @@
   - 仅单一、且无守方的阵营在场 → 该阵营累积进度，满 100% 易主（事件 `capturePointCaptured`）。
 - **被占领后仅提供视野**：视野半径 180 px，计入战争迷雾的可见区域。
 - **明确不提供**：补给运力与存量、损耗豁免、单位生产、生命与补给存量的恢复。
-- **不影响胜负**：胜负仍只看城市（失去全部城市即告负）。
+- **不影响胜负**：占领点不参与胜负判定——胜负完全由关卡的 `victory` 规则决定（`normal` 占城 / `defend` 守点 / `attack` 夺点 / `annihilative` 歼灭，见 `architecture.md` 的「关卡字段」一节）。
 
 > 实现要点：占领点存于**独立数组 `world.capturePoints`**，绝不并入 `world.cities`。
 > 因此 `supply.js`（补给/生产/恢复）、`supplyStock.js`（补给存量）、`victory.js`（失城判负）

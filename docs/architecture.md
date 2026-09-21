@@ -243,12 +243,12 @@ world.issueCommands(unitIds, command)           // 唯一入口，附带校验
   **约定**：每个脚本只指挥自己阵营的编队；蓝方剧本务必用 `units: { "group": "…" }` 限定在自家增援编队上，否则会抢走玩家的指挥权（`tests/unit/level.test.js` 里有对应守卫用例）。
 - **关卡实例（塔山）**：红军按三个进攻方向分成三支编队——`landing`（海路 → 打鱼山 p1）、`center`（中线 → 塔山 p3）、`east`（东线 → 白台山 p6），初始编队与各波增援都带 `group` 标签。规则按路写：`press{Landing,Center,East}`（120~150 s 每 10 s 让该路 attackMove 自己的目标点）+ `{landing,center,east}HoldOrWithdraw`（150 s 起：**这一路**手上有自己的点就坚守，没有就只让**这一路**撤回 `redBase`）。三路各判各的，互不牵连。
 - **`type`（关卡类型）**：`offensive`（进攻）/ `defensive`（防守）/ `annihilative`（歼灭）。合法值白名单是 `level.js` 的 `LEVEL_TYPES`，`validateLevel()` 会拒绝其它值。
-  **当前仅作元数据**：`GameScene` / `hud` / `world` / `victory` 都不读取它，胜负判定仍只看城市（`gdd.md` §10）。要让类型真正驱动玩法，接入方式是把它随关卡一起交给世界（如 `new World(mapData, { type })` 或在 `GameScene.create()` 里写入 `world.mess`），再由 `simulation/systems/victory.js` 分派——该文件里已留有 `defendVictory` / `attackVictory` 两个待启用的判定函数。
-- **`victory`（胜负条件）**：可选。基础规则始终生效——**一方失去全部城市即告负**（`gdd.md` §10）。声明任务规则时会追加判定，由 `buildMission(level, world)` 解析成 `world.mess` 后交给 `simulation/systems/victory.js`：
+  **当前仅作元数据**：`GameScene` / `hud` / `world` / `victory` 都不读取它；真正的胜负由下面 `victory` 的任务规则决定（不要用 `type` 推断胜负）。
+- **`victory`（胜负条件）**：可选，缺省按 `normal`（占领全部城市）。**没有"通用基础规则"**——除 `normal` 外，占光敌方城市不会结束游戏，必须达成各自的目标（`gdd.md` §10 / `code-structure.md` 的 victory 一节）。由 `buildMission(level, world)` 解析成 `world.mess` 后交给 `simulation/systems/victory.js`：
 
   | `victory.mode`（或 `type`） | 判定 |
   | --- | --- |
-  | `captureAll`（缺省） | 不额外判定，只用基础规则 |
+  | `normal` / `captureAll`（缺省） | **占领地图上全部城市**即胜（对称：谁占光城市谁赢）；占领点不计入 |
   | `defend` | `faction` 为防守方：**据点全丢立即判负**（只要还有据点在手里就继续守）；到 `time` 结算——仍有据点不在手里则防守失败，全部守住则防守方胜。`points` 缺省 = 地图上全部占领点 |
   | `attack` | `faction` 为进攻方：`time` 内拿下全部 `points` 即胜；超时判负 |
   | `annihilative` | `faction` 为我方：**消灭全部「指定单位」**即胜——指定单位 = 编队上标了 `"objective": "annihilate"` 的那些单位（未标记的敌军死光不算达成）；声明了 `time` 则超时判负 |

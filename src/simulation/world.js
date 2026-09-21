@@ -62,8 +62,9 @@ export class World {
     this.casualties = { blue: 0, red: 0 };
     this.winner = null;
     this.endTime = null;
-    // 关卡任务规则（可选）：由 GameScene 用 level.js 的 buildMission() 写入。
-    // null = 只有基础规则（失去全部城市即负）；victory.js 必须容忍它为 null。
+    // 关卡任务规则：由 GameScene 用 level.js 的 buildMission() 写入
+    // （{ mode, faction, time, points }）。为 null 时 victory.js 按 normal（占领全部城市）处理，
+    // 不会只看城市就判负——除 normal 外没有跨模式的通用胜负规则。
     this.mess = null;
     this.spatial = new SpatialGrid(map.size.width, map.size.height);
     this.nextUnitId = 1;

@@ -64,5 +64,5 @@
     ]
   },
 
-  "victory": { "type": "captureAll" }
+  "victory": { "mode": "normal" }
 }

@@ -641,13 +641,18 @@ describe('level：胜负条件（victory → buildMission）', () => {
     forces: [{ faction: 'blue', at: { x: 1, y: 2 }, units: [{ type: 'light', count: 1 }] }],
   });
 
-  it('captureAll / 未声明 victory → 不额外判定（返回 null，只走失城判负）', () => {
+  it('normal / captureAll / 未声明 victory → 全部解析成 normal（占领全部城市）', () => {
     const world = new World(makePlainMap());
-    expect(VICTORY_MODES).toEqual(['captureAll', 'defend', 'attack', 'annihilative']);
-    expect(buildMission({ victory: { type: 'captureAll' } }, world)).toBeNull();
-    expect(buildMission({ victory: null }, world)).toBeNull();
-    expect(buildMission({}, world)).toBeNull();
-    expect(buildMission(null, world)).toBeNull();
+    expect(VICTORY_MODES).toEqual(['normal', 'captureAll', 'defend', 'attack', 'annihilative']);
+    // captureAll 是 normal 的历史别名；缺省（编辑器试玩 / 没写 victory）也按 normal，
+    // 否则那种关卡永远打不完（normal 是唯一"占光城市即胜"的模式）
+    expect(buildMission({ victory: { mode: 'normal' } }, world)).toEqual({ mode: 'normal', faction: 'blue', time: null, points: [] });
+    expect(buildMission({ victory: { type: 'captureAll' } }, world)).toEqual({ mode: 'normal', faction: 'blue', time: null, points: [] });
+    expect(buildMission({ victory: null }, world)).toEqual({ mode: 'normal', faction: 'blue', time: null, points: [] });
+    expect(buildMission({}, world)).toEqual({ mode: 'normal', faction: 'blue', time: null, points: [] });
+    expect(buildMission(null, world)).toEqual({ mode: 'normal', faction: 'blue', time: null, points: [] });
+    // 非法 mode 仍然返回 null（validateLevel 会在更早一步把这种关卡拦下）
+    expect(buildMission({ victory: { mode: 'nonsense' } }, world)).toBeNull();
   });
 
   it('defend / attack / annihilative：解析阵营、时限与据点对象（id → 世界对象）', () => {
@@ -669,6 +674,47 @@ describe('level：胜负条件（victory → buildMission）', () => {
     // 宿北战役的写法：歼灭战 + 我方阵营 + 时限
     expect(buildMission({ victory: { type: 'annihilative', faction: 'blue', time: 10 } }, world))
       .toMatchObject({ mode: 'annihilative', faction: 'blue', time: 10 });
+  });
+
+  it('出征关卡的 victory 模式与设计一致，且每个非 normal 关都有能结束对局的目标', () => {
+    const index = loadLevelIndex();
+    const modeOf = (id) => {
+      const victory = loadLevel(id).victory ?? {};
+      const raw = victory.mode ?? victory.type ?? null;
+      return (raw === null || raw === 'captureAll') ? 'normal' : raw; // captureAll / 缺省都是 normal
+    };
+    const modes = Object.fromEntries(index.levels.map(level => [level.id, modeOf(level.id)]));
+
+    // 教学关与断裂峡谷：占领全部城市（它们没有据点/时限，只有 normal 能自然结束）
+    expect(modes['fracture-canyon-tutorial']).toBe('normal');
+    expect(modes['tactical-training-tutorial']).toBe('normal');
+    expect(modes['fracture-canyon']).toBe('normal');
+    // 战役：两场歼灭战、一场防守战、两场限时夺取
+    expect(modes['subei_battle']).toBe('annihilative');
+    expect(modes.shuangduiji_battle).toBe('annihilative');
+    expect(modes.tashan_battle).toBe('defend');
+    expect(modes.pingjin_battle).toBe('attack');
+    expect(modes.dujiang_battle).toBe('attack');
+
+    // 不变量：非 normal 的关卡必须有"能达成/能超时"的目标，否则那一局永远打不完
+    for (const level of index.levels) {
+      const data = loadLevel(level.id);
+      const mode = modes[level.id];
+      if (mode === 'annihilative') {
+        expect((data.forces ?? []).some(force => force?.objective === 'annihilate'),
+          `${level.id}: 歼灭关必须在某个编队上标 "objective": "annihilate"`).toBe(true);
+      }
+      if (mode === 'attack') {
+        expect((data.victory?.points ?? []).length > 0 || Number.isFinite(data.victory?.time),
+          `${level.id}: 进攻关既没有 points 也没有 time，永远结束不了`).toBe(true);
+      }
+      if (mode === 'defend') {
+        expect(Number.isFinite(data.victory?.time)
+          || (data.victory?.points ?? []).length > 0
+          || (loadMap((data.map ?? '').split('/').pop().replace('.json', '')).capturePoints ?? []).length > 0,
+        `${level.id}: 防守关既没有时限也没有可守据点，永远结束不了`).toBe(true);
+      }
+    }
   });
 
   it('victory 字段非法时被校验拦截', () => {

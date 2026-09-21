@@ -16,7 +16,10 @@ function twoCityMap() {
 }
 
 describe('victory', () => {
-  it('一方失去全部城市即告负，另一方获胜', () => {
+  // 规则口径（gdd.md §10）：
+  //   除 normal（占领全部城市）外，**没有任何"占光城市即胜"的通用规则**——
+  //   以前那条无条件基础规则会让歼灭战"占完敌方城市"就提前获胜，已按需求移除。
+  it('normal：占光地图上全部城市即获胜（默认模式，没写 victory 也走这条）', () => {
     const world = makeWorld(twoCityMap());
     world.cities.find(c => c.id === 'c2').faction = 'blue'; // 红方失城
     advance(world, 1 / 60);
@@ -25,16 +28,76 @@ describe('victory', () => {
     expect(world.history.some(e => e.type === 'victory' && e.winner === 'blue')).toBe(true);
   });
 
-  it('胜负对称：蓝方失去全部城市则红方获胜', () => {
+  it('normal 对称：蓝方被占光城市则红方获胜', () => {
     const world = makeWorld(twoCityMap());
     world.cities.find(c => c.id === 'c1').faction = 'red';
     advance(world, 1 / 60);
     expect(world.winner).toBe('red');
   });
+
+  it('normal（显式声明）同样按占城判定', () => {
+    const world = makeWorld(twoCityMap());
+    world.mess = { mode: 'normal', faction: 'blue', time: null, points: [] };
+    advance(world, 0.5);
+    expect(world.winner).toBeNull(); // 双方都还有城
+    world.cities.find(c => c.id === 'c2').faction = 'blue';
+    advance(world, 1 / 60);
+    expect(world.winner).toBe('blue');
+  });
+
+  it('歼灭战：**占光敌方城市不算胜利**，只有消灭全部指定单位才赢', () => {
+    const world = makeWorld(twoCityMap());
+    const target = world.spawnUnit('red', 'light', 1100, 120);
+    target.objective = 'annihilate';
+    world.spawnUnit('blue', 'light', 100, 600);
+    world.mess = { mode: 'annihilative', faction: 'blue', time: null, points: [] };
+
+    world.cities.find(c => c.id === 'c2').faction = 'blue'; // 红方城市全被占
+    advance(world, 2);
+    expect(world.winner, '歼灭战里占光城市不该判胜').toBeNull();
+
+    world.killUnit(target, 'combat');                       // 指定单位全灭 → 才算赢
+    advance(world, 1 / 60);
+    expect(world.winner).toBe('blue');
+  });
+
+  it('进攻战：占光敌方城市不算胜利，拿下全部据点才算', () => {
+    const world = makeWorld(makePlainMap({ capturePoints: [{ id: 'p1', x: 600, y: 300, faction: 'red' }] }));
+    world.mess = { mode: 'attack', faction: 'blue', time: null, points: [world.capturePoints[0]] };
+
+    world.cities.find(c => c.id === 'c2').faction = 'blue'; // 城市占光
+    advance(world, 1);
+    expect(world.winner, '进攻战里占光城市不该判胜').toBeNull();
+
+    world.capturePoints[0].faction = 'blue';                // 据点到手 → 赢
+    advance(world, 1 / 60);
+    expect(world.winner).toBe('blue');
+  });
+
+  it('防守战：占光敌方城市不算胜利，守到时限才算', () => {
+    const world = makeWorld(twoCityMap());
+    world.mess = { mode: 'defend', faction: 'blue', time: 1, points: [] };
+    world.cities.find(c => c.id === 'c2').faction = 'blue';
+    advance(world, 0.5);
+    expect(world.winner, '防守战里占光城市不该判胜').toBeNull();
+    advance(world, 0.7);
+    expect(world.winner).toBe('blue'); // 守到时限
+  });
+
+  it('非 normal 模式：丢光自己的城市也不会结束游戏（城市不再决定胜负）', () => {
+    const world = makeWorld(twoCityMap());
+    const target = world.spawnUnit('red', 'light', 1100, 120);
+    target.objective = 'annihilate';
+    world.spawnUnit('blue', 'light', 100, 600);
+    world.mess = { mode: 'annihilative', faction: 'blue', time: null, points: [] };
+    world.cities.find(c => c.id === 'c1').faction = 'red'; // 蓝方城市全丢
+    advance(world, 2);
+    expect(world.winner).toBeNull();
+  });
 });
 
 // world.mess（关卡任务规则）由 GameScene 用 level.js 的 buildMission() 写入；
-// 没写的关卡保持 null，此时只走上面的失城判负。
+// 没写 victory 的关卡拿到的是 normal（占领全部城市），此时也只有 normal 规则生效。
 describe('victory：关卡任务规则（world.mess）', () => {
   function pointMap() {
     return makePlainMap({ capturePoints: [{ id: 'p1', x: 600, y: 300, faction: 'blue' }] });

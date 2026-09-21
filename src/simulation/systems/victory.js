@@ -1,31 +1,27 @@
 import { OBJECTIVE_ANNIHILATE } from '../level.js';
 
 // 胜负判定（gdd.md §10）：
-// 1. **基础规则（始终生效）**：一方失去全部城市即告负，另一方获胜。
-//    这也是 REQUIREMENTS.md §4.5「消灭全部敌军且敌方无可生产城市」的简化形式：城市是唯一的
-//    兵力依托（部署之外没有别的补充来源），失去全部城市即无法继续作战，故无需再单独判定全灭。
-// 2. **关卡任务规则（可选）**：关卡 JSON 的 `victory` 声明了 `mode: 'defend' | 'attack' | 'annihilative'` 时，
-//    `world.mess` 会带着 { mode, faction, time, points } 传进来（见 level.js 的 buildMission），
-//    由下面的 defendVictory / attackVictory / annihilationVictory 追加判定。
+// **没有"通用基础规则"，每个关卡完全由自己的 victory 任务规则结束**：
+//   · normal        —— 占领全部城市（某一阵营拿下地图上每一座城市）即获胜
+//   · attack        —— 拿下全部据点胜；超时仍未拿完则负
+//   · defend        —— 守到时限胜；据点全丢立即负；到点仍有据点不在手里则负
+//   · annihilative  —— 消灭全部「指定单位」胜；超时未歼灭则负
 //
-// ⚠️ world.mess 为 null 时必须安全退出——绝大多数关卡没有任务规则，
-//    这里若直接读 mess.faction 会抛 TypeError 并让整个 tick（也就是游戏）崩掉。
+// 历史：以前这里有一条**无条件**的基础规则"一方失去全部城市即告负"。
+// 它的副作用是：歼灭战里只要把敌方城市全占了就能提前获胜（不必歼灭完），
+// 与"歼灭战要达成歼灭目标"冲突。现在这条规则只属于 normal 模式
+// （normal 与旧的 `captureAll` 写法同义，见 level.js 的 VICTORY_MODES）。
+//
+// ⚠️ world.mess 为 null 时按 normal 处理（编辑器试玩 / 没声明 victory 的关卡）——
+//    否则一局永远结束不了；同时任何分支都必须能安全处理 mess 为空。
 export function updateVictory(world) {
   if (world.winner) return;
-  for (const faction of ['blue', 'red']) {
-    const ownsCity = world.cities.some(city => city.faction === faction);
-    if (!ownsCity) {
-      endGame(world, faction === 'blue' ? 'red' : 'blue');
-      return;
-    }
-  }
-
-  // 关卡任务规则：未声明（world.mess 为空）时到此为止，只保留上面的失城判负
-  const mess = world.mess;
-  if (!mess) return;
-  if (mess.mode === 'attack') attackVictory(world, mess);
-  else if (mess.mode === 'annihilative') annihilationVictory(world, mess);
-  else defendVictory(world, mess);
+  const mess = world.mess ?? null;
+  const mode = mess?.mode ?? 'normal';
+  if (mode === 'attack') attackVictory(world, mess);
+  else if (mode === 'annihilative') annihilationVictory(world, mess);
+  else if (mode === 'defend') defendVictory(world, mess);
+  else normalVictory(world);
 }
 
 function endGame(world, winner) {
@@ -33,6 +29,20 @@ function endGame(world, winner) {
   world.winner = winner;
   world.endTime = world.time;
   world.events.push({ type: 'victory', winner, at: world.time });
+}
+
+// normal：占领全部城市即获胜——**对称判定**，谁把地图上每一座城市都拿到手谁赢
+// （所以"敌人占光你的城市"也是你输，而这条只在 normal 模式生效）。
+// - 占领点不参与（占领点在规则上只提供视野）
+// - 地图上一座城市都没有时不判定（避免开局秒胜；正常地图都至少各有 1 座）
+function normalVictory(world) {
+  if (world.cities.length === 0) return;
+  for (const faction of ['blue', 'red']) {
+    if (!world.cities.some(city => city.faction !== faction)) {
+      endGame(world, faction);
+      return;
+    }
+  }
 }
 
 // 防守胜利判定：mess.faction 指防守方，mess.points 是要守的据点（缺省 = 地图上全部占领点）
@@ -60,6 +70,7 @@ function defendVictory(world, mess) {
 // - 超过时限仍未拿下 → 另一方（防守方）胜
 // ⚠️ 顺序要紧：**先判据点、再判超时**。反过来的话，"刚好在时限那一 tick 拿下最后一个据点"
 //    会被超时分支判成失败——玩家明明赢了却看到失败结算（渡江战役实测踩到）。
+// ⚠️ 城市不算任务目标：占光敌方城市不在这里判胜（那是 normal 模式的规则）。
 function attackVictory(world, mess) {
   if (world.winner || !mess) return;
   const fac = mess.faction;
@@ -78,6 +89,7 @@ function attackVictory(world, mess) {
 // - 指定单位全部阵亡 → 我方胜
 // - 没有指定单位 → 不判定（避免关卡忘标标记时开局秒胜）
 // - 声明了时限且超时仍未歼灭 → 敌方胜（任务未达成）
+// ⚠️ 占光敌方城市**不算**歼灭完成：这里只看单位，不看城市。
 function annihilationVictory(world, mess) {
   if (world.winner || !mess) return;
   const fac = mess.faction;

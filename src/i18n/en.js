@@ -1,4 +1,4 @@
-﻿// 英文文案预留（REQUIREMENTS.md §5：中文优先并预留英文支持），语言切换机制后续接入。
+// 英文文案预留（REQUIREMENTS.md §5：中文优先并预留英文支持），语言切换机制后续接入。
 export default {
   'boot.loading': 'Loading…',
   'hud.brand.title': '沙盘战争',
@@ -79,6 +79,7 @@ export default {
   'victory.next': 'Next Mission',
   'victory.select': 'Choose Mission',
   'victory.restart': 'Restart',
+  'vg.mission.captureAllCities': 'Capture every city ({owned}/{total})',
   'vg.mission.defendHold': 'Hold all points ({held}/{total})',
   'vg.mission.defendSurvive': 'Survive until the time limit ({time} left)',
   'vg.mission.attackCapture': 'Capture enemy points ({captured}/{total})',

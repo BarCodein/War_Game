@@ -315,9 +315,13 @@ war_game/
 - `isSpotted` 判定；维护敌方 `lastSeen` 最后已知位置。
 
 ### `src/simulation/systems/victory.js`
-胜负判定（写 `winner`/`endTime`，推 `victory` 事件）：
-- **基础规则（始终生效）**：一方失去全部城市即告负，另一方获胜。
-- **关卡任务规则（可选，读 `world.mess`）**：`defendVictory`（据点全丢立即判负；到时限结算——仍有据点不在手里则防守失败，全部守住即胜）、`attackVictory`（时限内拿下全部据点）、`annihilationVictory`（**消灭全部指定单位**——`unit.objective === 'annihilate'` 的敌军；未标记的敌军不计入；声明了 `time` 则超时判负）。`world.mess` 为 `null` 时直接跳过——未声明任务的关卡只走基础规则。
+胜负判定（写 `winner`/`endTime`，推 `victory` 事件）。**没有"通用基础规则"**，每个关卡完全由自己的 `victory` 任务规则结束：
+- `normalVictory`（`mode: 'normal'`，也是 `captureAll` 与**不声明 victory** 时的缺省）：**占领地图上全部城市**即胜——对称判定，谁占光城市谁赢；占领点不计入。
+- `defendVictory`：据点全丢立即判负；到时限结算——仍有据点不在手里则防守失败，全部守住即胜。
+- `attackVictory`：时限内拿下全部据点即胜，超时判负（⚠️ 先判据点再判超时）。
+- `annihilationVictory`：**消灭全部指定单位**（`unit.objective === 'annihilate'` 的敌军；未标记的敌军不计入）；声明了 `time` 则超时判负。
+- ★ 除 `normal` 外**没有任何"占光城市即胜"的规则**：歼灭战/进攻战/防守战里把敌方城市全占了也不会结束（旧版那条无条件基础规则会让歼灭战提前获胜，已按需求移除）。
+- `world.mess` 为 `null` 时按 `normal` 处理（编辑器试玩 / 没声明 victory 的关卡），否则那一局永远结束不了。
 - `world.mess` 由 `GameScene` 用 `level.js` 的 `buildMission(level, world)` 写入（来源是关卡 JSON 的 `victory`）。
 
 ---
