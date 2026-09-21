@@ -8,7 +8,7 @@ import {
 //    不穿敌方实际控制区）→ 城市按「离自己最近的单位优先」支出吞吐点数 →
 //    单位实收 = 支出点数 × 距离因子（见 supplyPath.js 顶部说明）；
 // 2. 把实收点数换算成**补给存量进货速率**（`unit.supplyIntake`，供 supplyStock 系统消费）；
-// 3. 己方城市附近恢复生命（+3/s）；
+// 3. 己方城市附近恢复生命（速率见 values.cities.recovery；多城不叠加）；
 // 4. 城市生产：当前关闭（values.cities.production.enabled = false）；
 // 5. 环境损耗：身处水域的单位 hp −1/s（可溺水阵亡）。
 // 注：补给存量归零后的掉血（attrition）由 supplyStock 系统负责——那里才有最新的存量。
@@ -198,13 +198,16 @@ function distribute(world, faction, mainField) {
   }
 }
 
-// 2. 恢复：己方城市附近生命 +3/s
+// 2. 恢复：己方城市附近恢复生命（速率 = values.cities.recovery.hpPerSecond）
+//    **多城不叠加**：判据是"是否落在任意一座己方城市的恢复半径内"（some → 布尔），
+//    每 tick 只结算一次。压在 3 座城中间和贴着 1 座城，回血速率完全一样。
 function recoverNearCity(world, dt) {
+  const { radius, hpPerSecond } = values.cities.recovery;
   for (const unit of world.units) {
     if (unit.state === 'dead') continue;
     const nearCity = world.cities.some(city => city.faction === unit.faction
-      && Math.hypot(city.x - unit.x, city.y - unit.y) <= values.cities.recovery.radius);
-    if (nearCity) unit.hp = Math.min(unit.maxHp, unit.hp + values.cities.recovery.hpPerSecond * dt);
+      && Math.hypot(city.x - unit.x, city.y - unit.y) <= radius);
+    if (nearCity) unit.hp = Math.min(unit.maxHp, unit.hp + hpPerSecond * dt);
   }
 }
 

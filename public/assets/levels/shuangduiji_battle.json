@@ -22,7 +22,7 @@
       "faction": "blue",
       "at": { "spawnId": "s2" },
       "units": [
-        { "type": "light", "count": 5 },
+        { "type": "light", "count": 3 },
         { "type": "heavy", "count": 2 }
       ]
     },
@@ -30,14 +30,14 @@
       "faction": "blue",
       "at": { "spawnId": "s3" },
       "units": [
-        { "type": "light", "count": 3 }
+        { "type": "light", "count": 4 }
       ]
     },
     {
       "faction": "blue",
       "at": { "spawnId": "s4" },
       "units": [
-        { "type": "light", "count": 3 }
+        { "type": "light", "count": 6 }
       ]
     },
 
@@ -47,7 +47,7 @@
       "group": "vanguard1",
       "at": { "anchor": "redDeploy" },
       "units": [
-        { "type": "light", "count": 3 }
+        { "type": "light", "count": 6 }
       ]
     },
     {
@@ -56,7 +56,7 @@
       "group": "vanguard2",
       "at": { "anchor": "redDeploy" },
       "units": [
-        { "type": "light", "count": 3 }
+        { "type": "light", "count": 6 }
       ]
     },
     {
@@ -88,28 +88,28 @@
     "triggers": [
       {
         "id": "phase1_vanguard_to_nanpingji",
-        "at": { "time": 20 },
+        "at": { "time": 2 },
         "actions": [
           { "type": "engage", "target": { "anchor": "nanpingji" }, "units": { "group": "vanguard1" } }
         ]
       },
       {
         "id": "phase2_vanguard_to_northbank",
-        "at": { "time": 60 },
+        "at": { "time": 5 },
         "actions": [
           { "type": "engage", "target": { "capturePointId": "p6" }, "units": { "group": "vanguard2" } }
         ]
       },
       {
         "id": "phase3_main_to_shuangduiji",
-        "at": { "time": 100 },
+        "at": { "time": 30 },
         "actions": [
           { "type": "engage", "target": { "anchor": "shuangduiji" }, "units": { "group": "main" } }
         ]
       },
       {
         "id": "phase4_sortie_southeast",
-        "at": { "time": 140 },
+        "at": { "time": 50 },
         "actions": [
           { "type": "engage", "target": { "anchor": "eastSouth" }, "units": { "group": "sortie" } }
         ]
@@ -140,7 +140,7 @@
       },
       {
         "id": "main_press",
-        "when": { "time": 100 },
+        "when": { "time": 30 },
         "until": 180,
         "repeatEvery": 20,
         "then": [{ "type": "engage", "target": { "anchor": "shuangduiji" }, "units": { "group": "main" } }]
@@ -178,7 +178,7 @@
           {
             "type": "spawn",
             "unitType": "light",
-            "count": 4,
+            "count": 3,
             "at": { "anchor": "eastSouth" },
             "group": "relief",
             "spacing": { "x": 0, "y": 24 },

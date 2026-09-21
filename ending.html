@@ -119,7 +119,8 @@
           '<strong>我方部队：</strong>华东野战军、中原野战军、东北野战军与华北军区部队，' +
           '以及推着小推车支前的亿万民众。',
         meaning:
-          '从1946年12月到1949年4月，人民解放军由战略防御转入战略进攻，再由战略决战走向战略追击。' +
+          '从1946年12月到1949年4月，人民解放军由战略防御转入战略进攻，再由战略决战走向战略追击。<br>' +
+          '为有牺牲多壮志，敢教日月换新天。'+
           '宿北、塔山、双堆集、平津、渡江——战士们在每一处战场都洒下了热血，' +
           '也把希望和未来洒向了辽阔的祖国大地。<br><br>',
         epilogue:
@@ -203,7 +204,13 @@
         if (finished) return;
         finished = true;
         hideTitle();
+        // 视频自带音轨：立刻停掉，免得和随后起的结局 BGM 叠在一起
+        try { video.pause(); } catch (e) {}
         overlay.classList.add('fade-out');
+        // 视频播完 / 被跳过 → 起结局 BGM（钢琴曲）。
+        // BGM 由 bgm-controller 注入的 iframe 播放，这里只负责"可以开始了"；
+        // 用户显式关过 BGM 时 BgmStart() 返回 false，不会硬放。
+        if (window.BgmStart) window.BgmStart();
         setTimeout(function () {
           if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
           var firstSection = document.querySelector('.bbg-shell .bbg-section');
@@ -319,6 +326,11 @@
   </script>
 
   <script src="/audio.js"></script>
+  <!-- 结局 BGM：曲目固定为钢琴曲（piano_string），且**不在加载时就起播**
+       （BGM_AUTOSTART=false）——等上面的入场视频播完 / 被跳过后，
+       endIntro() 里再调 window.BgmStart() 开始放。 -->
+  <script>window.BGM_SONG = 'piano_string'; window.BGM_AUTOSTART = false;</script>
+  <script src="/bgm-controller.js"></script>
   <script>
     // 视频-BGM 互斥（v5：localStorage 标记，零跨 frame 依赖）
     (function () {

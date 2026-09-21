@@ -107,13 +107,41 @@ describe('supply', () => {
     expect(world.units.filter(u => u.faction === 'blue').length).toBe(1); // 无产出
   });
 
-  it('己方城市附近恢复生命 +3/s（上限封顶）', () => {
+  it('己方城市附近恢复生命（按配置速率，上限封顶）', () => {
+    const rate = values.cities.recovery.hpPerSecond;
     const world = makeWorld(blueCityMap());
-    const unit = world.spawnUnit('blue', 'light', 150, 600); // 距城 50 ≤ 120
+    const unit = world.spawnUnit('blue', 'light', 150, 600); // 距城 50 ≤ 恢复半径
     unit.hp = 50;
     advance(world, 1);
-    expect(unit.hp).toBeCloseTo(53);
-    advance(world, 5);
-    expect(unit.hp).toBe(60); // 封顶
+    expect(unit.hp).toBeCloseTo(50 + rate);
+    advance(world, 20); // 1/s 的速率下要够久才顶到上限
+    expect(unit.hp).toBe(unit.maxHp); // 封顶
+  });
+
+  it('回血**不叠加**：同时压在 1 座 / 3 座己方城市的恢复半径内，速率完全一样', () => {
+    const rate = values.cities.recovery.hpPerSecond;
+    const radius = values.cities.recovery.radius;
+
+    // 同一位置：己方城市 1 座 vs 3 座（半径 80，三座城相距 60，都能覆盖到单位）
+    const healWith = (friendlyCities) => {
+      const cities = [{ id: 'enemy', x: 1100, y: 100, faction: 'red' }];
+      for (let i = 0; i < friendlyCities; i += 1) {
+        cities.push({ id: `b${i}`, x: 400 + (i - (friendlyCities - 1) / 2) * 60, y: 400, faction: 'blue' });
+      }
+      const world = makeWorld(makePlainMap({
+        cities,
+        spawns: [{ faction: 'blue', x: 400, y: 400 }, { faction: 'red', x: 1100, y: 100 }],
+      }));
+      const unit = world.spawnUnit('blue', 'light', 400, 400);
+      unit.hp = 10;
+      advance(world, 10);
+      return unit.hp - 10;
+    };
+
+    expect(healWith(3)).toBeCloseTo(healWith(1), 6);
+    expect(healWith(2)).toBeCloseTo(healWith(1), 6);
+    // 而且就是"一份"速率，不是 N 份
+    expect(healWith(3)).toBeCloseTo(rate * 10, 3);
+    expect(radius).toBeGreaterThan(0);
   });
 });

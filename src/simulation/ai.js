@@ -464,7 +464,8 @@ export class ScriptedAI {
         return true;
       }
     }
-    // recover：在恢复半径内原地待命（+3hp/s 由 supply 结算；补给存量靠城里的补给线进货）
+    // recover：在恢复半径内原地待命（回血由 supply 结算，速率见 values.cities.recovery.hpPerSecond；
+    //          补给存量靠城里的补给线进货）
     if (avgHp >= cfg.regroup.recoverHpRatio && avgStock >= cfg.regroup.recoverSupplyRatio) {
       state.mode = 'engage';
       state.cooldown = cfg.regroup.cooldownSeconds;

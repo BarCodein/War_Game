@@ -145,6 +145,12 @@ describe('战役页面：关卡 id 的多重兜底契约', () => {
     // 按钮就是原来 result.html 上的"返回战役选择"
     expect(ending).toMatch(/id="endingBack"[^>]*href="\.\/battlechoose\.html"/);
     expect(ending).toContain('返回战役选择');
+    // 结局 BGM：曲目固定钢琴曲、加载时不起播，等视频播完 / 被跳过再由 endIntro() 调 BgmStart()
+    expect(ending).toContain("window.BGM_SONG = 'piano_string'");
+    expect(ending).toContain('window.BGM_AUTOSTART = false');
+    expect(ending).toContain('/bgm-controller.js');
+    expect(ending).toContain('window.BgmStart()');
+    expect(existsSync(new URL('../../assets/bgm/piano_string.mp3', import.meta.url)), '钢琴曲素材不存在').toBe(true);
   });
 
   it('ending.html 只在"浏览器禁止带声音自动播放"时才静音，换源会重新争取声音', () => {
