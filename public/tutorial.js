@@ -11,47 +11,13 @@ const TUTORIAL_LEVEL_ID = "fracture-canyon-tutorial";
 
 
 /* ============================================================
- *  剧情过场配置（接口）
- *  进入教学关卡后先播放剧情，玩家确认后才开始教学引导。
- *  后续可替换为视频、图片或更丰富的内容：
- *  - video: 视频URL（留空则不显示视频）
- *  - backgroundImage: 背景图URL（留空则用纯色）
- *  - onStart: 剧情开始时回调
- *  - onComplete: 剧情结束、教学开始时回调
+ *  剧情过场（对话式 + 打字机效果）**已整体移除**
+ *  以前进入教学关会先播一段开场对话（第一关 9 段 / 第二关 13 段），
+ *  打完再播一段结束对话（6 段 / 5 段），玩家确认后才开始教学引导。
+ *  现在两关都直接进教学面板、打完直接回作战地图，不再有对话过场。
+ *  对应的素材（assets/tutorial/ 下的背景图 / 立绘 / 过场音效）也一并删掉了；
+ *  要恢复请翻 git 历史：剧情配置对象与过场构建函数都在那次删除之前的版本里。
  * ============================================================ */
-let TUTORIAL_STORY = {
-  enabled: true,
-  assetPath: "/assets/tutorial/",
-  scenes: [
-    { talker: "纵队司令部", text: "警报！全体注意！敌人大举进犯，立即进入战斗位置！", bg: "images/bg-warning.jpg", audio: "warning", alert: true, portrait: "images/port-hq.png" },
-    { talker: "纵队司令部", text: "前线指挥所！听到请回答！我是纵队司令部作战科！", bg: "images/bg-warning.jpg", audio: "", alert: true, portrait: "images/port-hq.png" },
-    { talker: "前线指挥员", text: "司令部！我是前线指挥员，已到岗！请指示！", bg: "images/bg-character.jpg", audio: "", alert: false, portrait: "images/port-commander.png" },
-    { talker: "纵队司令部", text: "据侦察营急报：敌整编第七十四师正沿公路向我阵地推进，先头部队距我前沿不足十里，炮火随时可能覆盖！", bg: "images/bg-command.jpg", audio: "drum", alert: false, portrait: "images/port-hq.png" },
-    { talker: "纵队司令部", text: "形势严峻！但我部多为新兵，各级指挥员尚缺乏实战经验。司令员亲自指示：必须在战斗打响前，完成基础指挥训练！", bg: "images/bg-command.jpg", audio: "drum", alert: false, portrait: "images/port-hq.png" },
-    { talker: "纵队司令部", text: "现在我命令你：立即在训练场完成指挥训练——单位选择、部队机动、火力打击、多单位协同、行军路线规划！一项都不能少！", bg: "images/bg-command.jpg", audio: "drum", alert: false, portrait: "images/port-hq.png" },
-    { talker: "纵队司令部", text: "时间紧迫！敌人的炮弹不长眼睛，每多练一分，战场上就多一分胜算！", bg: "images/bg-command.jpg", audio: "", alert: false, portrait: "images/port-hq.png" },
-    { talker: "前线指挥员", text: "明白！请司令员放心！我保证在最短时间内完成训练，随时率部投入战斗！", bg: "images/bg-command.jpg", audio: "", alert: false, portrait: "images/port-commander.png" },
-    { talker: "纵队司令部", text: "好！党和人民考验我们的时候到了！训练——开始！", bg: "images/bg-command.jpg", audio: "", alert: false, portrait: "images/port-hq.png" }
-  ],
-  buttonText: "开始教学关卡",
-  onStart: null,
-  onComplete: null
-};
-
-/* ---------- 教学结束剧情配置 ---------- */
-let TUTORIAL_END_STORY = {
-  enabled: true,
-  assetPath: "/assets/tutorial/",
-  scenes: [
-    { talker: "通讯员", text: "报告司令员！训练场考核全部通过！部队已熟练掌握基础指挥要领！", bg: "images/bg-command.jpg", audio: "drum", alert: false, portrait: "images/port-hq.png" },
-    { talker: "纵队司令员", text: "好！但这只是开始！训练场的胜利不算胜利，战场上的胜利才是真胜利！", bg: "images/bg-command.jpg", audio: "drum", alert: false, portrait: "images/port-hq.png" },
-    { talker: "纵队司令员", text: "敌人还在步步紧逼！整编第七十四师的先头部队已经抵达我阵地前沿，真正的考验才刚刚开始！", bg: "images/bg-command.jpg", audio: "drum", alert: false, portrait: "images/port-hq.png" },
-    { talker: "纵队司令员", text: "记住——骄兵必败！越是胜利，越要谨慎！各级指挥员务必戒骄戒躁，随时准备投入战斗！", bg: "images/bg-command.jpg", audio: "", alert: false, portrait: "images/port-hq.png" },
-    { talker: "前线指挥员", text: "明白！我们绝不辜负党和人民的期望！随时待命，准备战斗！", bg: "images/bg-command.jpg", audio: "", alert: false, portrait: "images/port-commander.png" },
-    { talker: "纵队司令员", text: "好！返回作战地图，准备迎接真正的战斗！", bg: "images/bg-command.jpg", audio: "", alert: false, portrait: "images/port-hq.png" }
-  ],
-  buttonText: "返回作战地图"
-};
 
 /* ---------- 教学步骤定义 ---------- */
 let steps = [
@@ -219,43 +185,6 @@ const STEPS_LEVEL2 = [
   },
 ];
 
-/* ---------- 第二关开场剧情 ---------- */
-const STORY2_INTRO = {
-  enabled: true,
-  assetPath: "/assets/tutorial/",
-  scenes: [
-    { talker: "纵队司令部", text: "基础操作训练，考核通过！但这只是入门——战场上，决定生死的是地形和补给！", bg: "images/bg-command.jpg", audio: "drum", alert: false, portrait: "images/port-hq.png" },
-    { talker: "纵队司令部", text: "据前线战报，塔山、宿北方向连日激战。不少新指挥员因不熟悉地形、不懂补给，吃了大亏，甚至全军覆没！", bg: "images/bg-command.jpg", audio: "drum", alert: false, portrait: "images/port-hq.png" },
-    { talker: "纵队司令员", text: "先讲地形！战场有六种地形，每一种都关乎生死。随我逐一看来——", bg: "images/bg-command.jpg", audio: "drum", alert: false, portrait: "images/port-hq.png" },
-    { talker: "纵队司令员", text: "【平原】一马平川，最基础的战场。大兵团在此展开，正面交锋，拼的是兵力和火力，没有取巧的余地。", bg: "images/bg-plain.jpg", audio: "drum", alert: false, portrait: "images/port-hq.png" },
-    { talker: "纵队司令员", text: "【道路】机动的命脉！部队转移、驰援友军，走道路最快，行军也最省力。兵贵神速——谁掌握了道路，谁就掌握了战场主动权！", bg: "images/bg-road.jpg", audio: "drum", alert: false, portrait: "images/port-hq.png" },
-    { talker: "纵队司令员", text: "【森林】林木茂密，隐蔽性极佳！适合设伏、隐蔽集结，敌人难以发现。游击战、伏击战的天然掩护——藏得住，才能打得狠！", bg: "images/bg-forest.jpg", audio: "drum", alert: false, portrait: "images/port-hq.png" },
-    { talker: "纵队司令员", text: "【山地】易守难攻！占领高地据守，敌人仰攻困难，我军以逸待劳。塔山阻击战的核心，就是守住每一处高地，让敌人寸步难进！", bg: "images/bg-mountain.jpg", audio: "drum", alert: false, portrait: "images/port-hq.png" },
-    { talker: "纵队司令员", text: "【城镇】防御最强的地方！房屋街巷都是掩体，巷战歼敌，据守城镇，是以弱胜强的最佳依托。守住一座城，就能挡住一路敌！", bg: "images/bg-town.jpg", audio: "drum", alert: false, portrait: "images/port-hq.png" },
-    { talker: "纵队司令员", text: "【水域】最危险的地形！涉水作战，行动迟缓、火力削弱，还会持续伤亡——等于自杀！非万不得已，绝不涉水！", bg: "images/bg-water.jpg", audio: "", alert: false, portrait: "images/port-hq.png" },
-    { talker: "纵队司令员", text: "地形讲完了，再说补给！人是铁饭是钢——部队再能打，没有补给就是一堆废铁！选中一支部队，你会看到从己方城市延伸出来的蓝色细线，那就是补给线。", bg: "images/bg-command.jpg", audio: "", alert: false, portrait: "images/port-hq.png" },
-    { talker: "纵队司令员", text: "每支部队血条下方都有一条青蓝色的补给存量条。存量充足，部队生龙活虎；存量不足，战斗力大打折扣；存量彻底耗尽，部队持续失血，不撤回来就全完了！", bg: "images/bg-command.jpg", audio: "", alert: false, portrait: "images/port-hq.png" },
-    { talker: "纵队司令员", text: "补给线被切断，部队就断了粮道！孤军深入、被敌军包围、长时间交战——都会耗尽补给。记住：进攻再猛，也要守住自己的补给线！", bg: "images/bg-command.jpg", audio: "", alert: false, portrait: "images/port-hq.png" },
-    { talker: "纵队司令员", text: "现在，进入战术演训场！那里有道路、城镇、山地、森林、水域——每一种地形，每一种补给变化，都要亲手体会！", bg: "images/bg-command.jpg", audio: "", alert: false, portrait: "images/port-hq.png" },
-    { talker: "前线指挥员", text: "明白！六种地形、补给要领，我已牢记在心！请司令员放心，我一定在演训场亲手体会每一种变化，随时准备投入真正的战斗！", bg: "images/bg-command.jpg", audio: "", alert: false, portrait: "images/port-commander.png" }
-  ],
-  buttonText: "进入战术演训场"
-};
-
-/* ---------- 第二关结束剧情 ---------- */
-const STORY2_OUTRO = {
-  enabled: true,
-  assetPath: "/assets/tutorial/",
-  scenes: [
-    { talker: "通讯员", text: "报告！战术演训全部完成！指挥员已熟练掌握地形利用与补给运用要领！", bg: "images/bg-command.jpg", audio: "drum", alert: false, portrait: "images/port-hq.png" },
-    { talker: "纵队司令员", text: "好！记住——善用地形者，以少胜多；掌握补给者，以弱胜强！这是我军以弱胜强的法宝！", bg: "images/bg-command.jpg", audio: "drum", alert: false, portrait: "images/port-hq.png" },
-    { talker: "纵队司令员", text: "塔山阻击战、宿北战役……前线的同志们正在用鲜血验证这些道理。你们，准备好接过钢枪了吗？", bg: "images/bg-command.jpg", audio: "", alert: false, portrait: "images/port-hq.png" },
-    { talker: "前线指挥员", text: "时刻准备着！请党和人民放心，我们一定在战场上打出威风、打出胜利！", bg: "images/bg-command.jpg", audio: "", alert: false, portrait: "images/port-commander.png" },
-    { talker: "纵队司令员", text: "好！返回作战地图，真正的战斗在等着你们！", bg: "images/bg-command.jpg", audio: "", alert: false, portrait: "images/port-hq.png" }
-  ],
-  buttonText: "返回作战地图"
-};
-
 /* ---------- 状态 ---------- */
 const state = {
   stepIndex: 0,
@@ -348,323 +277,6 @@ function setGamePaused(paused) {
   } catch (e) {}
 }
 
-function buildStoryOverlay(opts) {
-  const cfg = Object.assign({}, TUTORIAL_STORY, opts || {});
-  if (!cfg.enabled) { if (cfg.onComplete) cfg.onComplete(); else startTutorial(); return; }
-  if (typeof cfg.onStart === "function") cfg.onStart();
-  // 剧情播放期间暂停游戏，避免准备阶段倒计时在后台走完
-  setGamePaused(true);
-
-  const AP = cfg.assetPath;
-  const scenes = cfg.scenes;
-  let curIdx = 0;
-  let audioUnlocked = false;
-  let typingTimer = null;
-  let isTyping = false;
-  let typingAudio = null;
-  const TYPE_SPEED = 45; // 每字毫秒
-
-  // 样式
-  const style = document.createElement("style");
-  style.id = "tutorialStoryStyle";
-  style.textContent = `
-    #tutorialStoryOverlay {
-      position: fixed; inset: 0; z-index: 10000;
-      background: #150d06 center/cover no-repeat;
-      font-family: "STKaiti","KaiTi","SimHei","Microsoft YaHei",sans-serif;
-      overflow: hidden; animation: storyFadeIn .6s ease;
-    }
-    #tutorialStoryOverlay::before {
-      content: ""; position: fixed; inset: 0;
-      background: rgba(18,10,4,.5); z-index: 0;
-    }
-    @keyframes storyFadeIn { from { opacity: 0; } to { opacity: 1; } }
-    #tutorialStoryOverlay.closing { animation: storyFadeOut .5s ease forwards; }
-    @keyframes storyFadeOut { to { opacity: 0; visibility: hidden; } }
-    .story-alert-flash {
-      position: fixed; inset: 0; z-index: 1;
-      background: radial-gradient(ellipse at center, transparent 40%, rgba(200,30,20,.42));
-      animation: alertPulse .8s infinite; display: none;
-    }
-    .story-alert-flash.active { display: block; }
-    @keyframes alertPulse { 0%,100%{opacity:.3} 50%{opacity:1} }
-    .story-portrait {
-      position: fixed; left: 3%; top: 50%; transform: translateY(-50%);
-      width: 45%; height: 80%; z-index: 2; pointer-events: none;
-      background: left center / contain no-repeat;
-      filter: drop-shadow(0 10px 30px rgba(0,0,0,.6));
-      transition: opacity .3s;
-    }
-    .story-skip-btn {
-      position: fixed; top: 20px; right: 20px; z-index: 10;
-      padding: 8px 18px; font-size: 14px; letter-spacing: 2px;
-      background: rgba(30,19,9,.7); color: #e8d9b0;
-      border: 1px solid #c9a24a;
-      border-radius: 4px; cursor: pointer; font-family: inherit;
-    }
-    .story-skip-btn:hover { color: #fff; border-color: #e8c879; background: rgba(60,38,16,.8); }
-    .story-panel {
-      position: fixed; left: 0; right: 0; bottom: 0; z-index: 5;
-      padding: 30px 36px 40px;
-      background: linear-gradient(to top, rgba(22,14,6,.96), rgba(22,14,6,.42));
-      border-top: 2px solid #c9a24a;
-      box-shadow: inset 0 1px 0 rgba(255,210,150,.18), 0 -8px 24px rgba(0,0,0,.5);
-      cursor: pointer;
-    }
-    .story-text {
-      max-width: 900px; margin: 0 auto;
-      font-size: 21px; color: #f4ecd0; line-height: 1.9;
-      text-shadow: 0 2px 10px rgba(0,0,0,.85);
-      min-height: 80px;
-    }
-    .story-talker {
-      color: #c9a24a; font-weight: bold; display: block;
-      margin-bottom: 10px; font-size: 23px;
-      text-shadow: 0 1px 4px rgba(0,0,0,.6);
-    }
-    .story-cursor {
-      display: inline-block; width: 2px; height: 20px;
-      background: #c9a24a; margin-left: 2px; vertical-align: middle;
-      animation: cursorBlink .6s step-end infinite;
-    }
-    @keyframes cursorBlink { 0%,100%{opacity:1} 50%{opacity:0} }
-    .story-tip {
-      max-width: 900px; margin: 16px auto 0;
-      font-size: 14px; color: #b9a87a; letter-spacing: 1px;
-    }
-    .story-start-btn {
-      display: none; margin: 24px auto 0; padding: 12px 40px;
-      font-size: 19px; background: linear-gradient(90deg, #6f2417, #9c3a26);
-      color: #f4ecd0; border: 1px solid #c9a24a; border-radius: 6px;
-      cursor: pointer; letter-spacing: 4px; font-family: inherit;
-      box-shadow: 0 3px 12px rgba(0,0,0,.5);
-    }
-    .story-start-btn:hover { background: linear-gradient(90deg, #8a2c1c, #b8472f); }
-  `;
-  document.head.appendChild(style);
-
-  // DOM
-  const overlay = document.createElement("div");
-  overlay.id = "tutorialStoryOverlay";
-  overlay.innerHTML = `
-    <div class="story-alert-flash" id="storyAlertFlash"></div>
-    <div class="story-portrait" id="storyPortrait"></div>
-    <button class="story-skip-btn" id="storySkipBtn">跳过剧情 ⏭</button>
-    <div class="story-panel" id="storyPanel">
-      <div class="story-text" id="storyText"></div>
-      <div class="story-tip" id="storyTip">点击任意位置 或 按空格键 继续...</div>
-      <button class="story-start-btn" id="storyStartBtn">${cfg.buttonText}</button>
-    </div>
-    <audio id="storySfxWarning"><source src="${AP}audio/sfx-warning.mp3" type="audio/mpeg"></audio>
-    <audio id="storySfxDrum"><source src="${AP}audio/sfx-drum.mp3" type="audio/mpeg"></audio>
-    <audio id="storySfxClick"><source src="${AP}audio/sfx-click.mp3" type="audio/mpeg"></audio>
-    <audio id="storySfxTyping" loop><source src="${AP}audio/sfx-typing.mp3" type="audio/mpeg"></audio>
-  `;
-  document.body.appendChild(overlay);
-  // 所有关卡：用 !important 强制设置样式，排除任何CSS覆盖
-  overlay.style.setProperty("z-index", "2147483647", "important");
-  overlay.style.setProperty("opacity", "1", "important");
-  overlay.style.setProperty("display", "block", "important");
-  overlay.style.setProperty("visibility", "visible", "important");
-  overlay.style.setProperty("position", "fixed", "important");
-  overlay.style.setProperty("inset", "0", "important");
-  overlay.style.setProperty("background", "#111 center/cover no-repeat", "important");
-  overlay.style.setProperty("pointer-events", "auto", "important");
-
-  const textEl = document.getElementById("storyText");
-  const tipEl = document.getElementById("storyTip");
-  const btnEl = document.getElementById("storyStartBtn");
-  const alertEl = document.getElementById("storyAlertFlash");
-  const portraitEl = document.getElementById("storyPortrait");
-  const panelEl = document.getElementById("storyPanel");
-  typingAudio = document.getElementById("storySfxTyping");
-  // 强制子元素可见（用 !important）
-  if (textEl) {
-    textEl.style.setProperty("opacity", "1", "important");
-    textEl.style.setProperty("display", "block", "important");
-    textEl.style.setProperty("visibility", "visible", "important");
-    textEl.style.setProperty("color", "#fff", "important");
-    textEl.style.setProperty("position", "relative", "important");
-    textEl.style.setProperty("z-index", "10", "important");
-  }
-  if (portraitEl) {
-    portraitEl.style.setProperty("opacity", "1", "important");
-    portraitEl.style.setProperty("display", "block", "important");
-    portraitEl.style.setProperty("visibility", "visible", "important");
-    portraitEl.style.setProperty("position", "fixed", "important");
-    portraitEl.style.setProperty("z-index", "5", "important");
-    portraitEl.style.setProperty("left", "3%", "important");
-    portraitEl.style.setProperty("top", "50%", "important");
-    portraitEl.style.setProperty("transform", "translateY(-50%)", "important");
-    portraitEl.style.setProperty("width", "45%", "important");
-    portraitEl.style.setProperty("height", "80%", "important");
-  }
-  if (panelEl) {
-    panelEl.style.setProperty("opacity", "1", "important");
-    panelEl.style.setProperty("display", "block", "important");
-    panelEl.style.setProperty("visibility", "visible", "important");
-    panelEl.style.setProperty("position", "fixed", "important");
-    panelEl.style.setProperty("z-index", "6", "important");
-    panelEl.style.setProperty("bottom", "0", "important");
-    panelEl.style.setProperty("left", "0", "important");
-    panelEl.style.setProperty("right", "0", "important");
-  }
-  if (tipEl) {
-    tipEl.style.setProperty("opacity", "1", "important");
-    tipEl.style.setProperty("display", "block", "important");
-  }
-  console.log("[剧情] overlay已添加, textEl=" + !!textEl + ", portraitEl=" + !!portraitEl + ", panelEl=" + !!panelEl);
-
-  function playSfx(id) {
-    if (!id) return;
-    const el = document.getElementById("storySfx" + id.charAt(0).toUpperCase() + id.slice(1));
-    if (el) { el.currentTime = 0; el.play().catch(() => {}); }
-  }
-
-  function stopTyping() {
-    if (typingTimer) { clearInterval(typingTimer); typingTimer = null; }
-    isTyping = false;
-    if (typingAudio) { typingAudio.pause(); typingAudio.currentTime = 0; }
-  }
-
-  function typeText(fullText, talker) {
-    stopTyping();
-    isTyping = true;
-    let charIdx = 0;
-    textEl.innerHTML = '<span class="story-talker">' + talker + '</span><span id="storyTypedContent"></span><span class="story-cursor"></span>';
-    const contentEl = document.getElementById("storyTypedContent");
-
-    // 播放打字音效
-    if (audioUnlocked && typingAudio) {
-      typingAudio.currentTime = 0;
-      typingAudio.play().catch(() => {});
-    }
-    typingTimer = setInterval(() => {
-      if (charIdx < fullText.length) {
-        contentEl.textContent = fullText.substring(0, charIdx + 1);
-        charIdx++;
-      } else {
-        stopTyping();
-        // 移除光标
-        const cursor = textEl.querySelector(".story-cursor");
-        if (cursor) cursor.remove();
-      }
-    }, TYPE_SPEED);
-  }
-
-  function showFullText(fullText, talker) {
-    stopTyping();
-    textEl.innerHTML = '<span class="story-talker">' + talker + '</span>' + fullText;
-  }
-
-  function renderScene() {
-    const s = scenes[curIdx];
-    if (!s) return;
-    overlay.style.backgroundImage = "url('" + AP + s.bg + "')";
-    overlay.style.backgroundSize = "cover";
-    overlay.style.backgroundPosition = "center";
-    if (alertEl) alertEl.classList.toggle("active", !!s.alert);
-    if (portraitEl) {
-      portraitEl.style.backgroundImage = "url('" + AP + s.portrait + "')";
-      portraitEl.style.backgroundSize = "contain";
-      portraitEl.style.backgroundPosition = "left center";
-      portraitEl.style.backgroundRepeat = "no-repeat";
-      portraitEl.style.display = "block";
-      portraitEl.style.opacity = "1";
-      portraitEl.style.visibility = "visible";
-      portraitEl.style.zIndex = "5";
-    }
-    // 打字机效果显示文字
-    if (textEl) {
-      textEl.style.display = "block";
-      textEl.style.opacity = "1";
-      textEl.style.visibility = "visible";
-      typeText(s.text || "", s.talker || "");
-    }
-    if (tipEl) tipEl.style.display = "block";
-    if (s.audio && audioUnlocked) playSfx(s.audio);
-  }
-
-  function goNext() {
-    if (!audioUnlocked) {
-      audioUnlocked = true;
-      const s = scenes[curIdx];
-      if (s.audio) playSfx(s.audio);
-      // 首次交互也启动打字音效
-      if (isTyping && typingAudio) { typingAudio.play().catch(() => {}); }
-    }
-    // 正在打字：点击快速显示完整文字
-    if (isTyping) {
-      const s = scenes[curIdx];
-      showFullText(s.text, s.talker);
-      playSfx("click");
-      return;
-    }
-    playSfx("click");
-    curIdx++;
-    if (curIdx >= scenes.length) {
-      tipEl.style.display = "none";
-      btnEl.style.display = "block";
-      alertEl.classList.remove("active");
-      portraitEl.style.backgroundImage = "none";
-    } else {
-      renderScene();
-    }
-  }
-
-  function skipStory() {
-    stopTyping();
-    audioUnlocked = true;
-    tipEl.style.display = "none";
-    btnEl.style.display = "block";
-    alertEl.classList.remove("active");
-    portraitEl.style.backgroundImage = "none";
-    const last = scenes[scenes.length - 1];
-    overlay.style.backgroundImage = "url('" + AP + last.bg + "')";
-    showFullText(last.text, last.talker);
-  }
-
-  function closeStory() {
-    stopTyping();
-    playSfx("click");
-    // 移除剧情层的键盘事件监听器（必须加 true，与 addEventListener 匹配）
-    document.removeEventListener("keydown", storyKeyHandler, true);
-    overlay.classList.add("closing");
-    setTimeout(() => {
-      overlay.remove();
-      style.remove();
-      if (typeof cfg.onComplete === "function") cfg.onComplete();
-      else startTutorial();
-    }, 500);
-  }
-
-  // 交互：第一关用 click+底部面板（原样）；第二关用 pointerdown+全屏（修复被游戏拦截的问题）
-  if (currentLevelId === "tactical-training-tutorial") {
-    overlay.addEventListener("pointerdown", (e) => {
-
-      if (e.target === btnEl) { closeStory(); return; }
-      if (e.target.id === "storySkipBtn") { skipStory(); return; }
-      goNext();
-    }, true);
-  } else {
-    // 第一关：原样，只绑定底部面板的 click
-    panelEl.addEventListener("click", (e) => { if (e.target !== btnEl) goNext(); });
-    document.getElementById("storySkipBtn").addEventListener("click", (e) => { e.stopPropagation(); skipStory(); });
-    btnEl.addEventListener("click", closeStory);
-  }
-  // 命名函数，方便 closeStory 时移除
-  function storyKeyHandler(e) {
-    if (e.code === "Space" || e.code === "Enter") {
-      e.preventDefault();
-      e.stopPropagation();
-      if (btnEl.style.display === "block") closeStory();
-      else goNext();
-    }
-  }
-  document.addEventListener("keydown", storyKeyHandler, true);
-
-  renderScene();
-}
 
 /* ---------- 地图目标区域标注 ---------- */
 let targetMarker = null;
@@ -934,11 +546,9 @@ function finishTutorial() {
   if (panel) panel.style.display = "none";
   const toast = document.getElementById("toast");
   if (toast) toast.style.display = "none";
-  // 延迟一小段时间让玩家看到全部打勾，再进入结束剧情
+  // 延迟一小段时间让玩家看到全部打勾，再回作战地图（结束剧情已移除）
   setTimeout(() => {
-    buildStoryOverlay(Object.assign({}, TUTORIAL_END_STORY, {
-      onComplete: () => { window.location.href = "/battlechoose.html"; }
-    }));
+    window.location.href = "/battlechoose.html";
   }, 1200);
 }
 
@@ -1307,8 +917,6 @@ function init() {
   // 防重复初始化
   if (tutorialInitialized) { console.log("[教学系统] 已初始化，跳过"); return; }
   // 清理可能残留的旧元素
-  const oldOverlay = document.getElementById("tutorialStoryOverlay");
-  if (oldOverlay) oldOverlay.remove();
   const oldPanel = document.getElementById("tutorialChecklist");
   if (oldPanel) oldPanel.remove();
   const oldStyle = document.getElementById("tutorialStyle");
@@ -1328,8 +936,6 @@ function init() {
   document.head.appendChild(hideStyle);
   if (currentLevelId === "tactical-training-tutorial") {
     steps = STEPS_LEVEL2;
-    TUTORIAL_STORY = STORY2_INTRO;
-    TUTORIAL_END_STORY = STORY2_OUTRO;
     panelTitle = "地形以及补给系统";
     panelTag = "TERRAIN & SUPPLY";
   }
@@ -1341,11 +947,11 @@ function init() {
 
   // 保留游戏原有的任务进度面板
 
-  // 先播放剧情过场，剧情结束后才开始教学引导
-  buildStoryOverlay();
+  // 直接开始教学引导（开场剧情已移除）
+  startTutorial();
 }
 
-/* ---------- 剧情结束后启动教学 ---------- */
+/* ---------- 启动教学引导（init 里直接调用；以前是等开场剧情播完才调） ---------- */
 function startTutorial() {
   buildPanel();
 
