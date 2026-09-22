@@ -22,22 +22,23 @@
       "faction": "blue",
       "at": { "spawnId": "s2" },
       "units": [
-        { "type": "light", "count": 3 },
-        { "type": "heavy", "count": 2 }
+        { "type": "light", "spacing": { "x": 30, "y": 0 },"count": 3 },
+        { "type": "heavy", "spacing": { "x": 30, "y": 0 },"offset": { "x": 0, "y": 42 },"count": 2 }
       ]
     },
     {
       "faction": "blue",
       "at": { "spawnId": "s3" },
       "units": [
-        { "type": "light", "count": 4 }
+        { "type": "light","spacing": { "x": 30, "y": 0 }, "count": 4 }
       ]
     },
     {
       "faction": "blue",
       "at": { "spawnId": "s4" },
+      
       "units": [
-        { "type": "light", "count": 6 }
+        { "type": "light", "spacing": { "x": 10, "y": -10 },"count": 6 }
       ]
     },
 

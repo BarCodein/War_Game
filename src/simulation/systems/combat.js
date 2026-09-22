@@ -1,9 +1,13 @@
-﻿import { values } from '../../config/index.js';
+import { values } from '../../config/index.js';
+import { capabilityRatio } from '../capability.js';
 import { effectsFor, stockRatio } from './supplyStock.js';
 
 // 战斗系统（gdd.md §4）：敌我单位足够接近（圆点接触）后自动交战；
 // 目标选择：优先当前目标直至死亡，否则取接触范围内最近（config.combat.targetPriority）；
-// 伤害 = 基础伤害 × 缺补削弱 × 防御者地形修正；每单位独立攻击冷却，首次接触立即攻击。
+// 伤害 = 基础伤害 × 缺补削弱 × 防御者地形修正 × **战斗力系数（血量口径）** × 攻方地形修正
+// × 防御姿态 × 溃逃/失序易伤；每单位独立攻击冷却，首次接触立即攻击。
+// 「战斗力系数」= `capability.js` 的 capabilityRatio()（血量 ↔ 能力的唯一曲线），
+// 交战补给消耗也走同一个函数（gdd.md §6）。
 // 统一为「攻击前进」（attack-forward）：move 与 attackMove 都沿预定路线行军，
 // 途中接触敌军即停下交战，敌军离开/清空后恢复行军（见 gdd.md §4）。
 export function updateCombat(world, dt) {
@@ -36,7 +40,7 @@ export function updateCombat(world, dt) {
     const effects = effectsFor(stockRatio(unit));
     // 攻方所在地形也影响输出：水域里攻击力打对折（values.terrain.attackMultiplier）
     const damage = (stats.damage * effects.damageMultiplier * 
-      world.terrain.defenseModifierAt(enemy.x, enemy.y) * calcDamageRatio(unit) *
+      world.terrain.defenseModifierAt(enemy.x, enemy.y) * capabilityRatio(unit) *
       world.terrain.attackMultiplierAt(unit.x, unit.y));
     // 溃逃/失序的部队阵型散乱：承受伤害 ×1.5（gdd.md §4）
     const disordered = enemy.state === 'rout' || enemy.state === 'unordered';
@@ -65,9 +69,7 @@ function resolveTarget(world, unit) {
     Math.hypot(enemy.x - unit.x, enemy.y - unit.y) < Math.hypot(nearest.x - unit.x, nearest.y - unit.y) ? enemy : nearest);
 }
 
-// 兰切斯特定律，并考虑有预备队，所以创造阈值
-// （导出供战术 AI 复用，避免战力估算与真实伤害公式各写一套）
-export function calcDamageRatio(unit){
-  return Math.min(unit.hp/values.units[unit.type].hp / 
-    values.combat.hp_dps_ratio,1);
-}
+// 曾在这里的 calcDamageRatio()（兰切斯特定律 + 预备队阈值，血量 → 战斗力）已移出本模块：
+// 见 src/simulation/capability.js 的 capabilityRatio()——它现在同时被战斗伤害与
+// **交战补给消耗**（supplyStock.js）复用，不再是战斗专属，并补了 0 下限
+// （damageUnit 允许 hp 短暂为负，负血量绝不能算出负消耗）。AI 战力估算改从 capability.js 引入。

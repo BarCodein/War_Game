@@ -46,10 +46,10 @@ score = threat      × 局部兵力比 P(me)/(P(me)+P(enemy))     // 0.30
       + vulnerability × (目标 rout/unordered ? 1 : 0)        // 0.10  承受伤害 ×1.5
       + chase       × (溃逃 ? 距离项 : 0)                    // 0.15  追击收益
       + terrain     × attackMultiplierAt(自己)               // 0.15  在水里输出减半
-P(unit) = dps × effectsFor(stockRatio).damageMultiplier × calcDamageRatio(unit) × (hp / 地形防御修正)
+P(unit) = dps × effectsFor(stockRatio).damageMultiplier × capabilityRatio(unit) × (hp / 地形防御修正)
 ```
 
-- **战力估算刻意复用真实伤害公式的成分**（`calcDamageRatio` 由 `combat.js` 导出），避免 AI 与战斗两套数值打架。
+- **战力估算刻意复用真实伤害公式的成分**（`capabilityRatio` 由 `src/simulation/capability.js` 导出，战斗伤害与交战补给消耗也共用它），避免 AI 与战斗两套数值打架。
 - **集中火力上限**：`values.ai.squad.maxAttackersPerTarget`（默认 2）——达到上限的目标直接从候选里剔除，避免多人围殴一个残血单位造成过杀浪费。
 - **换目标迟滞**：新目标分数必须超过旧目标 `(1 + hysteresis)`（0.15）才换，防止每 0.5 秒横跳。
 - **命令签名去重**：同一决策重复下发同样的命令会重置行军路线，因此只有签名变化时才真下单。

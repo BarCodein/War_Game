@@ -6,6 +6,8 @@ import { updateSupplyStock, effectsFor, stockRatio } from '../../src/simulation/
 // 补给存量系统（gdd.md §6）：数值 = 单位剩余补给存量（上限按兵种，values.units.*.supplyStock）。
 //   · 进货：补给系统算出的实收点数（unit.supplyIntake），断补 = 0；
 //   · 消耗：交战 −8/s（参战未瞄准 −3/s）、行军 −5/s、急行军 −10/s，有路线时 ×1.3；
+//     **交战项再乘战斗力系数**（血量低于 combat.hp_dps_ratio 后线性下降，与伤害公式同一函数），
+//     口粮 / 行军 / 急行军 / 进货 / 就地搜集都不乘；
 //   · 阈值：存量比例 < 60% → 缺补（削弱）、< 30% → 将尽（动摇）、= 0 → 溃逃 / 失序；
 //   · 归零后才掉血（supply.attritionHpPerSecond）；补给线被切断本身不掉血，只是不进货。
 
@@ -183,6 +185,76 @@ describe('补给存量：消耗', () => {
     const defendCombat = (defending.maxSupplyStock - defending.supplyStock) - IDLE;
     const attackCombat = (attacking.maxSupplyStock - attacking.supplyStock) - IDLE;
     expect(attackCombat / defendCombat).toBeCloseTo(values.supplyStock.perSecond.attack, 6);
+  });
+
+  it('交战消耗随血量下降：残血部队吃得少（与伤害共用战斗力系数）', () => {
+    const world = makeWorld(cityMap());
+    const full = cutOff(world.spawnUnit('blue', 'light', 300, 300));
+    const hurt = cutOff(world.spawnUnit('blue', 'light', 300, 360));
+    const support = cutOff(world.spawnUnit('blue', 'light', 300, 420));
+    for (const unit of [full, hurt, support]) unit.state = 'combat';
+    full.underFire = true;
+    hurt.underFire = true;
+    support.underFire = false; // 参战未被瞄准：同样属于"交战项"，一样乘系数
+    hurt.hp = hurt.maxHp * 0.4;         // 40% 血量 → 系数 0.4 ÷ 0.8 = 0.5
+    support.hp = support.maxHp * 0.4;
+
+    updateSupplyStock(world, 1);
+    const combatOf = unit => (unit.maxSupplyStock - unit.supplyStock) - IDLE; // 扣掉不吃系数的口粮
+    expect(combatOf(hurt) / combatOf(full)).toBeCloseTo(0.5, 6);
+    expect(combatOf(support)).toBeCloseTo(
+      Math.abs(values.supplyStock.perSecond.inCombatSupport) * 0.5, 6,
+    );
+  });
+
+  it('血量 ≥ hp_dps_ratio × 上限 → 系数 = 1（满血与旧行为逐位一致）', () => {
+    const world = makeWorld(cityMap());
+    const full = cutOff(world.spawnUnit('blue', 'light', 300, 300));
+    const atThreshold = cutOff(world.spawnUnit('blue', 'light', 300, 360));
+    for (const unit of [full, atThreshold]) {
+      unit.state = 'combat';
+      unit.underFire = true;
+    }
+    atThreshold.hp = atThreshold.maxHp * values.combat.hp_dps_ratio;
+    updateSupplyStock(world, 1);
+    expect(atThreshold.supplyStock).toBeCloseTo(full.supplyStock, 6);
+  });
+
+  it('基础口粮与行军不随血量变化（系数只乘交战项）', () => {
+    const world = makeWorld(cityMap());
+    const full = cutOff(world.spawnUnit('blue', 'light', 300, 300));
+    const hurt = cutOff(world.spawnUnit('blue', 'light', 300, 360));
+    const fullMarch = cutOff(world.spawnUnit('blue', 'light', 300, 420));
+    const hurtMarch = cutOff(world.spawnUnit('blue', 'light', 300, 480));
+    for (const unit of [fullMarch, hurtMarch]) {
+      unit.state = 'moving';
+      unit.route = [{ x: 700, y: unit.y }];
+    }
+    hurt.hp = hurt.maxHp * 0.2;
+    hurtMarch.hp = hurtMarch.maxHp * 0.2;
+
+    updateSupplyStock(world, 1);
+    expect(hurt.supplyStock).toBeCloseTo(full.supplyStock, 6);                       // 残血驻军 = 满血驻军
+    expect(hurtMarch.supplyStock).toBeCloseTo(fullMarch.supplyStock, 6);             // 残血行军 = 满血行军
+    expect(full.supplyStock).toBeCloseTo(full.maxSupplyStock - IDLE, 6);             // 只有口粮
+    expect(fullMarch.supplyStock).toBeLessThan(hurt.supplyStock);                    // 但行军确实更贵
+  });
+
+  it('溃逃时受击扣的仍是交战项：同样乘战斗力系数', () => {
+    const world = makeWorld(cityMap());
+    const full = cutOff(world.spawnUnit('blue', 'light', 800, 150));
+    const hurt = cutOff(world.spawnUnit('blue', 'light', 800, 220));
+    for (const unit of [full, hurt]) {
+      unit.state = 'rout';
+      unit.underFire = true;
+      unit.supplyStock = 0;
+    }
+    hurt.hp = hurt.maxHp * 0.4; // 系数 0.5
+    updateSupplyStock(world, 1);
+    const routRate = values.supplyStock.rout.recoverPerSecond;
+    const combatCost = Math.abs(values.supplyStock.perSecond.inCombat);
+    expect(full.supplyStock).toBeCloseTo(routRate - combatCost, 6);              // 满血：+8 −8 ≈ 0
+    expect(hurt.supplyStock).toBeCloseTo(routRate - combatCost * 0.5, 6);        // 半血：+8 −4 = +4
   });
 });
 

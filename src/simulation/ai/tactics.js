@@ -1,6 +1,6 @@
 import { values } from '../../config/index.js';
 import { effectsFor, stockRatio } from '../systems/supplyStock.js';
-import { calcDamageRatio } from '../systems/combat.js';
+import { capabilityRatio } from '../capability.js';
 import { supplyPolicy, supplyScore } from './supply.js';
 
 // 战术效用打分（docs/ai-design.md 阶段一 A）：把"该打谁"变成可解释的加权分数。
@@ -14,7 +14,7 @@ export function combatPower(unit, world) {
   const defense = world?.terrain?.defenseModifierAt(unit.x, unit.y) ?? 1;
   const dps = (stats.damage / stats.attackInterval)
     * effectsFor(stockRatio(unit)).damageMultiplier
-    * calcDamageRatio(unit);
+    * capabilityRatio(unit);
   return Math.max(0.01, dps * (unit.hp / Math.max(0.01, defense)));
 }
 

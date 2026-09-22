@@ -32,6 +32,7 @@ war_game/
 │  │  ├─ world.js              #    世界容器 + tick 编排 + 统一命令入口
 │  │  ├─ map.js                #    地图 JSON 校验/迁移/地形访问层
 │  │  ├─ entities.js           #    单位/城市实体工厂
+│  │  ├─ capability.js         #    战斗力系数（血量口径，战斗与交战补给共用，纯函数）
 │  │  ├─ loop.js               #    固定时间步长累积器
 │  │  ├─ commands.js           #    统一命令接口与校验
 │  │  ├─ spatial.js            #    均匀网格空间分区
@@ -166,6 +167,12 @@ war_game/
 - `makeUnit({id, faction, type, x, y})`：从 `values.units` 取类型属性，初始化 hp/补给存量/状态/路径/目标/冷却/补给/效果倍率/最后目视等。
 - `makeCity({id, x, y, faction})`：城市 + 占领进度 + 生产计时。
 
+### `src/simulation/capability.js`
+「血量 ↔ 能力」的**唯一**曲线（`gdd.md §4`、`§6`），纯函数、可 headless 单测：
+- `capabilityRatio(unit)`：`clamp(血量 ÷ 血量上限 ÷ combat.hp_dps_ratio, 0, 1)`——血量 ≥ `hp_dps_ratio`（0.8）× 上限时为 1（封顶），往下按血量比例线性下降；下限夹 0（`damageUnit` 允许 hp 短暂为负，负血量绝不能算出负消耗）。
+- **两个消费方共用它**：战斗伤害（`systems/combat.js`）与**交战补给消耗**（`systems/supplyStock.js` 的 `inCombat`/`inCombatSupport`，含溃逃受击扣的那一份）；AI 战力估算（`ai/tactics.js` 的 `combatPower`）也读它。改 `combat.hp_dps_ratio` → 三处一起变。
+- 历史上它叫 `combat.calcDamageRatio`（兰切斯特定律 + 预备队阈值），因为不再是战斗专属，已移出 `combat.js` 并补了 0 下限。
+
 ### `src/simulation/loop.js`
 固定时间步长累积器：
 - `createLoop(world)`：`advance(renderDt, speed)` 每帧最多补 `maxCatchUpTicks` 个 tick，掉帧丢弃积压；`accumulator` getter。
@@ -250,7 +257,7 @@ war_game/
 - `retreatCity(point)`：撤退目标 = `bestRetreatCity`（补给代价最低、但**避开被围的城**，见 `ai/relief.js`），没有城时才退回 `nearestOwnCity` 的欧氏最近。
 
 ### `src/simulation/ai/`（战术层纯函数，docs/ai-design.md）
-- `tactics.js`：`combatPower`（复用 `combat.calcDamageRatio` + 缺补倍率 + 地形防御）/ `localBalance`（半径内双方战力占比）/ `targetValue` / `scoreAttack`（含集火上限，达上限返回 null）/ `chooseTarget`（溃逃优先，再比分数）/ `enemiesWithin`（走空间网格）。
+- `tactics.js`：`combatPower`（复用 `capability.js` 的 `capabilityRatio` + 缺补倍率 + 地形防御）/ `localBalance`（半径内双方战力占比）/ `targetValue` / `scoreAttack`（含集火上限，达上限返回 null）/ `chooseTarget`（溃逃优先，再比分数）/ `enemiesWithin`（走空间网格）。
 - `squad.js`：`formationSlots`（line / column / wedge，按朝向旋转）/ `squadAnchor`（形心向目标推进 `advanceStep`，不越过目标）/ `needsColumn`（沿直线采样水域/不可通行）/ `cohesionRatio`·`isCohesive`·`isRushingAhead`（不添油）/ `assignSlots`（按距锚点距离 + id 的确定性分配）。
 - `front.js`（阶段二 B）：复用 `world.controlLineSegments`（控制线 0 等值线 = 实际战线）定位战线 → `pointStrength` 采样兵力比（空点记 1）→ `chooseWeakSpot` 选最弱段 / `approachAxes` 生成接近轴 → `chooseApproach` 按"敌弱 + 近 + 地形合口味 + **补给代价低** + **压得住敌粮道**"挑轴 → `approachWaypoint` 两段式推进；`terrainPreference` / `feintAxis` 供档位使用。**脚本目标点不变，只选接近方向。**
 - `supply.js`（阶段四）：AI 的补给视野（`supplyPolicy` / `supplyCostOf` / `withinSupply` / `bestSupplyCity` / `clampToSupply` / `isLowSupply` / `squadLowSupply` / `supplyScore`），见上文。
@@ -274,13 +281,15 @@ war_game/
 战斗系统：
 - 交战判定：距离 ≤ 双方半径和 + `contactTolerance`（**接触才开打**，比按攻击距离更严格）。
 - 目标选择：优先当前目标直至死亡，否则取接触范围内最近（`config.combat.targetPriority`）。
-- 伤害 = 基础 × 缺补削弱 × 防御者地形修正 × 血量比例 × **攻方地形修正**（`values.terrain.attackMultiplier`，站在水里 ×0.5）× 防御姿态（`combat.defend`，防御者原地不动时 ×0.75）× **溃逃/失序易伤**（`combat.disorderedDamageTaken`，目标处于 `rout`/`unordered` 时 ×1.5）；每单位独立攻击冷却，首次接触立即攻击。
+- 伤害 = 基础 × 缺补削弱 × 防御者地形修正 × **战斗力系数（血量口径，`capability.js` 的 `capabilityRatio`）** × **攻方地形修正**（`values.terrain.attackMultiplier`，站在水里 ×0.5）× 防御姿态（`combat.defend`，防御者原地不动时 ×0.75）× **溃逃/失序易伤**（`combat.disorderedDamageTaken`，目标处于 `rout`/`unordered` 时 ×1.5）；每单位独立攻击冷却，首次接触立即攻击。
+- 曾在本模块导出的 `calcDamageRatio` 已移到 `src/simulation/capability.js`（`capabilityRatio`）：战斗伤害与交战补给消耗共用同一条曲线，AI 战力估算也改从那里引入。
 - **attack-forward**：`move` 与 `attackMove` 都沿路线行军，接敌停下交战，敌军清空后恢复行军。
 
 ### `src/simulation/systems/supplyStock.js`
 **补给存量系统**（`gdd.md §6`，机制原本是士气，数值含义已改为「剩余补给存量」）：
 - `updateSupplyStock(world, dt)`：先按状态分派（溃逃/失序走各自的搜集分支），其余单位走 `consume`（进货 − 消耗），最后统一结算归零掉血。
 - **进货**：`unit.supplyIntake`（由 `supply.js` 每轮结算写入的补给存量/秒）；**消耗**：基础口粮 −1/s（任何状态都吃，与下面叠加）、交战 −8/s、参战未瞄准 −3/s、行军 −5/s（乘 `terrain.marchSupplyMultiplier`，道路 0.5）、急行军 −10/s 取代行军值，有路线（进攻）时交战/行军项再乘 1.3。所以断补的驻军也会慢慢耗尽（轻步兵 80 s 见底 → 周期性失序）。
+- **交战项乘战斗力系数**（`capability.js` 的 `capabilityRatio`，与伤害公式共用 `combat.hp_dps_ratio`）：同一状态下伤得越重、交战消耗越少（血量 40% → 交战消耗 ×0.5；血量 ≥80% → ×1，与旧行为一致）。基础口粮 / 行军 / 急行军 / 进货 / 就地搜集都**不**乘——残血驻军照样吃饭、残血行军照样 −5/s。溃逃受击时扣的那一份也是交战项，同样乘系数。
 - **阈值**：`effectsFor(ratio)` 按**存量比例**返回倍率（<0.6 缺补 ×0.75/×0.85；<0.3 将尽 ×0.5/×0.7）；`stockRatio(unit)` 是统一口径（combat / movement / AI / HUD 都用它）。
 - **归零**：正被攻击 → 溃逃（撤向己方城市，无城可退立即投降）；未受攻击 → 失序原地；两者都 +8/s、+10/s 就地搜集，恢复到 `stopAt` 停止。
 - `applyAttrition`：**存量归零才掉血**（`supply.attritionHpPerSecond`，走 `world.damageUnit` 计入伤亡）——补给线被切断本身不掉血。
