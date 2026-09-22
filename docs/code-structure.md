@@ -276,6 +276,11 @@ war_game/
 - 急行军代价在 `moveAlongRoute` 里结算：每秒 `hpPerSecond` 掉血（走 `world.damageUnit`，计入伤亡），掉光即 `killUnit(unit, 'forcedMarch')`。溃逃（`ignoreStockEffects`）不参与。
 - `clampToMap`：把目标点夹进地图矩形——`terrain.passableAt()` 会把格子索引夹到边缘格，因此**地图外的坐标看起来也可通行**，不夹取的话单位会走出地图、进入画布上未渲染的区域。
 - `segmentBlocked`、`simplify`、`separateOverlaps`（软排斥）。
+- **水域通行不卡死**（修过一轮 bug，`gdd.md §5`）：
+  - `waterSafeStep`：水里沿目标直线行进；前方 `clearance` 内有友军时减速让路，但判据比软排斥分离距离**更紧** `movement.waterYieldMargin`（4 px）——分离每 tick 保证圆心距 ≥ clearance，同阈值会让一对卡在阈值上的友军互相"让路"却没人推，双方步长恒为 0（实测僵死）。
+  - 水中停滞判据看**朝当前路点有没有真的前进**（`MIN_WATER_PROGRESS`），而不是单 tick 位移：挤住的单位会"前进量与推回量抵消"，位移不为 0 却几秒不前进；判为卡住后先 `tryRerouteBlockedUnit` 侧向绕行。
+  - `skipUnreachableWaypoint`：轨迹点够不着/被挡住时**只跳过这个采样点**继续走后面的轨迹。旧实现在这些分支把整条轨迹清空并 hold，于是单位停在半路（水里就是"卡在河中央"）。水域里永远不整条丢弃。
+  - `applySeparationPush`：水域软排斥也带可通行性守卫（陆地软排斥本来就有），不把单位推进高山格（那里移动倍率 0 = 永久出不来）；水里也不会主动踏进不可通行地形（会落回常规分支去 A* 绕行）。
 
 ### `src/simulation/systems/combat.js`
 战斗系统：

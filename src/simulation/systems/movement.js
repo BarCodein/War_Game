@@ -12,6 +12,10 @@ const PATH_CACHE_MAX = 512;
 
 const LOCK_ROUTE_UPDATE_INTERVAL = 0.5; // seconds
 
+// 水里"卡住"的判据（px/tick，朝当前路点的净前进量）：正常水域步长是 speed × 0.4 ÷ 60 ≈ 0.27，
+// 让路时会降到一半左右，所以只有**几乎没朝路点前进**（原地打转）才算停滞。
+const MIN_WATER_PROGRESS = 0.02;
+
 export function updateMovement(world, dt) {
   const previousPositions = new Map();
   for (const unit of world.units) {
@@ -89,7 +93,20 @@ function updateBlockedUnits(world, previousPositions, dt) {
       continue;
     }
     const displacement = Math.hypot(unit.x - previous.x, unit.y - previous.y);
-    if (displacement >= values.movement.minDisplacement) {
+    // 陆地上沿用原来的判据（单 tick 位移 < minDisplacement）。
+    // ⚠️ 水里另有一套判据：让路（waterSafeStep）本来就会把速度压到半速，位移小是正常的，
+    // 所以看的是**朝当前路点有没有真的前进** —— 挤在一起的单位会"前进量与推回量互相抵消"，
+    // 单 tick 位移不为 0 却在几秒里一步都不往前走，位移判据完全漏掉这种僵持（实测的卡死）。
+    const inWater = world.terrain.terrainAt(unit.x, unit.y) === values.terrain.codes.water;
+    let stalled = displacement < values.movement.minDisplacement;
+    if (inWater) {
+      const direction = movementDirection(unit);
+      const progress = direction
+        ? (unit.x - previous.x) * direction.x + (unit.y - previous.y) * direction.y
+        : displacement;
+      stalled = progress < MIN_WATER_PROGRESS;
+    }
+    if (!stalled) {
       unit.stuckTime = 0;
       unit.rerouteAttempts = 0;
       continue;
@@ -97,20 +114,24 @@ function updateBlockedUnits(world, previousPositions, dt) {
     unit.stuckTime += dt;
     if (unit.stuckTime < values.movement.stuckThresholdSeconds) continue;
     unit.stuckTime = 0;
-    if (world.terrain.terrainAt(unit.x, unit.y) === values.terrain.codes.water) {
-      // Water speed and low supply stock can make a tick's displacement small;
-      // water is passable, so do not replace the route with a side detour.
+    if (tryRerouteBlockedUnit(world, unit)) {
       unit.rerouteAttempts = 0;
       continue;
     }
-    if (tryRerouteBlockedUnit(world, unit)) continue;
     unit.rerouteAttempts += 1;
-    if (unit.rerouteAttempts >= values.movement.maxRerouteAttempts) {
-      // Stop only the blocked segment. The queued segments remain available.
-      unit.route = [];
-      unit.routeIndex = 0;
-      unit.state = 'hold';
+    if (unit.rerouteAttempts < values.movement.maxRerouteAttempts) continue;
+    if (inWater) {
+      // 水里最常见的是"两个友军正好在一条直线上迎面相遇"：软排斥的推力与前进量互相抵消，
+      // 双方都以 ~0 的速度顶着（实测僵死）。首选解法是上面的侧向绕行；
+      // 侧向也被堵死时**只跳过当前这个轨迹采样点**（拖曳轨迹 8px 一个点，跳一个无所谓），
+      // 绝不丢掉整条轨迹 —— 旧代码在这里直接清空路线，单位于是永远冻在河中央。
+      skipUnreachableWaypoint(world, unit);
+      continue;
     }
+    // 陆地：只停被挡住的那一段（队列里后续路径段保留）
+    unit.route = [];
+    unit.routeIndex = 0;
+    unit.state = 'hold';
   }
 }
 
@@ -319,10 +340,21 @@ function moveAlongRoute(world, unit, dt, ignoreStockEffects = false, speedMultip
   }
 
   if (distance <= travel) {
-    if (!world.terrain.passableAt(target.x, target.y) || segmentBlocked(world.terrain, unit.x, unit.y, target.x, target.y)) {
-      unit.route = [];
-      unit.routeIndex = 0;
-      unit.state = 'hold';
+    const waypointPassable = world.terrain.passableAt(target.x, target.y);
+    if (!waypointPassable || segmentBlocked(world.terrain, unit.x, unit.y, target.x, target.y)) {
+      // 够不到这个采样点：能绕就绕（A*），绕不过就**跳过它继续走后面的轨迹**。
+      // 旧实现在这里把整条轨迹丢掉并原地 hold —— 拖曳轨迹是 8px 一个采样点的长轨迹，
+      // 只要其中一个点被挡住（水域里直线航行会偏离规划路径，很容易撞上这种点），
+      // 单位就会停在半路不动，在水里就是"卡在河中央"（bug）。
+      const detour = waypointPassable
+        ? findPath(world.terrain, unit.x, unit.y, target.x, target.y)
+        : null;
+      if (detour && detour.length > 0) {
+        unit.route.splice(unit.routeIndex, 0, ...detour);
+        unit.pathDirty = true;
+        return; // 下一 tick 沿插入的绕行点走
+      }
+      skipUnreachableWaypoint(world, unit);
       return;
     }
     unit.x = target.x;
@@ -340,9 +372,16 @@ function moveAlongRoute(world, unit, dt, ignoreStockEffects = false, speedMultip
   // 惰性重规划，否则减速跨格时会反复改写目标方向，表现为原地转圈。
   if (world.terrain.terrainAt(unit.x, unit.y) === values.terrain.codes.water) {
     const waterStep = waterSafeStep(world, unit, target, travel);
-    unit.x += waterStep.x;
-    unit.y += waterStep.y;
-    return;
+    const nextX = unit.x + waterStep.x;
+    const nextY = unit.y + waterStep.y;
+    // 直线航行不看地形，但**不能踏进不可通行地形**：高山（和地图外）的移动倍率是 0，
+    // 踏进去这一步位移就恒为 0，单位会永远定在那里不被任何逻辑救回来（水边紧贴高山的图上会踩到）。
+    // 前方是墙就落回下面的常规分支，交给 A* 绕行或跳过这个采样点。
+    if (world.terrain.passableAt(nextX, nextY)) {
+      unit.x = nextX;
+      unit.y = nextY;
+      return;
+    }
   }
 
   // 仅在路径变更或进入新格子时检查不可通行地形
@@ -356,10 +395,8 @@ function moveAlongRoute(world, unit, dt, ignoreStockEffects = false, speedMultip
         unit.route.splice(unit.routeIndex, 0, ...detour);
         target = unit.route[unit.routeIndex];
       } else {
-        // 找不到路径则原地保持（不穿行不可通行地形）
-        unit.route = [];
-        unit.routeIndex = 0;
-        unit.state = 'hold';
+        // 绕不过去：跳过这个够不着的采样点，保留后面的轨迹（旧实现丢掉整条轨迹 → 停在半路）
+        skipUnreachableWaypoint(world, unit);
         return;
       }
     }
@@ -374,9 +411,9 @@ function moveAlongRoute(world, unit, dt, ignoreStockEffects = false, speedMultip
     const nextX = unit.x + (target.x - unit.x) / remaining * step;
     const nextY = unit.y + (target.y - unit.y) / remaining * step;
     if (!world.terrain.passableAt(nextX, nextY) || segmentBlocked(world.terrain, unit.x, unit.y, nextX, nextY)) {
-      unit.route = [];
-      unit.routeIndex = 0;
-      unit.state = 'hold';
+      // 这一步迈不出去（前方是不可通行地形/被挡）：跳过这个采样点继续走后面的轨迹，
+      // 而不是把整条轨迹丢掉停在半路（见 skipUnreachableWaypoint）。
+      skipUnreachableWaypoint(world, unit);
       return;
     }
     unit.x = nextX;
@@ -384,20 +421,44 @@ function moveAlongRoute(world, unit, dt, ignoreStockEffects = false, speedMultip
   }
 }
 
+/**
+ * 跳过当前轨迹点：拖曳轨迹每 `input.routeSampleDistance`（8px）一个采样点，个别点因为
+ * 单位被软排斥推开、或在水里直线航行偏离了规划路径而变得够不着时，**跳过它继续走后面的轨迹**
+ * 才是玩家期望的行为。旧实现在这些分支里把**整条轨迹**清空并转入 hold，于是单位停在半路，
+ * 在水里就是"卡在河中央"（bug）。轨迹点全部跳完（或被清空）才停下。
+ */
+function skipUnreachableWaypoint(world, unit) {
+  unit.routeIndex += 1;
+  unit.rerouteAttempts = 0;
+  unit.stuckTime = 0;
+  if (unit.routeIndex < unit.route.length) return;
+  unit.route = [];
+  unit.routeIndex = 0;
+  activateNextQueuedRoute(world, unit);
+}
+
 function waterSafeStep(world, unit, target, travel) {
-  const directionX = (target.x - unit.x) / Math.hypot(target.x - unit.x, target.y - unit.y);
-  const directionY = (target.y - unit.y) / Math.hypot(target.x - unit.x, target.y - unit.y);
+  const dx = target.x - unit.x;
+  const dy = target.y - unit.y;
+  const length = Math.hypot(dx, dy);
+  const directionX = dx / length;
+  const directionY = dy / length;
   let allowed = travel;
   for (const other of world.units) {
     if (other === unit || other.state === 'dead') continue;
     if (other.faction !== unit.faction) continue; // Allow approaching enemy units in water
     const offsetX = other.x - unit.x;
     const offsetY = other.y - unit.y;
+    const clearance = waterClearance(unit, other);
+    // ⚠️ 让路判据必须比软排斥的**分离距离更紧**（`movement.waterYieldMargin` 的余量）。
+    // 软排斥每 tick 保证圆心距 ≥ clearance；若两者取同一个阈值，一对正好卡在阈值上的友军
+    // 就会"我判你挡路、软排斥却认为已经够开而不推"互相锁死（浮点相等更是刀锋），
+    // 双方 allowed 恒为 0，永远停在河中央 —— 实测的僵死 bug。
+    const yieldDistance = clearance - values.movement.waterYieldMargin;
+    if (Math.hypot(offsetX, offsetY) >= yieldDistance) continue;
     const along = offsetX * directionX + offsetY * directionY;
     if (along <= 0 || along > travel + unit.radius + other.radius) continue;
     const lateral = Math.abs(offsetX * directionY - offsetY * directionX);
-    const clearance = waterClearance(unit, other);
-    if (lateral >= clearance) continue;
     const forwardLimit = along - Math.sqrt(Math.max(0, clearance * clearance - lateral * lateral));
     allowed = Math.min(allowed, Math.max(0, forwardLimit));
   }
@@ -422,15 +483,39 @@ function separateWaterOverlaps(world) {
         const nx = distance > 0.001 ? dx / distance : (unit.id < other.id ? 1 : -1);
         const ny = distance > 0.001 ? dy / distance : 0;
         const push = (clearance - distance) / 2;
-        unit.x += nx * push;
-        unit.y += ny * push;
-        other.x -= nx * push;
-        other.y -= ny * push;
+        applySeparationPush(world, unit, nx * push, ny * push);
+        applySeparationPush(world, other, -nx * push, -ny * push);
         changed = true;
       }
     }
     if (!changed) break;
   }
+}
+
+/**
+ * 把一对单位的推向量作用到其中一方：目标点不可通行时**不推**。
+ * 陆地软排斥（separateOverlaps）一直有这个守卫；水域这一份以前没有，
+ * 于是挤在岸边的单位会被推进不可通行的高山格 —— 那里移动倍率是 0、位移恒为 0，
+ * 单位再也出不来（"过水域时卡住"的另一种成因）。
+ */
+function applySeparationPush(world, unit, pushX, pushY) {
+  const nextX = unit.x + pushX;
+  const nextY = unit.y + pushY;
+  if (!world.terrain.passableAt(nextX, nextY)) return;
+  unit.x = nextX;
+  unit.y = nextY;
+}
+
+// 单位当前的前进方向（朝当前路点）；没有路线/不在移动时返回 null。
+function movementDirection(unit) {
+  if (unit.state !== 'moving' && unit.state !== 'rout') return null;
+  const target = unit.route?.[unit.routeIndex];
+  if (!target) return null;
+  const dx = target.x - unit.x;
+  const dy = target.y - unit.y;
+  const length = Math.hypot(dx, dy);
+  if (length < 1e-3) return null;
+  return { x: dx / length, y: dy / length };
 }
 
 function waterClearance(unit, other) {

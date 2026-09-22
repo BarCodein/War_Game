@@ -415,6 +415,10 @@ export const values = {
     stuckThresholdSeconds: 0.35,
     minDisplacement: 0.25,
     unitSeparation: 2,
+    // 水里"让路"（waterSafeStep）的判据要比软排斥的分离距离（半径和 + unitSeparation）**更紧**
+    // 这么多 px：分离每 tick 保证圆心距 ≥ 分离距离，若两者取同一个阈值，一对正好卡在阈值上的
+    // 友军会互相判成"前方有人"、而软排斥又认为够开而不推 → 双双步长为 0，永远停在河中央（假死）。
+    waterYieldMargin: 4,
     formationOffset: 28,
     maxRerouteAttempts: 3,
     localRerouteRadius: 112,

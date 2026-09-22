@@ -75,6 +75,7 @@ const MIRROR = {
   'input.routeMinLength': 4,
   'input.routeUnitOffset': 18,
   'movement.routSpeedMultiplier': 0.6,
+  'movement.waterYieldMargin': 4,
   'movement.forcedMarch': { speedMultiplier: 1.5, supplyPerSecond: -10, hpPerSecond: 1.5 },
   'ui.toastDurationMs': 2200,
   'ui.timerRefreshMs': 1000,

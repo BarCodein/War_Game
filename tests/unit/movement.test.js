@@ -201,6 +201,102 @@ describe('多单位移动分离', () => {
   });
 });
 
+describe('水域通行：不再被卡住', () => {
+  // 水域的岸边可以是不可通行的高山；水本身可通行、速度 0.4，且"让路"逻辑都在 waterSafeStep 里。
+  // 这一组用例守的是 bug：单位沿轨迹过水域时会停在河中央不动（详见各处注释）。
+  function lakeWorld({ extraCells = {}, width = 640, height = 480 } = {}) {
+    const cells = {};
+    for (let cx = 10; cx <= 20; cx += 1) {
+      for (let cy = 10; cy <= 20; cy += 1) cells[`${cx},${cy}`] = values.terrain.codes.water;
+    }
+    Object.assign(cells, extraCells);
+    return makeWorld(makePlainMap({ width, height, terrainCells: cells }));
+  }
+
+  it('水中迎面相遇的两名友军会错身而过，不会互相顶住僵死', () => {
+    // 圆心距 30.05 ≈ 软排斥的分离距离（14+14+2 = 30）：让路判据若与分离距离取同一个阈值，
+    // 双方会互相判成"前方有人"，而软排斥又认为已经够开、根本不会推 → 双双步长为 0。
+    const world = lakeWorld();
+    const first = world.spawnUnit('blue', 'light', 100, 100);
+    const second = world.spawnUnit('blue', 'light', 113.2, 127.0);
+    world.issueCommands([first.id], { type: 'move', path: [{ x: 100, y: 200 }] });
+    world.issueCommands([second.id], { type: 'move', path: [{ x: 113.2, y: 27 }] });
+
+    advance(world, 2.5);
+    // 两人都朝各自目标走了 15px 以上，并且已经错开（距离 > 分离距离）
+    expect(first.y - 100).toBeGreaterThan(15);
+    expect(127 - second.y).toBeGreaterThan(15);
+    expect(Math.hypot(second.x - first.x, second.y - first.y)).toBeGreaterThan(30);
+    expect(first.state).toBe('moving');
+    expect(second.state).toBe('moving');
+
+    // 错身之后各自走完（没有被对方顶住）
+    advance(world, 6);
+    expect(Math.hypot(first.x - 100, first.y - 200)).toBeLessThan(5);
+    expect(Math.hypot(second.x - 113.2, second.y - 27)).toBeLessThan(5);
+  });
+
+  it('够不着的轨迹采样点被跳过，后续轨迹继续走（不丢整条轨迹）', () => {
+    // 拖曳轨迹是 8px 一个采样点的长轨迹；其中一个点落在不可通行的高山上时，
+    // 旧实现会把整条轨迹清空并停住 —— 于是"过水域时卡在河中央"。
+    const cells = {};
+    for (let cx = 30; cx <= 31; cx += 1) {
+      for (let cy = 28; cy <= 31; cy += 1) cells[`${cx},${cy}`] = values.terrain.codes.highMountain;
+    }
+    const world = makeWorld(makePlainMap({ terrainCells: cells }));
+    const unit = world.spawnUnit('blue', 'light', 200, 300);
+    unit.route = [{ x: 260, y: 300 }, { x: 310, y: 300 }, { x: 400, y: 300 }]; // 中间那个点在山上
+    unit.routeIndex = 0;
+    unit.state = 'moving';
+
+    advance(world, 20);
+    expect(Math.hypot(unit.x - 400, unit.y - 300)).toBeLessThan(20); // 走到了轨迹终点
+    expect(unit.state).toBe('hold');                                 // 轨迹走完才停
+  });
+
+  it('水面紧贴高山：不会踏进不可通行地形而永久定住，会绕过去', () => {
+    // 水面东侧是一道高山墙（列 21~25、行 10~20）。目标在山那边：
+    // 水里是直线航行、不看地形，旧实现会一路走进高山格 —— 那里移动倍率 0，位移恒为 0，
+    // 单位再也出不来（永远"卡在河边"）。
+    const extra = {};
+    for (let cx = 21; cx <= 25; cx += 1) {
+      for (let cy = 10; cy <= 20; cy += 1) extra[`${cx},${cy}`] = values.terrain.codes.highMountain;
+    }
+    const world = lakeWorld({ extraCells: extra });
+    const unit = world.spawnUnit('blue', 'light', 150, 150);
+    world.issueCommands([unit.id], { type: 'move', path: [{ x: 400, y: 150 }] });
+
+    let everImpassable = false;
+    for (let tick = 0; tick < 60 * 30; tick += 1) {
+      world.tick(1 / 60);
+      if (!world.terrain.passableAt(unit.x, unit.y)) everImpassable = true;
+    }
+    expect(everImpassable).toBe(false);
+    expect(Math.hypot(unit.x - 400, unit.y - 150)).toBeLessThan(20); // 绕过山墙到达目标
+  });
+
+  it('水域软排斥不会把单位推进不可通行地形', () => {
+    // 水西侧紧贴高山：挤在一起的两名友军里，靠西的那个"被推开"的方向正是山体。
+    // 旧实现无条件推 → 单位被推进高山格 → 移动倍率 0 → 永久定住。
+    const extra = {};
+    for (let cy = 10; cy <= 20; cy += 1) extra[`9,${cy}`] = values.terrain.codes.highMountain;
+    const world = lakeWorld({ extraCells: extra });
+    const west = world.spawnUnit('blue', 'light', 101, 150);
+    const east = world.spawnUnit('blue', 'light', 115, 150); // 距离 14 < 分离距离 30 → 触发软排斥
+    world.issueCommands([west.id], { type: 'move', path: [{ x: 200, y: 150 }] });
+    world.issueCommands([east.id], { type: 'move', path: [{ x: 200, y: 170 }] });
+
+    for (let tick = 0; tick < 60 * 5; tick += 1) {
+      world.tick(1 / 60);
+      expect(world.terrain.passableAt(west.x, west.y)).toBe(true);
+      expect(world.terrain.passableAt(east.x, east.y)).toBe(true);
+    }
+    // 靠西的单位留在水里且真的动了（没有被推进山里定住）
+    expect(world.terrain.terrainAt(west.x, west.y)).toBe(values.terrain.codes.water);
+    expect(west.x).toBeGreaterThan(105);
+  });
+});
+
 describe('溃退移动速度', () => {
   it('自动溃退速度低于普通移动速度', () => {
     const routWorld = makeWorld(makePlainMap());

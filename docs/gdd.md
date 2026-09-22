@@ -78,6 +78,13 @@
   1. **攻击力 ×0.5**——水里站不稳，输出打对折（按**攻方所在地形**算，与防御修正无关）；
   2. **每秒损失 1 点血**——环境损耗，与补给是否充足无关；走 `World.damageUnit` 计入伤亡，掉光即**溺水阵亡**（`cause = water`）。
   桥梁是独立地形（`bridge` ≠ `water`），过桥不受这两条影响。
+- **水里如何与友军并行**（保证过河不会卡死）：
+  1. 水里沿已规划目标**直线行进**，不做陆地上那套"进新格子就重规划障碍"的惰性绕行（减速跨格时会反复改写方向、原地转圈）；
+  2. **让路**：前方 clearance 内（半径和 + `movement.unitSeparation`）有友军时减速让行，但判据比软排斥的分离距离**更紧** `movement.waterYieldMargin`（4 px）——
+     分离每 tick 会把圆心距推到 ≥ clearance，若两者取同一阈值，一对正好卡在阈值上的友军会互相判成"前方有人"而软排斥又不推，双方步长恒为 0、永远停在河中央；
+  3. 让路**只减速不停止**，且水中停滞超过 `stuckThresholdSeconds` 就计入"卡住"：先尝试侧向绕行，侧向也被堵死时**只跳过当前那个轨迹采样点**，绝不丢弃整条轨迹；
+  4. 水域的软排斥带可通行性守卫（不会把单位推进高山格——那里移动倍率 0 = 永久出不来），水里也不会主动踏进不可通行地形；
+  5. 目标点够不着时（被推开/直线航行偏离规划路径导致）**跳过这个采样点、继续走后面的轨迹**，拖曳轨迹每 8 px 一个点，跳过个别点不影响整体走向。
 
 ## 6. 补给存量系统（§8-1）
 
@@ -375,6 +382,7 @@
 | supplyStock.rout：recoverPerSecond / stopAt / stuckSeconds | +8 /s（受击再扣 −8/s）/ 20 / 5 s |
 | supplyStock.unordered：recoverPerSecond / stopAt / stuckSeconds | +10 /s / 20 / 5 s |
 | movement.routSpeedMultiplier | 0.6 |
+| movement.waterYieldMargin | 4 px（水里"让路"的判据比软排斥分离距离更紧这么多；防止迎面相遇的友军互相顶住僵死） |
 | movement.forcedMarch：speedMultiplier / supplyPerSecond / hpPerSecond | ×1.5（水域除外，与地形倍率叠乘）/ −10 /s（取代普通行军的 −5 /s）/ 1.5 /s（计入伤亡，可力竭阵亡） |
 | cities.capture：radius / perUnitPerSecond / capPerSecond / decayPerSecond | 60 / 5% / 15% / 3% |
 | cities.production：enabled / interval / unitType / pauseWhenSupplyFull | false（**生产已关闭**）/ 12 s / light / true |
