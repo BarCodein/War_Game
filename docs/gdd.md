@@ -314,6 +314,8 @@
   但**模拟不推进**：部队不动、脚本敌军不动、关卡计时与 AI 触发器都不走。倒计时结束才真正开打，部队按已下达的命令行动。
   暂停会同时冻结倒计时；编辑器试玩（`fromEditor`）直接跳过准备阶段。
 - **结算界面**（独立页 `result.html`，胜利/失败都跳转）：胜负大字、原因、用时，以及**双方伤亡**——  `?result=victory|defeat&level=<id>&t=<用时>&casualtiesBlue=<我方>&casualtiesRed=<敌军>`。
+  **节奏**：分出胜负的那一刻战场**定格 1 s**（`ui.resultHoldMs`，模拟与 AI 都停），
+  然后才进胜利/失败动画（`result-video.html` 播 `shengli.mp4`/`shibai.mp4`），动画结束再落到 `result.html`。
   伤亡 = 该阵营**损失的血量**（`stats.hpPerCasualty` = 1，即 1 点血 = 1 点伤亡），
   由 `World.damageUnit()` 在扣血处累计（战斗伤害 + 补给损耗；治疗不计、超杀不计），
   结算页据此显示两张对阵卡片与战损比；缺参数时该板块不显示（兼容旧链接）。
@@ -400,7 +402,7 @@
 |---|---|
 | input.clickHitRadius / dragBoxThreshold | 25 / 8（px） |
 | input.routeSampleDistance / routeMinLength / routeUnitOffset | 8 / 4 / 18（px） |
-| ui.toastDurationMs / timerRefreshMs | 2200 / 1000（ms） |
+| ui.toastDurationMs / timerRefreshMs / resultHoldMs | 2200 / 1000 / 1000（ms；`resultHoldMs` = 胜负判定后**定格 1 s 再进胜利/失败动画**） |
 | simulation.fixedStep / maxCatchUpTicks | 1/60 s / 5 |
 | simulation.speeds | 0.5 / 1 / 2 |
 | prep.seconds | 5（开局准备阶段倒计时；期间可下达预先指令，部队与 AI 都不行动。编辑器试玩跳过） |

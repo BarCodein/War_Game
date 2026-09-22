@@ -66,6 +66,7 @@ export function createHud(scene, world, controller, selection, orders) {
     obj3Done: false,
     obj4Done: false,
     victoryShown: false,
+    resultTimer: null, // 胜负停顿 → 结算的延时器（见 renderVictory / destroy）
     lastEventIndex: 0,
     accumulator: 0,
     timeWarnings: new Set(), // 已触发的时间预警阈值（避免重复）
@@ -443,12 +444,21 @@ export function createHud(scene, world, controller, selection, orders) {
   }
 
   // 胜利结算（world.winner 置位后展示一次）
+  // 节奏：判定出胜负 → 停 ui.resultHoldMs（1s）→ 才进胜利/失败动画。
+  // 这 1s 里画面停在最后一帧战场：GameScene.update 在 world.winner 置位后就不再推进
+  // 模拟与 AI（只走渲染），所以「停顿」是真正的定格，不是继续打 1 秒。
   function renderVictory() {
     if (!world.winner || status.victoryShown) return;
-    status.victoryShown = true;
+    status.victoryShown = true; // 先置位再去延时，保证只调度一次
+    status.resultTimer = setTimeout(revealResult, values.ui.resultHoldMs);
+  }
+
+  function revealResult() {
+    status.resultTimer = null;
     const win = world.winner === 'blue';
 
-    // 正式对局：直接跳转独立结算页 result.html（不弹内嵌结算窗口）。
+    // 正式对局：跳转胜负动画页 result-video.html（播 shengli/shibai.mp4），
+    // 视频结束再由它跳到独立结算页 result.html（不弹内嵌结算窗口）。
     // result.html 按胜负提供 重新开始/下一战场 + 返回主界面 按钮。
     if (!scene.fromEditor) {
       if (win && scene.campaignId) {
@@ -460,7 +470,7 @@ export function createHud(scene, world, controller, selection, orders) {
         timeText: formatTime(world.endTime ?? world.time),
         casualties: world.casualties,
       });
-      /* 胜利/失败先放一段仪式感视频（result-video.html），再跳到 result.html */
+      // 停顿（renderVictory 里的 ui.resultHoldMs）已经走完，这里直接进动画
       window.location.href = `/result-video.html?${params}`;
       return;
     }
@@ -540,9 +550,14 @@ export function createHud(scene, world, controller, selection, orders) {
   renderVictoryConditions();
 
   // 暴露 destroy 方法：GameScene 在 SHUTDOWN 时调用。
-  // HUD 目前没有需要清理的定时器（战斗音效那两个 setInterval 已移除），
-  // 保留这个钩子是为了以后再加 HUD 级定时器时有统一的清理入口。
-  function destroy() {}
+  // HUD 目前只有一个定时器——胜负停顿 → 结算的 resultTimer：场景在停顿期间被关掉
+  // （返回编辑器 / 刷新 / 退到选关页）时必须取消它，否则迟到的结算跳页会把玩家拽走。
+  function destroy() {
+    if (status.resultTimer !== null) {
+      clearTimeout(status.resultTimer);
+      status.resultTimer = null;
+    }
+  }
 
   return { update, showToast, destroy };
 }

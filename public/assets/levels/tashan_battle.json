@@ -22,13 +22,7 @@
 
   "forces": [
     
-    {
-      "faction": "blue",
-      "at": { "spawnId": "s3" },
-      "units": [
-        { "type": "heavy", "count": 1   }
-      ]
-    },
+    
     {
       "faction": "blue",
       "at": { "spawnId": "s5" },
@@ -54,13 +48,13 @@
       "faction": "blue",
       "at": { "spawnId": "s9" },
       "units": [
-        { "type": "light", "count": 1 }
+        { "type": "light", "count": 2 }
       ]
     },{
       "faction": "blue",
       "at": { "spawnId": "s9" },
       "units": [
-        { "type": "light", "count": 2 }
+        { "type": "light", "count": 1 }
       ]
     },
     {
@@ -88,7 +82,7 @@
       "faction": "blue",
       "at": { "spawnId": "s13" },
       "units": [
-        { "type": "light", "count": 1 }
+        { "type": "light", "count": 2 }
       ]
     },
     {
@@ -102,7 +96,7 @@
       "faction": "blue",
       "at": { "spawnId": "s19" },
       "units": [
-        { "type": "light", "count": 2 }
+        { "type": "light", "count": 1 }
       ]
     },
     {
@@ -116,14 +110,14 @@
       "faction": "blue",
       "at": { "spawnId": "s21" },
       "units": [
-        { "type": "heavy", "count": 1 }
+        { "type": "heavy", "count": 2 }
       ]
     },
     {
       "faction": "blue",
       "at": { "spawnId": "s22" },
       "units": [
-        { "type": "light", "count": 2 }
+        { "type": "light", "count": 1 }
       ]
     },
     {
@@ -160,7 +154,7 @@
       "at": { "spawnId": "s17" },
       "group": "landing",
       "units": [
-        { "type": "light", "count": 1 }
+        { "type": "light", "count": 2 }
       ]
     },
     {
@@ -168,7 +162,7 @@
       "at": { "spawnId": "s18" },
       "group": "center",
       "units": [
-        { "type": "light", "count": 1 }
+        { "type": "light", "count": 2 }
       ]
     },
     {
@@ -184,7 +178,7 @@
       "at": { "spawnId": "s2" },
       "group": "east",
       "units": [
-        { "type": "light", "count": 1 }
+        { "type": "light", "count": 2 }
       ]
     }
 
@@ -202,10 +196,10 @@
           {
             "type": "spawn",
             "unitType": "light",
-            "count": 2,
+            "count": 3,
             "at": { "anchor": "sea" },
             "group": "landing",
-            "spacing": { "x": 0, "y": 24 },
+            "spacing": { "x": 0, "y": 40 },
             "order": { "type": "attackMove", "target": { "anchor": "dayushan" } }
           }
         ]
@@ -220,8 +214,17 @@
             "count": 4,
             "at": { "anchor": "redBase" },
             "group": "center",
-            "spacing": { "x": 0, "y": 24 },
+            "spacing": { "x": 0, "y": 40 },
             "order": { "type": "attackMove", "target": { "anchor": "tashan" } }
+          },
+          {
+            "type": "spawn",
+            "unitType": "light",
+            "count": 1,
+            "at": { "anchor": "redBase" },
+            "group": "landing",
+            "spacing": { "x": 0, "y": 40 },
+            "order": { "type": "attackMove", "target": { "anchor": "dayushan" } }
           },
           {
             "type": "spawn",
@@ -229,14 +232,14 @@
             "count": 4,
             "at": { "anchor": "eastHook" },
             "group": "east",
-            "spacing": { "x": 0, "y": 24 },
+            "spacing": { "x": 0, "y": 40 },
             "order": { "type": "attackMove", "target": { "anchor": "baitaishan" } }
           }
         ]
       },
       {
         "id": "secondWave",
-        "at": { "time": 75 },
+        "at": { "time": 70 },
         "actions": [
           {
             "type": "spawn",
@@ -265,7 +268,7 @@
           {
             "type": "spawn",
             "unitType": "heavy",
-            "count": 4,
+            "count": 3,
             "at": { "anchor": "redBase" },
             "group": "center",
             "spacing": { "x": 40, "y": 0 },
@@ -273,8 +276,8 @@
           },
           {
             "type": "spawn",
-            "unitType": "light",
-            "count": 2,
+            "unitType": "heavy",
+            "count": 3,
             "at": { "anchor": "eastHook" },
             "group": "east",
             "spacing": { "x": 0, "y": 24 },

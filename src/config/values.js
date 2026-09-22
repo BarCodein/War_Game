@@ -420,6 +420,7 @@ export const values = {
   ui: {
     toastDurationMs: 2200,
     timerRefreshMs: 1000,
+    resultHoldMs: 1000,     // 胜负判定后停顿多久再进结算（胜利/失败动画 + 结算页）
   },
 };
 

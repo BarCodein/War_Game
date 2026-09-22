@@ -383,7 +383,10 @@ DOM HUD：
 - 读取/订阅暂停、速度、选择、订单；`els` 集合采集所有 HUD DOM 元素。
 - `renderUnitList`/`renderCityCard`/`renderMission`/`renderEvents`/`renderTimer`/`renderVictory`。
 - `resultQuery({ win, campaignId, timeText, casualties })`：**结算页 URL 参数**（纯函数，可单测）——
-  `result` / `level` / `t` / `casualtiesBlue` / `casualtiesRed`（伤亡取整）；`renderVictory` 用它跳转 `result.html`。
+  `result` / `level` / `t` / `casualtiesBlue` / `casualtiesRed`（伤亡取整）；`revealResult` 用它跳转 `result-video.html`。
+- **胜负节奏**：`renderVictory` 只负责在 `world.winner` 置位时启动 `ui.resultHoldMs`（1 s）延时，
+  `revealResult` 才是真正跳转/弹窗的那一步——这一秒画面定格在最后的战场（`GameScene.update` 已因 `world.winner` 停止推进模拟与 AI）；
+  场景 SHUTDOWN 时 `destroy()` 取消未触发的延时，避免离开页面后还被结算跳页拽走。
 - **toast 顶部弹窗已移除**（`showToast` 为 no-op），进度只保留在右侧战场通讯日志。
 - `returnFromGame`：`fromEditor` 时跳转 `/editor.html?fromPlaytest=1`，否则 `reload` 重开教学关。
 

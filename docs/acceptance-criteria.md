@@ -47,6 +47,7 @@
 - [x] E4 胜利条件：按关卡 `victory` 规则判定——`normal` 占领全部城市、`defend` 守满时限、`attack` 夺取据点、`annihilative` 歼灭指定单位；除 `normal` 外占光敌方城市不再提前获胜 — Vitest
 - [x] E5 失败条件与胜利对称 — Vitest
 - [x] E6 暂停与游戏速度控制（空格暂停、×0.5/×1/×2）— Playwright
+- [x] E7 胜负节奏：判定出胜负后战场定格 1 s（`ui.resultHoldMs`，模拟与 AI 已停）再进胜利/失败动画 `result-video.html`，动画结束落到结算页 — Playwright
 
 ## F. 地图编辑器
 

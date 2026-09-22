@@ -78,6 +78,7 @@ const MIRROR = {
   'movement.forcedMarch': { speedMultiplier: 1.5, supplyPerSecond: -10, hpPerSecond: 1.5 },
   'ui.toastDurationMs': 2200,
   'ui.timerRefreshMs': 1000,
+  'ui.resultHoldMs': 1000,
   'simulation.fixedStep': 1 / 60,
   'simulation.maxCatchUpTicks': 5,
   'simulation.speeds': [0.5, 1, 2],
