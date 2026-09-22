@@ -3,6 +3,7 @@ import { World } from '../../simulation/world.js';
 import { createLoop } from '../../simulation/loop.js';
 import { ScriptedAI } from '../../simulation/ai.js';
 import { deployForces, buildMission } from '../../simulation/level.js';
+import { updateFog } from '../../simulation/systems/fog.js';
 import { createTerrainRenderer } from '../terrainRenderer.js';
 import { createFogRenderer } from '../fogRenderer.js';
 import { createUnitRenderer } from '../unitRenderer.js';
@@ -108,6 +109,13 @@ export class GameScene extends Phaser.Scene {
       this.ai = null;
       this.ais = [];
     }
+
+    // 开局准备阶段（读秒）模拟不推进，所以**建场时先算一次战争迷雾**：
+    // 迷雾是"当前状态的派生视图"，不 tick 就一直是全图未探索 —— 读秒期间整张地图是黑的，
+    // 而且渲染层用 isSpotted()（读 fog 网格）决定要不要画敌军，于是开局本来就该看到的敌情
+    // 全被藏起来，直到倒计时结束才突然出现。准备阶段部队不动、AI 不跑、计时不走，
+    // 所以这一次计算在整段读秒里都成立（gdd.md §9、§11）。
+    updateFog(world);
 
     this.controller = createGameController();
     // AI 由固定步长循环驱动（与 headless 测试同一节奏），不再按渲染帧调用（docs/ai-design.md §4）
