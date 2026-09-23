@@ -153,19 +153,35 @@ describe('战役页面：关卡 id 的多重兜底契约', () => {
     expect(existsSync(new URL('../../assets/bgm/piano_string.mp3', import.meta.url)), '钢琴曲素材不存在').toBe(true);
   });
 
-  it('ending.html 只在"浏览器禁止带声音自动播放"时才静音，换源会重新争取声音', () => {
-    // 回归点：曾经只要 play() 被拒就 muted = true 重试，结果两个很常见的失败
+  it('ending.html 只在"浏览器禁止带声音自动播放"时才静音，交互后会自动接回声音', () => {
+    // 回归点 1：曾经只要 play() 被拒就 muted = true 重试，结果两个很常见的失败
     // （刚 load() 就 play() 的 AbortError 竞态、远端源加载失败的 NotSupportedError）
     // 都会把视频**永久静音**——画面在放、就是没声音，别的页面却都正常。
+    // 回归点 2：被自动播放策略拦下之后**永远静音**。浏览器只允许「用户交互过的文档」带声音播放，
+    // 所以现在挂一个"第一次点击 / 按键就把声音接回来"的钩子（不弹按钮），
+    // 而且那一次点击不算跳过（否则鼠标用户一点就把视频点没了）。
     const ending = read('ending.html');
-    // 全页只允许一处 muted = true，且必须在 NotAllowedError 分支里
-    expect(ending.match(/video\.muted = true/g)).toHaveLength(1);
+    // 静音只允许出现在两处：NotAllowedError 分支、以及"恢复声音失败"的回滚
+    const muteSites = [...ending.matchAll(/video\.muted = true/g)]
+      .map(match => ending.slice(Math.max(0, match.index - 140), match.index + 40));
+    expect(muteSites.length).toBeGreaterThan(0);
+    for (const site of muteSites) {
+      expect(site.includes("err.name === 'NotAllowedError'") || site.includes('resumed.catch')).toBe(true);
+    }
     expect(ending).toContain("err.name === 'NotAllowedError'");
     // 切到仓库备份时先取消静音，否则第一源失败会把没声音带到备用源上
     expect(ending).toMatch(/video\.muted = false;[\s\S]{0,160}video\.load\(\)/);
     // 不能刚 load() 就 play()：那是 AbortError 竞态，会被上面的判断误当成"策略拦截"
     expect(ending).toContain('function attemptPlay');
     expect(ending).toContain('video.readyState >= 2');
+    // 策略拦截后：挂上"第一次点击 / 按键就恢复声音"的钩子，且这次点击不跳过（stopPropagation）
+    expect(ending).toContain('armAutoUnmute()');
+    expect(ending).toContain("window.addEventListener('click', pendingUnmute, true)");
+    expect(ending).toContain("window.addEventListener('keydown', pendingUnmute, true)");
+    expect(ending).toContain('stopPropagation');
+    expect(ending).toMatch(/video\.muted = false;[\s\S]{0,220}video\.play\(\)/);
+    // 收场时摘掉钩子，避免结束后又被一次点击"恢复声音"
+    expect(ending).toContain('disarmAutoUnmute()');
   });
 
   it('result.html 把渡江战役的胜利接到结局页', () => {

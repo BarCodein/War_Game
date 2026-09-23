@@ -22,27 +22,13 @@
     })();
   </script>
 
-  <!-- ==================== 导航条 ==================== -->
-  <nav class="battle-nav">
-    <div class="battle-nav-inner">
-      <a class="battle-nav-back" href="./battlechoose.html">&larr; 返回关卡</a>
-      <a class="battle-nav-brand" href="./index.html">
-        <span class="nav-mark">&#9876;</span> 沙盘战争
-      </a>
-    </div>
-  </nav>
-
-  <!-- ==================== 页面标题（JS 按 ENDING_DATA 填充） ==================== -->
-  <section class="battle-hero">
-    <span class="hero-eyebrow">CAMPAIGN COMPLETE</span>
-    <h1 id="endingTitle"></h1>
-    <p class="hero-subtitle" id="endingSubtitle"></p>
-  </section>
-
   <!-- ==================== 结局视频（结构与 battlebackground.html 的入场视频一致） ====================
        进入页面先播放结局视频（全屏覆盖，带声音）。
        视频开头 5 秒显示标题，之后渐隐，视频继续播放；
        点击任意位置可随时跳过；视频播完 / 出错（素材缺失）时淡出，进入下方内容区。
+       ★ 声音：浏览器只允许「用户交互过的文档」带声音自动播放。被拦下时先静音放画面，
+         并在**第一次点击 / 按键**时自动接回声音（不弹按钮）；那一次点击不算"跳过"，
+         再点一次才跳过（声音本来就正常时，第一次点击照旧跳过）。
        ★ 接入方式：视频 src 由 JS 从 ENDING_DATA.video 填充（当前 = ./assets/video/end.mp4）。
          ENDING_DATA.video 置空 → 不自动播放，标题卡显示 2.6 秒后直接进内容区。
   =============================================================== -->
@@ -59,6 +45,23 @@
       <p id="endingIntroSubtitle"></p>
     </div>
   </div>
+
+  <!-- ==================== 导航条 ==================== -->
+  <nav class="battle-nav">
+    <div class="battle-nav-inner">
+      <a class="battle-nav-back" href="./battlechoose.html">&larr; 返回关卡</a>
+      <a class="battle-nav-brand" href="./index.html">
+        <span class="nav-mark">&#9876;</span> 沙盘战争
+      </a>
+    </div>
+  </nav>
+
+  <!-- ==================== 页面标题（JS 按 ENDING_DATA 填充） ==================== -->
+  <section class="battle-hero">
+    <span class="hero-eyebrow">CAMPAIGN COMPLETE</span>
+    <h1 id="endingTitle"></h1>
+    <p class="hero-subtitle" id="endingSubtitle"></p>
+  </section>
 
   <div class="bbg-shell">
 
@@ -206,6 +209,7 @@
         hideTitle();
         // 视频自带音轨：立刻停掉，免得和随后起的结局 BGM 叠在一起
         try { video.pause(); } catch (e) {}
+        disarmAutoUnmute(); // 收场后不该再被一次点击"恢复声音"
         overlay.classList.add('fade-out');
         // 视频播完 / 被跳过 → 起结局 BGM（钢琴曲）。
         // BGM 由 bgm-controller 注入的 iframe 播放，这里只负责"可以开始了"；
@@ -218,7 +222,10 @@
         }, 700);
       }
 
-      // 点击 overlay 任意位置 → 跳过
+      // 点击 overlay 任意位置 → 跳过。
+      // ★ 例外：带声音的自动播放被浏览器拦下时（此刻正静音放），第一次点击用来接回声音、
+      // **不**跳过（鼠标用户没有别的方式给出用户激活，否则声音永远接不回来），再点一次才跳过。
+      // 声音正常时（例如浏览器已允许该站点自动播放）第一次点击就跳过，行为不变。
       overlay.addEventListener('click', endIntro);
 
       /* ★ 黑屏的根因就在这两行 class 上：
@@ -245,15 +252,56 @@
       //   · 先等到真有数据（loadeddata / canplay）再播，绕开竞态；
       //   · **只有 NotAllowedError（浏览器不许带声音自动播放）才退到静音**；
       //   · 其它失败原样重试，不动静音状态，真正的素材问题交给 error / 看门狗兜底。
+      //
+      // ★ 另外：被 NotAllowedError 拦下之后**静音不是终局**。浏览器（Chrome/Edge）的自动播放策略
+      // 只允许「用户已经交互过的文档」带声音播放，所以刚打开页面就被拦是正常的；但**一旦用户
+      // 碰了页面**（点击/按键/触屏），同一个文档就获得用户激活，可以立刻取消静音。
+      // 所以这里挂一个"第一次真实交互就恢复声音"的钩子：不弹按钮、不打断画面，
+      // 实测（Edge，静态部署、全新 profile）点击后 0 帧内 muted 由 true → false 且继续播。
+      // 注意 mousemove / 悬停**不算**用户激活（规范如此），所以只监听点击类与键盘事件。
+      var unmuteArmed = false;
+      var pendingUnmute = null; // 已挂上的"第一次交互就恢复声音"处理器（收场时要摘掉）
+      function disarmAutoUnmute() {
+        if (!pendingUnmute) return;
+        window.removeEventListener('click', pendingUnmute, true);
+        window.removeEventListener('keydown', pendingUnmute, true);
+        pendingUnmute = null;
+        unmuteArmed = false;
+      }
+      function armAutoUnmute() {
+        if (unmuteArmed) return;
+        unmuteArmed = true;
+        pendingUnmute = function unmute(event) {
+          disarmAutoUnmute();
+          if (!video.muted || finished || video.ended) return; // 已经在响 / 已经收场
+          // 这一次点击只用来"接回声音"，不当成跳过：鼠标用户除了点击没有别的方式给出用户激活，
+          // 若同时把视频跳掉，声音就永远接不回来了。拦掉事件传播 → 跳过要再点一次。
+          // （声音本来就正常时 pendingUnmute 不会被挂上，点击照旧立刻跳过。）
+          if (event && event.type === 'click' && event.stopPropagation) event.stopPropagation();
+          video.muted = false;
+          var resumed = video.play();
+          if (resumed && typeof resumed.catch === 'function') {
+            resumed.catch(function () { video.muted = true; }); // 还是不行就退回静音，画面不受影响
+          }
+        };
+        // 只监听 click / keydown：click 正是"跳过"用的那个手势，拿来当用户激活最省事；
+        // 不监听 pointerdown / mousedown / touchstart —— 它们在 click 之前就触发，
+        // 会让"开声音"和"跳过"被拆成两次事件，反而乱。
+        window.addEventListener('click', pendingUnmute, true);
+        window.addEventListener('keydown', pendingUnmute, true);
+      }
+
       function attemptPlay() {
         var p = video.play();
         if (!p || typeof p.catch !== 'function') return;
         p.catch(function (err) {
           if (err && err.name === 'NotAllowedError') {
-            // 没有用户手势 → 带声音的自动播放被禁，只能静音放（画面优先，不留黑屏）
+            // 没有用户手势 → 带声音的自动播放被禁，只能静音放（画面优先，不留黑屏），
+            // 同时等用户第一次交互时自动把声音接回来
             video.muted = true;
             var mutedRetry = video.play();
             if (mutedRetry && typeof mutedRetry.catch === 'function') mutedRetry.catch(endIntro);
+            armAutoUnmute();
             return;
           }
           // 加载竞态等：保持原样再试一次，千万别顺手静音
