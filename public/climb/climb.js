@@ -1,4 +1,4 @@
-﻿// ============================================================
+// ============================================================
 // 睡衣登山大赛 - 横板爬山跑酷 (像素风)
 // 主角: 穿睡衣的士兵 | 武器: 步枪 + 大刀
 // 目标: 在规定时间内爬上山顶
@@ -550,6 +550,8 @@ let cpIndex = 0
 let cp = { x: 60, y: START_Y - PLAYER_H }
 let fallRocks = []
 let rockTimer = rand(150, 300)
+let renderFrames = 0 // animate() 被调用的次数（端到端测试用它断言"逻辑步数与刷新率无关"）
+let logicSteps = 0   // 真正的逻辑步数（固定步长累加器里的循环次数）
 
 // ---------- 成就系统 ----------
 // 进度类数据按账号隔离：统一走 window.UserStorage（public/user-storage.js，climb.html 里先加载）
@@ -1622,32 +1624,70 @@ function updateCamera() {
 }
 
 // ---------- main loop ----------
-function animate() {
+// 固定步长逻辑：这套小游戏的所有数值（SPEED / GRAV / JUMP_V / 各种冷却与 flash / shake…）
+// 都是按「一帧一步 @60Hz」调出来的，而 requestAnimationFrame 的频率跟着显示器刷新率走
+// —— 在 120Hz / 144Hz 的机器上，逐帧更新会直接跑成 2~2.4 倍速（本机 60Hz 正常、别人机器变快）。
+// 所以逻辑固定在 60Hz 步进，按真实经过时间补步；补不上的部分丢掉，最多补 5 步（不瞬移）。
+const STEP_MS = 1000 / 60
+const MAX_STEPS_PER_FRAME = 5
+const MAX_FRAME_MS = 250 // 切标签页 / 系统卡顿回来时，单帧最多按 250ms 计
+let lastFrameAt = 0
+let stepAccumulator = 0
+
+function animate(now) {
   requestAnimationFrame(animate)
+  renderFrames++
+
+  if (typeof now !== 'number') now = performance.now()
+  if (!lastFrameAt) lastFrameAt = now
+  let elapsed = now - lastFrameAt
+  if (elapsed < 0) elapsed = 0 // 时钟回退（页面挂起恢复 / 测试注入时钟）
+  lastFrameAt = now
+  if (elapsed > MAX_FRAME_MS) elapsed = MAX_FRAME_MS
+  stepAccumulator += elapsed
+
+  let steps = 0
+  while (stepAccumulator >= STEP_MS && steps < MAX_STEPS_PER_FRAME) {
+    stepAccumulator -= STEP_MS
+    steps++
+    logicSteps++
+
+    if (state === 'play') {
+      updatePlatforms()
+      updatePlayer()
+      updateEnemies()
+      updateBullets()
+      updateHazards()
+      checkCollisions()
+      updateCamera()
+    }
+
+    if (shake > 0) shake--
+
+    // 粒子同样按 60Hz 步进（以前跟着刷新率走，高刷屏上会飞得更快、消失得更快）
+    for (const pt of particles) {
+      pt.x += pt.vx
+      pt.y += pt.vy
+      pt.vy += 0.15
+      pt.life--
+    }
+    particles = particles.filter((p) => p.life > 0)
+  }
+  if (steps >= MAX_STEPS_PER_FRAME) stepAccumulator = 0 // 追不上就丢掉积压，别滚雪球
 
   if (state === 'play') {
-    updatePlatforms()
-    updatePlayer()
-    updateEnemies()
-    updateBullets()
-    updateHazards()
-    checkCollisions()
-    updateCamera()
-
+    // 倒计时与胜负判定都基于真实时钟（不受刷新率影响）
     timeLeft = Math.max(0, Math.ceil((endTime - performance.now()) / 1000))
-    if (timeLeft <= 0 && state === 'play') {
+    if (timeLeft <= 0) {
       state = 'lose'
       sfx('lose')
       onPlayerLose()
-    }
-    if (player.x >= WIN_X && state === 'play') {
+    } else if (player.x >= WIN_X) {
       state = 'win'
       sfx('win')
       onPlayerWin()
     }
   }
-
-  if (shake > 0) shake--
 
   ctx.save()
   if (shake > 0) {
@@ -1676,17 +1716,23 @@ function animate() {
     ctx.globalAlpha = clamp(pt.life / pt.max, 0, 1)
     ctx.fillRect(pt.x - cam.x, pt.y - cam.y, pt.size, pt.size)
     ctx.globalAlpha = 1
-    pt.x += pt.vx
-    pt.y += pt.vy
-    pt.vy += 0.15
-    pt.life--
   }
-  particles = particles.filter((p) => p.life > 0)
 
   drawHUD()
   ctx.restore()
 
   syncUI()
+}
+
+// 只读调试口：端到端测试用它断言"同一段真实时间里，60Hz 与 120Hz 的推进量一致"
+// （全是 getter，不写状态，也不参与游戏逻辑）。
+window.__climb = {
+  get state() { return state },
+  get x() { return player.x },
+  get y() { return player.y },
+  get renderFrames() { return renderFrames },
+  get logicSteps() { return logicSteps },
+  get timeLeft() { return timeLeft },
 }
 
 animate()
