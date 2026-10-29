@@ -93,6 +93,16 @@ function rootAssets() {
 export default defineConfig({
   base: '/',
   plugins: [rootAssets()],
+  // 开发期把 PvP 的两个前缀代理到本机的 Node 服务（npm run server，默认 127.0.0.1:3001）：
+  //   /api/**       → Node 的 REST
+  //   /socket.io/** → Node 的 socket.io（含 WebSocket 升级）
+  // 这样 http://localhost:5173/pvp.html 与线上（Nginx 反代）走的是同一套同源路径，页面代码零差异。
+  server: {
+    proxy: {
+      '/api': { target: 'http://127.0.0.1:3001', changeOrigin: false },
+      '/socket.io': { target: 'http://127.0.0.1:3001', ws: true, changeOrigin: false },
+    },
+  },
   build: {
     rollupOptions: {
       input: pageEntries(),

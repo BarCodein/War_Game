@@ -28,9 +28,20 @@ export default defineConfig({
     { name: 'firefox', use: { ...devices['Desktop Firefox'] } },
     // { name: 'msedge', use: { ...devices['Desktop Chrome'], channel: 'msedge' } },
   ],
-  webServer: {
-    command: 'npm run dev',
-    url: 'http://localhost:5173',
-    reuseExistingServer: true,
-  },
+  webServer: [
+    {
+      command: 'npm run dev',
+      url: 'http://localhost:5173',
+      reuseExistingServer: true,
+    },
+    {
+      // PvP：Vite 把 /api 与 /socket.io 代理到这里（见 vite.config.js）。
+      // 用临时 SQLite 文件，避免 e2e 污染本地 server/data/pvp.db；
+      // env 里的 PVP_DB 只在 Playwright 拉起的进程里生效。
+      command: 'node server/src/index.js',
+      url: 'http://127.0.0.1:3001/api/health',
+      reuseExistingServer: true,
+      env: { PVP_DB: 'server/data/e2e.db' },
+    },
+  ],
 });

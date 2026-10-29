@@ -13,6 +13,12 @@ blob-report/
 .env.*
 !.env.example
 
+# PvP 服务端本地 SQLite（线上在 StateDirectory=/var/lib/war-game，不进仓库）
+server/data/
+*.db
+*.db-shm
+*.db-wal
+
 # Tool caches and logs
 .vite/
 .vitest/

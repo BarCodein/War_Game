@@ -1,0 +1,362 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>沙盘战争 · PvP 联机</title>
+  <!--
+    ================================================================
+    PvP 入口页（P1 阶段：账号 + 链路自检；P3 会换成真正的 React 大厅）
+      1. 账号：/api/auth/register · login · logout · me（HttpOnly Cookie 会话）
+      2. 链路：GET /api/health（REST）+ /socket.io 握手与 link:ping（WebSocket）
+    全部走**同源相对路径**：本地（Vite 代理）与线上（Nginx 反代）跑同一份代码。
+    ================================================================
+  -->
+  <style>
+    :root {
+      --cream: #f1e9d2; --ink: #241a12; --brass: #d4a843;
+      --ok: #2f7d3a; --bad: #a3231d; --warn: #b3781a;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; min-height: 100vh; padding: 32px 20px 60px;
+      background: radial-gradient(1200px 600px at 50% -10%, #4a2818, #241208 70%);
+      color: var(--cream);
+      font-family: "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+    }
+    .wrap { max-width: 880px; margin: 0 auto; }
+    header { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+    h1 { margin: 0; font-size: 24px; letter-spacing: 2px; }
+    h1 span { color: var(--brass); }
+    .sub { color: #c9b79a; font-size: 13px; letter-spacing: 1px; }
+    .pill { display: inline-flex; align-items: center; gap: 8px; padding: 6px 14px; border-radius: 999px;
+            font-size: 13px; border: 1px solid rgba(241,233,210,.25); background: rgba(0,0,0,.25); }
+    .pill b { font-weight: 600; }
+    .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--warn); box-shadow: 0 0 8px currentColor; }
+    .dot.ok { background: var(--ok); } .dot.bad { background: var(--bad); } .dot.wait { background: var(--brass); }
+    .pills { display: flex; gap: 10px; flex-wrap: wrap; }
+    .card { margin-top: 22px; border: 1px solid rgba(212,168,67,.35); border-radius: 12px;
+            background: linear-gradient(180deg, rgba(255,248,230,.06), rgba(255,248,230,.02)); padding: 18px 20px; }
+    .card h2 { margin: 0 0 12px; font-size: 15px; letter-spacing: 2px; color: var(--brass); font-weight: 600; }
+    dl { display: grid; grid-template-columns: 170px 1fr; gap: 8px 14px; margin: 0; font-size: 14px; }
+    dt { color: #c9b79a; } dd { margin: 0; font-family: Consolas, "Courier New", monospace; word-break: break-all; }
+    .ok-text { color: #7dd84a; } .bad-text { color: #ff8b80; }
+    pre { margin: 10px 0 0; padding: 12px; max-height: 220px; overflow: auto; font-size: 12px; line-height: 1.5;
+          background: rgba(0,0,0,.35); border-radius: 8px; border: 1px solid rgba(241,233,210,.12); }
+    .row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 14px; align-items: center; }
+    button { cursor: pointer; padding: 9px 18px; border-radius: 8px; font-size: 13px; letter-spacing: 1px;
+             color: var(--cream); background: linear-gradient(180deg, #6d3a12, #4a2818);
+             border: 1px solid var(--brass); }
+    button:hover { filter: brightness(1.15); }
+    button:disabled { opacity: .55; cursor: progress; }
+    input { padding: 9px 12px; border-radius: 8px; border: 1px solid rgba(212,168,67,.5);
+            background: rgba(0,0,0,.35); color: var(--cream); font-size: 14px; min-width: 180px; }
+    input::placeholder { color: #9a8a72; }
+    .hint { margin-top: 18px; font-size: 13px; line-height: 1.9; color: #c9b79a; }
+    .hint2 { margin-top: 8px; font-size: 12px; line-height: 1.8; color: #a99a80; }
+    code { font-family: Consolas, monospace; background: rgba(0,0,0,.35); padding: 1px 6px; border-radius: 4px; color: #ffe9b8; }
+    #authMsg { margin-top: 12px; font-size: 13px; min-height: 18px; }
+    .who { font-size: 16px; }
+    .who b { color: var(--brass); }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div>
+        <h1>沙盘战争 <span>· PvP 联机</span></h1>
+        <p class="sub">账号（注册 / 登录）+ 链路自检（REST + WebSocket）</p>
+      </div>
+      <div class="pills">
+        <span class="pill"><i class="dot wait" id="dotRest"></i>REST <b id="restState">检测中…</b></span>
+        <span class="pill"><i class="dot wait" id="dotWs"></i>WebSocket <b id="wsState">检测中…</b></span>
+      </div>
+    </header>
+
+    <!-- ============ 账号 ============ -->
+    <section class="card" id="authCard">
+      <h2>账号</h2>
+
+      <div id="authLoggedOut">
+        <div class="row">
+          <input id="inputUsername" type="text" placeholder="用户名（3–20 位）" autocomplete="username" maxlength="20">
+          <input id="inputPassword" type="password" placeholder="密码（≥ 8 位）" autocomplete="current-password" maxlength="64">
+          <button id="btnLogin">登录</button>
+          <button id="btnRegister">注册</button>
+        </div>
+        <div id="authMsg"></div>
+        <p class="hint2">
+          用户名 3–20 位（中英文 / 数字 / 下划线），密码 8–64 位；口令以 scrypt 加盐存储，服务端只下发 HttpOnly 会话 Cookie。
+          同一 IP 登录失败 5 次/分钟后会被限速。
+        </p>
+      </div>
+
+      <div id="authLoggedIn" hidden>
+        <p class="who">已登录：<b id="meName">—</b><span id="meAccount" class="hint2"></span></p>
+        <div class="row">
+          <button id="btnLogout">登出</button>
+        </div>
+        <p class="hint2">会话保存在 HttpOnly Cookie 中（默认 7 天）；「登出」会同时删除服务端会话记录。</p>
+      </div>
+    </section>
+
+    <!-- ============ 服务器 ============ -->
+    <section class="card">
+      <h2>服务器</h2>
+      <dl>
+        <dt>服务版本</dt><dd id="fVersion">—</dd>
+        <dt>Node 版本</dt><dd id="fNode">—</dd>
+        <dt>运行时长</dt><dd id="fUptime">—</dd>
+        <dt>房间占用</dt><dd id="fRooms">—</dd>
+        <dt>快照频率</dt><dd id="fSnapshot">—</dd>
+        <dt>注册账号数</dt><dd id="fAccounts">—</dd>
+        <dt>当前 WS 客户端</dt><dd id="fClients">—</dd>
+        <dt>往返延迟 RTT</dt><dd id="fRtt">—</dd>
+        <dt>页面来源</dt><dd id="fOrigin">—</dd>
+        <dt>解析出的 WS 地址</dt><dd id="fWsUrl">—</dd>
+      </dl>
+      <div class="row">
+        <button id="btnRecheck">重新检测</button>
+        <button id="btnSocket">断开 / 重连 WS</button>
+      </div>
+      <pre id="log">等待检测…</pre>
+    </section>
+
+    <p class="hint">
+      <b>本地怎么跑：</b>开两个终端 —— <code>npm run server</code>（Node，127.0.0.1:3001）
+      与 <code>npm run dev</code>（Vite），然后打开 <code>http://localhost:5173/pvp.html</code>。
+      Vite 会把 <code>/api</code> 与 <code>/socket.io</code> 代理到 Node，与线上 Nginx 反代路径完全一致。<br>
+      <b>一个进程验证（不用 Nginx）：</b><code>npm run build</code> 后
+      <code>PVP_SERVE_STATIC=1 npm run server</code>（Windows：<code>$env:PVP_SERVE_STATIC=1; npm run server</code>），
+      打开 <code>http://127.0.0.1:3001/pvp.html</code>。<br>
+      <b>线上：</b>Nginx 反代 <code>/api</code> 与 <code>/socket.io</code> 到 127.0.0.1:3001 后，打开
+      <code>http://&lt;服务器IP&gt;/pvp.html</code>。
+    </p>
+  </div>
+
+  <script>
+    (function () {
+      var $ = function (id) { return document.getElementById(id); };
+      var logEl = $('log');
+      var lines = [];
+      function log(message) {
+        var stamp = new Date().toLocaleTimeString('zh-CN', { hour12: false });
+        lines.unshift('[' + stamp + '] ' + message);
+        lines = lines.slice(0, 12);
+        logEl.textContent = lines.join('\n');
+      }
+      function setState(kind, ok, text) {
+        $('dot' + kind).className = 'dot ' + (ok === null ? 'wait' : ok ? 'ok' : 'bad');
+        var el = $(kind === 'Rest' ? 'restState' : 'wsState');
+        el.textContent = text;
+        el.className = ok === null ? '' : ok ? 'ok-text' : 'bad-text';
+      }
+      function fmtUptime(seconds) {
+        if (!Number.isFinite(seconds)) return '—';
+        var s = Math.max(0, Math.floor(seconds));
+        var m = Math.floor(s / 60);
+        return m > 0 ? m + ' 分 ' + (s % 60) + ' 秒' : s + ' 秒';
+      }
+      function fmtDate(ms) {
+        if (!ms) return '';
+        return new Date(ms).toLocaleString('zh-CN', { hour12: false });
+      }
+
+      var wsUrl = location.origin.replace(/^http/, 'ws') + '/socket.io/';
+      $('fOrigin').textContent = location.origin;
+      $('fWsUrl').textContent = wsUrl;
+
+      // ============ 账号 ============
+      var authMsg = $('authMsg');
+      function showAuthMessage(text, isError) {
+        authMsg.textContent = text || '';
+        authMsg.className = isError ? 'bad-text' : 'ok-text';
+      }
+      function renderUser(user) {
+        var loggedIn = Boolean(user);
+        $('authLoggedOut').hidden = loggedIn;
+        $('authLoggedIn').hidden = !loggedIn;
+        if (loggedIn) {
+          $('meName').textContent = user.displayName || user.username;
+          $('meAccount').textContent = '（@' + user.username + ' · id ' + user.id +
+            (user.createdAt ? ' · 注册于 ' + fmtDate(user.createdAt) : '') + '）';
+        }
+      }
+      function apiJson(path, options) {
+        options = options || {};
+        options.headers = Object.assign({ 'content-type': 'application/json' }, options.headers || {});
+        if (options.body) options.body = JSON.stringify(options.body);
+        return fetch(path, options).then(function (res) {
+          return res.text().then(function (text) {
+            var data = null;
+            try { data = text ? JSON.parse(text) : null; } catch (e) { data = null; }
+            return { res: res, data: data };
+          });
+        });
+      }
+      function refreshMe() {
+        return fetch('/api/auth/me', { cache: 'no-store' })
+          .then(function (res) { return res.json().catch(function () { return null; }); })
+          .then(function (data) {
+            renderUser(data && data.ok ? data.user : null);
+            return data;
+          })
+          .catch(function () { renderUser(null); });
+      }
+
+      function submitAuth(kind) {
+        var username = $('inputUsername').value.trim();
+        var password = $('inputPassword').value;
+        if (!username || !password) { showAuthMessage('用户名和密码都要填', true); return; }
+        var buttons = [$('btnLogin'), $('btnRegister')];
+        buttons.forEach(function (b) { b.disabled = true; });
+        showAuthMessage(kind === 'login' ? '登录中…' : '注册中…', false);
+
+        apiJson('/api/auth/' + kind, { method: 'POST', body: { username: username, password: password } })
+          .then(function (result) {
+            if (result.res.ok && result.data && result.data.ok) {
+              $('inputPassword').value = '';
+              renderUser(result.data.user);
+              showAuthMessage(kind === 'login' ? '登录成功，欢迎回来！' : '注册成功，已自动登录。', false);
+              log('AUTH ' + kind + ' ok · ' + result.data.user.username);
+              checkRest();
+            } else {
+              var message = (result.data && result.data.message) || ('HTTP ' + result.res.status);
+              var code = (result.data && result.data.code) || '';
+              showAuthMessage(message + (code ? ' [' + code + ']' : ''), true);
+              log('AUTH ' + kind + ' 失败：' + message + ' ' + code);
+            }
+          })
+          .catch(function (error) {
+            showAuthMessage('请求失败：' + error.message, true);
+          })
+          .finally(function () { buttons.forEach(function (b) { b.disabled = false; }); });
+      }
+
+      $('btnLogin').addEventListener('click', function () { submitAuth('login'); });
+      $('btnRegister').addEventListener('click', function () { submitAuth('register'); });
+      $('inputPassword').addEventListener('keydown', function (event) {
+        if (event.key === 'Enter') submitAuth('login');
+      });
+      $('btnLogout').addEventListener('click', function () {
+        fetch('/api/auth/logout', { method: 'POST' })
+          .then(function () { renderUser(null); showAuthMessage('已登出', false); log('AUTH logout'); checkRest(); })
+          .catch(function (error) { showAuthMessage('登出失败：' + error.message, true); });
+      });
+
+      // ============ 服务器 / 链路 ============
+      var rttSamples = [];
+      function renderRtt() {
+        if (!rttSamples.length) { $('fRtt').textContent = '—'; return; }
+        var last = rttSamples[rttSamples.length - 1];
+        var avg = rttSamples.reduce(function (a, b) { return a + b; }, 0) / rttSamples.length;
+        var min = Math.min.apply(null, rttSamples);
+        $('fRtt').textContent = last + ' ms（最低 ' + min + ' / 平均 ' + avg.toFixed(1) + ' ms，样本 ' + rttSamples.length + '）';
+      }
+
+      function checkRest() {
+        var startedAt = performance.now();
+        return fetch('/api/health', { cache: 'no-store' })
+          .then(function (res) {
+            var rtt = Math.round(performance.now() - startedAt);
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            return res.json().then(function (data) { return { data: data, rtt: rtt }; });
+          })
+          .then(function (result) {
+            var data = result.data;
+            setState('Rest', true, '正常');
+            $('fVersion').textContent = data.version || '—';
+            $('fNode').textContent = data.node || '—';
+            $('fUptime').textContent = fmtUptime(data.uptimeSeconds);
+            $('fRooms').textContent = (data.rooms ?? 0) + ' / ' + (data.maxRooms ?? '—');
+            $('fSnapshot').textContent = (data.snapshotHz ?? '—') + ' Hz';
+            $('fAccounts').textContent = (data.accounts ?? 0) + ' 个';
+            $('fClients').textContent = (data.socketClients ?? 0) + ' 个';
+            rttSamples.push(result.rtt);
+            rttSamples = rttSamples.slice(-10);
+            renderRtt();
+            return true;
+          })
+          .catch(function (error) {
+            setState('Rest', false, '失败');
+            $('fVersion').textContent = '—';
+            log('REST 失败：' + error.message + '（Node 服务起来了吗？npm run server）');
+            return false;
+          });
+      }
+
+      var socket = null;
+      function loadSocketClient() {
+        return new Promise(function (resolve, reject) {
+          if (window.io) return resolve(window.io);
+          var script = document.createElement('script');
+          script.src = '/socket.io/socket.io.js';
+          script.onload = function () { window.io ? resolve(window.io) : reject(new Error('客户端脚本已加载但没有 io')); };
+          script.onerror = function () { reject(new Error('拿不到 /socket.io/socket.io.js（Node 没起或反代未生效）')); };
+          document.head.appendChild(script);
+        });
+      }
+      function connectSocket() {
+        setState('Ws', null, '连接中…');
+        return loadSocketClient()
+          .then(function (io) {
+            if (socket) { socket.disconnect(); socket = null; }
+            socket = io({ transports: ['websocket', 'polling'], timeout: 5000 });
+            socket.on('connect', function () {
+              setState('Ws', true, '已连接');
+              log('WS 已连接 · id=' + socket.id);
+              startPing();
+            });
+            socket.on('link:hello', function (payload) {
+              log('WS hello · 服务版本 ' + payload.version + ' · 快照 ' + payload.snapshotHz + ' Hz');
+            });
+            socket.on('connect_error', function (error) {
+              setState('Ws', false, '连接失败');
+              log('WS 连接失败：' + error.message);
+            });
+            socket.on('disconnect', function (reason) {
+              setState('Ws', false, '已断开');
+              log('WS 断开：' + reason);
+              stopPing();
+            });
+          })
+          .catch(function (error) {
+            setState('Ws', false, '失败');
+            log('WS 失败：' + error.message);
+          });
+      }
+      var pingTimer = null;
+      function startPing() {
+        stopPing();
+        pingTimer = setInterval(function () {
+          if (!socket || !socket.connected) return;
+          var t = performance.now();
+          socket.timeout(3000).emit('link:ping', { t: Date.now() }, function (error) {
+            if (error) { log('WS ping 超时'); return; }
+            rttSamples.push(Math.round(performance.now() - t));
+            rttSamples = rttSamples.slice(-10);
+            renderRtt();
+          });
+        }, 2000);
+      }
+      function stopPing() { if (pingTimer) { clearInterval(pingTimer); pingTimer = null; } }
+
+      $('btnRecheck').addEventListener('click', function () {
+        lines = [];
+        checkRest();
+        refreshMe();
+        if (!socket || !socket.connected) connectSocket();
+      });
+      $('btnSocket').addEventListener('click', function () {
+        if (socket && socket.connected) { socket.disconnect(); } else { connectSocket(); }
+      });
+
+      // 首屏
+      refreshMe();
+      checkRest();
+      connectSocket();
+      setInterval(checkRest, 5000);
+    })();
+  </script>
+</body>
+</html>

@@ -22,6 +22,11 @@ These commands install dependencies, start Vite, run Vitest, run Playwright, and
 
 Use JavaScript, not TypeScript, with two-space indentation, single quotes, semicolons, `camelCase` identifiers, and kebab-case CSS classes. Keep simulation, rendering, input, and controllers separate. Store tunable rules in configuration instead of magic numbers, and centralize user-visible text for localization. Do not add a UI framework or backend.
 
+**PvP 例外（2026-10-29 起，需求方明确授权）**：联机对战功能不受上一条「不得引入 UI 框架或后端」的限制 ——
+`server/` 是 Node 22 + Express + Socket.IO + SQLite 的权威对战服务端，PvP 页面允许使用 React。
+范围与分阶段验收见 `docs/pvp-plan.md`，部署见 `docs/pvp-deploy.md`；
+单机战役（`src/**`、`game.html` 等）仍保持原有分层与「无框架 / 无后端」约束不变。
+
 ## Testing Guidelines
 
 Use Vitest for deterministic simulation, validation, and serialization tests; use Playwright for critical browser flows. Name tests after behavior, such as `combat.test.js`. Test supported desktop browsers and layouts from 1280×720 through 1920×1080. Check performance-sensitive changes against the 500-unit target and fixed-timestep requirement.
