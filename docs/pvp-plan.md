@@ -12,7 +12,8 @@
 - [x] **P1a 链路打通**（已实现并本地实测，见 §11）：`server/`（express + socket.io）、`GET /api/health`、`/socket.io` 握手与 `link:ping`、`pvp.html` 自检页、`deploy/` 模板、`docs/pvp-deploy.md`、`tests/unit/server-link.test.js`
 - [x] **P1b 账号体系**（已实现并本地实测，见 §11.2）：SQLite（better-sqlite3 + 迁移）、注册/登录/登出/`me`、scrypt 加盐、HttpOnly 会话 Cookie、按 IP 失败限速、`pvp.html` 账号面板、`tests/unit/server-auth.test.js`（10 条）、`tests/e2e/pvp-auth.spec.js`（3 条）
 - [x] **P2 权威对局（MatchSim）**（已实现并本地实测，见 §11.3）：`server/src/match.js`（60Hz 固定步长 + 命令队列 + 胜负 + 超时判定）、`server/src/snapshot.js`（按阵营过滤视野）、`server/src/levels.js`、`public/assets/pvp/*.json`（对称兵力模板）、`scripts/pvp-selftest.mjs`、`tests/unit/pvp-match.test.js` + `pvp-levels.test.js`（28 条）
-- [ ] P3 房间码 → P4 对局同步 → P5 断线 → P6 部署配置与验收 → P7 打磨
+- [x] **P3 房间码匹配**（已实现并本地实测，见 §11.4）：`server/src/rooms.js`（状态机 + 6 位码 + TTL/倒计时/离场）、`server/src/routes/rooms.js`、`/api/rooms/*`、socket `match:join|ready|leave` + `match:state|begin|end`、`pvp.html` 房间大厅、`tests/unit/server-rooms.test.js`（10 条）、`tests/e2e/pvp-rooms.spec.js`（3 条）
+- [ ] P4 对局同步 → P5 断线 → P6 部署配置与验收 → P7 打磨
 
 ---
 
@@ -535,6 +536,7 @@ CI 增补（P6）：`npm test` + `npm run test:e2e`（含 PvP 双上下文用例
 | 2026-10-29 | **P1a 链路打通已实现**（§11）：`server/`（express 5 + socket.io 4）、`/api/health`、`/socket.io` 握手 + `link:ping`、`pvp.html` 自检页、`deploy/` 模板、`docs/pvp-deploy.md`、`tests/unit/server-link.test.js`；依赖改挂仓库根；Vite 加 `/api`、`/socket.io` 开发代理 |
 | 2026-10-29 | **P1b 账号体系已实现**（§11.2）：`server/src/db.js`（better-sqlite3 + 迁移）、`server/src/auth.js`（scrypt/会话/限速/Cookie 解析）、`server/src/routes/auth.js`、`/api/auth/*` 四个接口、`pvp.html` 账号面板、`tests/unit/server-auth.test.js`（10）、`tests/e2e/pvp-auth.spec.js`（3）、`playwright.config.js` 增加 Node 服务 webServer、`AGENTS.md` 记录 PvP 例外 |
 | 2026-10-29 | **P2 权威对局已实现**（§11.3）：`server/src/match.js`、`snapshot.js`、`levels.js`、`public/assets/pvp/*.json`（对称 16v16 / 12v12）、`scripts/pvp-selftest.mjs`、28 条单测。实测 0.65–0.85 ms/tick、快照 4.2–6 KB、重放 14400 tick 哈希一致；修正 §3.8 的兵力方案（改用"双方同编制 + 各自出生点 + 最小间距 400px"，不采用坐标镜像） |
+| 2026-10-29 | **P3 房间码匹配已实现**（§11.4）：`server/src/rooms.js`（状态机/6 位码/TTL/倒计时/离场规则）、`server/src/routes/rooms.js`、socket `match:join|ready|leave` 与 `match:state|begin|end`、`pvp.html` 房间大厅（建房/输码/准备/倒计时/开局提示）、10 条单测 + 3 条双上下文 e2e；`playwright.config.js` 放宽 e2e 注册限速 |
 
 ---
 
@@ -649,3 +651,63 @@ node scripts/pvp-selftest.mjs --seconds 240 --verify   # 额外做重放确定�
 node scripts/pvp-selftest.mjs --level pingjin_pvp --seconds 120 --no-prep
 npx vitest run tests/unit/pvp-match.test.js tests/unit/pvp-levels.test.js
 ```
+
+---
+
+## 11.4 已实现：P3 房间码匹配（含实测）
+
+**接口**
+
+| 方法 | 路径 | 成功 | 失败码 |
+|---|---|---|---|
+| POST | `/api/rooms` | 201 `{room}` | 401 `UNAUTHENTICATED`、400 `BAD_LEVEL`、503 `ROOM_LIMIT`（超过 `maxRooms`=4） |
+| GET | `/api/rooms/:code` | 200 | 404 `ROOM_NOT_FOUND`（不存在/过期） |
+| POST | `/api/rooms/:code/join` | 200 | 404、409 `ALREADY_JOINED` / `ROOM_FULL` / `ROOM_STARTED` |
+| POST | `/api/rooms/:code/ready` | 200 | 404、409 `NOT_IN_ROOM` / `ROOM_STARTED` |
+| POST | `/api/rooms/:code/leave` | 200 `{closed}` | 404、409 `NOT_IN_ROOM` |
+
+**Socket（房间频道 `room:<code>`，握手用 Cookie 认证）**
+
+| 方向 | 事件 | 说明 |
+|---|---|---|
+| C→S | `match:join {roomCode}` | 进入房间频道（必须是房间成员）；ack 返回房间视图 |
+| C→S | `match:ready {roomCode, ready}` | 准备 / 取消准备；双方准备 → `countdown` |
+| C→S | `match:leave {roomCode}` | 离开（房主离开 → 关闭房间） |
+| S→C | `match:state` | 房间视图 + `serverNow`（客户端据此算倒计时，避免时钟偏差）；关闭时带 `closed:true, reason` |
+| S→C | `match:begin` | `{matchId, levelId, prepSeconds:5, players[]}`；此时服务器已创建 `MatchSim`（P4 接 60Hz 驱动） |
+| S→C | `match:end` | `{winner, reason}`（P3 只有 `forfeit` 一种来源） |
+
+**状态机与规则**
+
+| 项 | 实现 |
+|---|---|
+| 房间码 | 6 位，字符集 `A-HJ-NP-Z2-9`（去掉 0/O/1/I） |
+| 阵营 | 房主 = blue，客人 = red（首次加入即锁定） |
+| 状态 | `waiting`（等人/等准备）→ `countdown`（双方 ready，3 s）→ `playing` → `finished` |
+| 取消准备 | countdown 中任一方取消 → 退回 `waiting` 并清空倒计时 |
+| 留场重置 | 新玩家加入时把所有人的 `ready` 清空（避免"准备态与实际阵容不一致"） |
+| 房主离开 | 关闭房间，向频道广播 `closed:true, reason:'host-left'` |
+| 客人离开 | 房间保留、退回 `waiting`、重置 ready |
+| 超时 | `waiting` 阶段 30 分钟未开局 → TTL 回收（`sweep` 250 ms 一次） |
+| 容量 | 同时最多 4 个房间（= `maxRooms`），超出建房返回 503（1 核容量，见 §3.10） |
+| 房间存储 | **仅内存**（进程重启即丢；不为此建库表，对局记录留到 P4/P5） |
+
+**实测**
+
+| 项 | 结果 |
+|---|---|
+| `tests/unit/server-rooms.test.js` | **10 passed**：未登录 401、6 位码格式、查房/404/未知地图 400、客人=red、重复加入/第三人满/上限 503、TTL 回收、双方 ready→countdown→playing 且 `match:begin` 两端一致（matchId/关卡/prep=5/双方昵称）、取消准备退回 waiting、房主离开→对手收到 closed→房间 404、未登录/非成员 socket 无法进房 |
+| `tests/e2e/pvp-rooms.spec.js`（Edge，双浏览器上下文） | **3 passed**：A 建房 → B 输码加入 → 两端各看到 2 名玩家 → 双方准备 → 两端都进入"对局已开始"（阵营 蓝/红 正确）→ 关卡与准备时长正确；错误房间码提示"房间不存在"；房主离开后对手看到"房主已离开" |
+| `tests/e2e/pvp-auth.spec.js`（回归） | **3 passed**（`pvp.html` 加房间面板后账号流程未被破坏） |
+| 全量单测 | **542 passed / 8 failed**（8 条仍是既有供应/配置漂移） |
+
+**本地怎么看（浏览器）**
+```bash
+npm run server        # 终端 A
+npm run dev           # 终端 B → http://localhost:5173/pvp.html
+# 再开一个无痕窗口注册第二个账号，A 建房 → B 输码加入 → 双方准备 → 3 秒后开局
+npx playwright test tests/e2e/pvp-rooms.spec.js   # 自动化双上下文（本机用 Edge 时加 channel: 'msedge'）
+```
+
+> 注意：e2e 会反复注册账号，而注册限速默认 10 次/小时/IP。`playwright.config.js` 里已给 Node 服务设了
+> `PVP_REGISTER_MAX_PER_HOUR=1000`，只在 e2e 拉起的进程里生效，线上仍是默认值。

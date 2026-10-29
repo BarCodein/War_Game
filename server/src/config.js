@@ -55,4 +55,15 @@ export const config = {
   loginWindowMs: number(process.env.PVP_LOGIN_WINDOW_MINUTES, 1) * 60 * 1000,
   // 注册限速：同一 IP 每小时 10 次
   registerMaxPerHour: number(process.env.PVP_REGISTER_MAX_PER_HOUR, 10),
+
+  // ---- 房间码匹配（P3）----
+  // 房间码 30 分钟有效（只在"等待开局"阶段计时，开局后由对局自己管时长）
+  roomTtlMs: number(process.env.PVP_ROOM_TTL_MINUTES, 30) * 60 * 1000,
+  // 双方 ready 后的倒计时（之后创建对局；对局内还有 values.prep.seconds 的准备阶段）
+  roomCountdownMs: number(process.env.PVP_ROOM_COUNTDOWN_SECONDS, 3) * 1000,
+  // 对局时长上限（到点按城市数 → 总血量判胜）
+  matchTimeLimitMs: number(process.env.PVP_MATCH_MINUTES, 10) * 60 * 1000,
+  // 可选择的对战地图（对称兵力模板，见 public/assets/pvp/）
+  pvpLevels: String(process.env.PVP_LEVELS ?? 'dujiang_pvp,pingjin_pvp')
+    .split(',').map((item) => item.trim()).filter(Boolean),
 };

@@ -38,10 +38,11 @@ export default defineConfig({
       // PvP：Vite 把 /api 与 /socket.io 代理到这里（见 vite.config.js）。
       // 用临时 SQLite 文件，避免 e2e 污染本地 server/data/pvp.db；
       // env 里的 PVP_DB 只在 Playwright 拉起的进程里生效。
+      // e2e 会反复注册新账号，所以要放宽注册限速（默认 10 次/小时/IP 会被自己打满）。
       command: 'node server/src/index.js',
       url: 'http://127.0.0.1:3001/api/health',
       reuseExistingServer: true,
-      env: { PVP_DB: 'server/data/e2e.db' },
+      env: { PVP_DB: 'server/data/e2e.db', PVP_REGISTER_MAX_PER_HOUR: '1000' },
     },
   ],
 });

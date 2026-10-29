@@ -6,9 +6,11 @@
   <title>沙盘战争 · PvP 联机</title>
   <!--
     ================================================================
-    PvP 入口页（P1 阶段：账号 + 链路自检；P3 会换成真正的 React 大厅）
+    PvP 入口页（P3：账号 + 房间码 + 链路自检；P4 会把"对局中"接到 pvp-battle.html）
       1. 账号：/api/auth/register · login · logout · me（HttpOnly Cookie 会话）
-      2. 链路：GET /api/health（REST）+ /socket.io 握手与 link:ping（WebSocket）
+      2. 房间：POST /api/rooms（建房）· /join（加入）· /ready · /leave，
+                状态通过 socket 的 match:state / match:begin 推送
+      3. 链路：GET /api/health（REST）+ /socket.io 握手与 link:ping（WebSocket）
     全部走**同源相对路径**：本地（Vite 代理）与线上（Nginx 反代）跑同一份代码。
     ================================================================
   -->
@@ -49,15 +51,24 @@
              border: 1px solid var(--brass); }
     button:hover { filter: brightness(1.15); }
     button:disabled { opacity: .55; cursor: progress; }
-    input { padding: 9px 12px; border-radius: 8px; border: 1px solid rgba(212,168,67,.5);
+    input, select { padding: 9px 12px; border-radius: 8px; border: 1px solid rgba(212,168,67,.5);
             background: rgba(0,0,0,.35); color: var(--cream); font-size: 14px; min-width: 180px; }
     input::placeholder { color: #9a8a72; }
+    #inputRoomCode { text-transform: uppercase; letter-spacing: 6px; font-family: Consolas, monospace; width: 190px; min-width: 0; }
     .hint { margin-top: 18px; font-size: 13px; line-height: 1.9; color: #c9b79a; }
     .hint2 { margin-top: 8px; font-size: 12px; line-height: 1.8; color: #a99a80; }
     code { font-family: Consolas, monospace; background: rgba(0,0,0,.35); padding: 1px 6px; border-radius: 4px; color: #ffe9b8; }
-    #authMsg { margin-top: 12px; font-size: 13px; min-height: 18px; }
+    #authMsg, #roomMsg { margin-top: 12px; font-size: 13px; min-height: 18px; }
     .who { font-size: 16px; }
     .who b { color: var(--brass); }
+    .code-big { font-family: Consolas, monospace; font-size: 28px; letter-spacing: 8px; color: #ffe9b8; }
+    table.players { border-collapse: collapse; margin-top: 10px; font-size: 14px; width: 100%; }
+    table.players th, table.players td { text-align: left; padding: 8px 10px; border-bottom: 1px solid rgba(241,233,210,.12); }
+    table.players th { color: #c9b79a; font-weight: 500; font-size: 12px; letter-spacing: 1px; }
+    .faction-blue { color: #7fb0ff; } .faction-red { color: #ff9b8f; }
+    .ready-yes { color: #7dd84a; } .ready-no { color: #c9b79a; }
+    #roomCountdown { margin-top: 10px; font-size: 15px; color: #ffe9b8; min-height: 20px; }
+    #roomStarted { margin-top: 4px; }
   </style>
 </head>
 <body>
@@ -65,7 +76,7 @@
     <header>
       <div>
         <h1>沙盘战争 <span>· PvP 联机</span></h1>
-        <p class="sub">账号（注册 / 登录）+ 链路自检（REST + WebSocket）</p>
+        <p class="sub">账号 · 房间码匹配 · 链路自检</p>
       </div>
       <div class="pills">
         <span class="pill"><i class="dot wait" id="dotRest"></i>REST <b id="restState">检测中…</b></span>
@@ -100,6 +111,61 @@
       </div>
     </section>
 
+    <!-- ============ 对战房间 ============ -->
+    <section class="card" id="roomCard">
+      <h2>对战房间</h2>
+
+      <div id="roomGuestHint" hidden>
+        <p class="hint2">登录后即可创建房间或输入房间码加入（好友约战，2 人 1v1）。</p>
+      </div>
+
+      <div id="roomLobby" hidden>
+        <div class="row">
+          <select id="levelSelect">
+            <option value="dujiang_pvp">渡江战役（8v8 城市）</option>
+            <option value="pingjin_pvp">平津战役（4v4 城市）</option>
+          </select>
+          <button id="btnCreateRoom">创建房间</button>
+        </div>
+        <div class="row">
+          <input id="inputRoomCode" type="text" placeholder="房间码" maxlength="6" autocomplete="off">
+          <button id="btnJoinRoom">加入房间</button>
+        </div>
+        <div id="roomMsg"></div>
+        <p class="hint2">
+          把 6 位房间码发给对手，对方输入即可加入。双方都点「准备」后 3 秒倒计时开局；
+          房间 30 分钟未开局自动失效，房主离开会关闭房间。
+        </p>
+      </div>
+
+      <div id="roomActive" hidden>
+        <p>房间码 <b id="roomCode" class="code-big">—</b> <button id="btnCopyCode">复制</button></p>
+        <p id="roomStateText" class="hint2">—</p>
+        <table class="players" id="roomPlayers">
+          <thead><tr><th>玩家</th><th>阵营</th><th>状态</th></tr></thead>
+          <tbody></tbody>
+        </table>
+        <div class="row">
+          <button id="btnReady">准备</button>
+          <button id="btnLeaveRoom">离开房间</button>
+        </div>
+        <div id="roomCountdown"></div>
+      </div>
+
+      <div id="roomStarted" hidden>
+        <p class="who">对局已开始：<b id="startedLevel">—</b></p>
+        <dl>
+          <dt>对局 ID</dt><dd id="startedMatchId">—</dd>
+          <dt>你的阵营</dt><dd id="startedFaction">—</dd>
+          <dt>准备阶段</dt><dd id="startedPrep">—</dd>
+        </dl>
+        <p class="hint2" id="startedHint">
+          双方已进入对局。实时同步（快照渲染）在 P4 接入；当前阶段可以用 <code>docs/pvp-plan.md §11.3</code>
+          的无头自检验证服务端对局逻辑。
+        </p>
+      </div>
+    </section>
+
     <!-- ============ 服务器 ============ -->
     <section class="card">
       <h2>服务器</h2>
@@ -125,7 +191,7 @@
     <p class="hint">
       <b>本地怎么跑：</b>开两个终端 —— <code>npm run server</code>（Node，127.0.0.1:3001）
       与 <code>npm run dev</code>（Vite），然后打开 <code>http://localhost:5173/pvp.html</code>。
-      Vite 会把 <code>/api</code> 与 <code>/socket.io</code> 代理到 Node，与线上 Nginx 反代路径完全一致。<br>
+      再开一个无痕窗口注册另一个账号，就能自己和自己对战（两个浏览器上下文）。<br>
       <b>一个进程验证（不用 Nginx）：</b><code>npm run build</code> 后
       <code>PVP_SERVE_STATIC=1 npm run server</code>（Windows：<code>$env:PVP_SERVE_STATIC=1; npm run server</code>），
       打开 <code>http://127.0.0.1:3001/pvp.html</code>。<br>
@@ -161,31 +227,10 @@
         if (!ms) return '';
         return new Date(ms).toLocaleString('zh-CN', { hour12: false });
       }
-
-      var wsUrl = location.origin.replace(/^http/, 'ws') + '/socket.io/';
-      $('fOrigin').textContent = location.origin;
-      $('fWsUrl').textContent = wsUrl;
-
-      // ============ 账号 ============
-      var authMsg = $('authMsg');
-      function showAuthMessage(text, isError) {
-        authMsg.textContent = text || '';
-        authMsg.className = isError ? 'bad-text' : 'ok-text';
-      }
-      function renderUser(user) {
-        var loggedIn = Boolean(user);
-        $('authLoggedOut').hidden = loggedIn;
-        $('authLoggedIn').hidden = !loggedIn;
-        if (loggedIn) {
-          $('meName').textContent = user.displayName || user.username;
-          $('meAccount').textContent = '（@' + user.username + ' · id ' + user.id +
-            (user.createdAt ? ' · 注册于 ' + fmtDate(user.createdAt) : '') + '）';
-        }
-      }
       function apiJson(path, options) {
         options = options || {};
         options.headers = Object.assign({ 'content-type': 'application/json' }, options.headers || {});
-        if (options.body) options.body = JSON.stringify(options.body);
+        if (options.body && typeof options.body !== 'string') options.body = JSON.stringify(options.body);
         return fetch(path, options).then(function (res) {
           return res.text().then(function (text) {
             var data = null;
@@ -193,6 +238,30 @@
             return { res: res, data: data };
           });
         });
+      }
+
+      var wsUrl = location.origin.replace(/^http/, 'ws') + '/socket.io/';
+      $('fOrigin').textContent = location.origin;
+      $('fWsUrl').textContent = wsUrl;
+
+      // ================= 账号 =================
+      var me = null;
+      var authMsg = $('authMsg');
+      function showAuthMessage(text, isError) {
+        authMsg.textContent = text || '';
+        authMsg.className = isError ? 'bad-text' : 'ok-text';
+      }
+      function renderUser(user) {
+        me = user || null;
+        var loggedIn = Boolean(me);
+        $('authLoggedOut').hidden = loggedIn;
+        $('authLoggedIn').hidden = !loggedIn;
+        if (loggedIn) {
+          $('meName').textContent = me.displayName || me.username;
+          $('meAccount').textContent = '（@' + me.username + ' · id ' + me.id +
+            (me.createdAt ? ' · 注册于 ' + fmtDate(me.createdAt) : '') + '）';
+        }
+        renderRoomAccess();
       }
       function refreshMe() {
         return fetch('/api/auth/me', { cache: 'no-store' })
@@ -203,7 +272,6 @@
           })
           .catch(function () { renderUser(null); });
       }
-
       function submitAuth(kind) {
         var username = $('inputUsername').value.trim();
         var password = $('inputPassword').value;
@@ -220,6 +288,8 @@
               showAuthMessage(kind === 'login' ? '登录成功，欢迎回来！' : '注册成功，已自动登录。', false);
               log('AUTH ' + kind + ' ok · ' + result.data.user.username);
               checkRest();
+              // 会话在 Cookie 里：重连 socket 让握手带上登录态
+              reconnectSocket();
             } else {
               var message = (result.data && result.data.message) || ('HTTP ' + result.res.status);
               var code = (result.data && result.data.code) || '';
@@ -227,12 +297,9 @@
               log('AUTH ' + kind + ' 失败：' + message + ' ' + code);
             }
           })
-          .catch(function (error) {
-            showAuthMessage('请求失败：' + error.message, true);
-          })
+          .catch(function (error) { showAuthMessage('请求失败：' + error.message, true); })
           .finally(function () { buttons.forEach(function (b) { b.disabled = false; }); });
       }
-
       $('btnLogin').addEventListener('click', function () { submitAuth('login'); });
       $('btnRegister').addEventListener('click', function () { submitAuth('register'); });
       $('inputPassword').addEventListener('keydown', function (event) {
@@ -240,11 +307,207 @@
       });
       $('btnLogout').addEventListener('click', function () {
         fetch('/api/auth/logout', { method: 'POST' })
-          .then(function () { renderUser(null); showAuthMessage('已登出', false); log('AUTH logout'); checkRest(); })
+          .then(function () {
+            renderUser(null);
+            resetRoomView();
+            showAuthMessage('已登出', false);
+            log('AUTH logout');
+            checkRest();
+            reconnectSocket();
+          })
           .catch(function (error) { showAuthMessage('登出失败：' + error.message, true); });
       });
 
-      // ============ 服务器 / 链路 ============
+      // ================= 房间 =================
+      var room = null;          // 最新的 match:state 载荷
+      var roomCode = null;      // 当前所在房间码
+      var countdownTimer = null;
+      var roomMsg = $('roomMsg');
+
+      function showRoomMessage(text, isError) {
+        roomMsg.textContent = text || '';
+        roomMsg.className = isError ? 'bad-text' : 'ok-text';
+      }
+
+      function renderRoomAccess() {
+        var loggedIn = Boolean(me);
+        $('roomGuestHint').hidden = loggedIn || Boolean(roomCode);
+        $('roomLobby').hidden = !loggedIn || Boolean(roomCode);
+        $('roomActive').hidden = !roomCode;
+      }
+
+      function resetRoomView() {
+        room = null;
+        roomCode = null;
+        if (countdownTimer) { clearInterval(countdownTimer); countdownTimer = null; }
+        $('roomActive').hidden = true;
+        $('roomStarted').hidden = true;
+        $('roomCountdown').textContent = '';
+        renderRoomAccess();
+      }
+
+      function renderRoomState(state) {
+        if (!state) return;
+        if (state.closed || state.state === 'finished') {
+          var reason = state.reason || '';
+          resetRoomView();
+          showRoomMessage(reason === 'host-left' ? '房主已离开，房间已关闭' : '房间已结束' + (reason ? '（' + reason + '）' : ''), true);
+          log('ROOM 关闭 ' + (reason || ''));
+          return;
+        }
+        room = state;
+        if (!roomCode) roomCode = state.code;
+        $('roomLobby').hidden = true;
+        $('roomGuestHint').hidden = true;
+        $('roomActive').hidden = false;
+        $('roomCode').textContent = state.code;
+
+        var tbody = $('roomPlayers').querySelector('tbody');
+        tbody.innerHTML = '';
+        (state.players || []).forEach(function (player) {
+          var tr = document.createElement('tr');
+          var nameCell = document.createElement('td');
+          nameCell.textContent = player.displayName + (me && player.id === me.id ? '（你）' : '');
+          var factionCell = document.createElement('td');
+          factionCell.className = 'faction-' + player.faction;
+          factionCell.textContent = player.faction === 'blue' ? '蓝方' : '红方';
+          var readyCell = document.createElement('td');
+          readyCell.className = player.ready ? 'ready-yes' : 'ready-no';
+          readyCell.textContent = player.ready ? '已准备' : '未准备';
+          tr.appendChild(nameCell); tr.appendChild(factionCell); tr.appendChild(readyCell);
+          tbody.appendChild(tr);
+        });
+
+        var mine = (state.players || []).find(function (player) { return me && player.id === me.id; }) || null;
+        var opponent = (state.players || []).find(function (player) { return !me || player.id !== me.id; }) || null;
+        if (mine) $('btnReady').textContent = mine.ready ? '取消准备' : '准备';
+        $('btnReady').disabled = !mine;
+
+        if (state.state === 'waiting') {
+          $('roomStateText').textContent = opponent
+            ? '双方就位，等两位玩家都点「准备」'
+            : '等待对手加入：把房间码发给对方';
+        } else if (state.state === 'countdown') {
+          $('roomStateText').textContent = '双方已准备，即将开始…';
+        } else if (state.state === 'playing') {
+          $('roomStateText').textContent = '对局进行中';
+        }
+        renderCountdown(state);
+      }
+
+      function renderCountdown(state) {
+        if (countdownTimer) { clearInterval(countdownTimer); countdownTimer = null; }
+        $('roomCountdown').textContent = '';
+        if (state.state !== 'countdown' || !state.countdownEndsAt) return;
+
+        var reference = state.serverNow || Date.now();
+        var tickStartedAt = Date.now();
+        function tick() {
+          // remaining = 倒计时终点 - 服务器下发状态时刻 - 本地已流逝时间
+          var elapsed = Date.now() - tickStartedAt;
+          var remaining = Math.max(0, Math.ceil((state.countdownEndsAt - reference - elapsed) / 1000));
+          $('roomCountdown').textContent = remaining > 0 ? ('倒计时 ' + remaining + ' 秒…') : '开始！';
+          if (remaining <= 0) { clearInterval(countdownTimer); countdownTimer = null; }
+        }
+        tick();
+        countdownTimer = setInterval(tick, 250);
+      }
+
+      function emitWithAck(event, payload) {
+        return new Promise(function (resolve) {
+          if (!socket || !socket.connected) return resolve({ ok: false, code: 'NO_SOCKET', message: 'WebSocket 未连接' });
+          socket.timeout(5000).emit(event, payload, function (error, response) {
+            if (error) return resolve({ ok: false, code: 'TIMEOUT', message: '服务器无响应' });
+            resolve(response || { ok: false, code: 'EMPTY' });
+          });
+        });
+      }
+
+      function afterJoinRoom(roomPayload, code) {
+        roomCode = code;
+        renderRoomAccess();
+        renderRoomState(roomPayload);
+        emitWithAck('match:join', { roomCode: code }).then(function (result) {
+          if (!result.ok) {
+            showRoomMessage((result.message || '进入房间频道失败') + (result.code ? ' [' + result.code + ']' : ''), true);
+          }
+        });
+      }
+
+      function onCreateRoom() {
+        if (!me) return;
+        $('btnCreateRoom').disabled = true;
+        showRoomMessage('创建中…', false);
+        apiJson('/api/rooms', { method: 'POST', body: { levelId: $('levelSelect').value } })
+          .then(function (result) {
+            if (result.res.ok && result.data && result.data.ok) {
+              var created = result.data.room;
+              showRoomMessage('房间已创建，把房间码发给对手', false);
+              log('ROOM 建房 ' + created.code);
+              afterJoinRoom(created, created.code);
+            } else {
+              showRoomMessage((result.data && result.data.message) || ('建房失败 HTTP ' + result.res.status), true);
+            }
+          })
+          .catch(function (error) { showRoomMessage('建房失败：' + error.message, true); })
+          .finally(function () { $('btnCreateRoom').disabled = false; });
+      }
+
+      function onJoinRoom() {
+        if (!me) return;
+        var code = ($('inputRoomCode').value || '').trim().toUpperCase();
+        if (!/^[A-Z0-9]{6}$/.test(code)) { showRoomMessage('请输入 6 位房间码', true); return; }
+        $('btnJoinRoom').disabled = true;
+        showRoomMessage('加入中…', false);
+        apiJson('/api/rooms/' + code + '/join', { method: 'POST' })
+          .then(function (result) {
+            if (result.res.ok && result.data && result.data.ok) {
+              showRoomMessage('已加入房间', false);
+              log('ROOM 加入 ' + code);
+              afterJoinRoom(result.data.room, code);
+            } else {
+              showRoomMessage((result.data && result.data.message) || ('加入失败 HTTP ' + result.res.status), true);
+            }
+          })
+          .catch(function (error) { showRoomMessage('加入失败：' + error.message, true); })
+          .finally(function () { $('btnJoinRoom').disabled = false; });
+      }
+
+      function onLeaveRoom() {
+        if (!roomCode) return;
+        var code = roomCode;
+        resetRoomView();
+        apiJson('/api/rooms/' + code + '/leave', { method: 'POST' }).catch(function () {});
+        emitWithAck('match:leave', { roomCode: code });
+        showRoomMessage('已离开房间', false);
+      }
+
+      function onToggleReady() {
+        if (!roomCode || !room) return;
+        var mine = (room.players || []).find(function (player) { return me && player.id === me.id; });
+        var nextReady = !(mine && mine.ready);
+        $('btnReady').disabled = true;
+        emitWithAck('match:ready', { roomCode: roomCode, ready: nextReady }).then(function (result) {
+          $('btnReady').disabled = false;
+          if (!result.ok) showRoomMessage((result.message || '准备失败') + (result.code ? ' [' + result.code + ']' : ''), true);
+        });
+      }
+
+      $('btnCreateRoom').addEventListener('click', onCreateRoom);
+      $('btnJoinRoom').addEventListener('click', onJoinRoom);
+      $('btnLeaveRoom').addEventListener('click', onLeaveRoom);
+      $('btnReady').addEventListener('click', onToggleReady);
+      $('btnCopyCode').addEventListener('click', function () {
+        if (!roomCode) return;
+        var text = roomCode;
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).then(function () { showRoomMessage('房间码已复制', false); });
+        } else {
+          showRoomMessage('房间码：' + text, false);
+        }
+      });
+
+      // ================= 链路自检 =================
       var rttSamples = [];
       function renderRtt() {
         if (!rttSamples.length) { $('fRtt').textContent = '—'; return; }
@@ -296,19 +559,47 @@
           document.head.appendChild(script);
         });
       }
+
       function connectSocket() {
         setState('Ws', null, '连接中…');
         return loadSocketClient()
           .then(function (io) {
             if (socket) { socket.disconnect(); socket = null; }
             socket = io({ transports: ['websocket', 'polling'], timeout: 5000 });
+
             socket.on('connect', function () {
               setState('Ws', true, '已连接');
               log('WS 已连接 · id=' + socket.id);
               startPing();
+              if (roomCode) emitWithAck('match:join', { roomCode: roomCode });
             });
             socket.on('link:hello', function (payload) {
-              log('WS hello · 服务版本 ' + payload.version + ' · 快照 ' + payload.snapshotHz + ' Hz');
+              log('WS hello · 服务版本 ' + payload.version + (payload.authenticated ? ' · 已认证' : ' · 未认证'));
+            });
+            socket.on('match:state', function (state) {
+              log('ROOM 状态 ' + (state && state.state) + (state && state.players ? ' · ' + state.players.length + ' 人' : ''));
+              renderRoomState(state);
+            });
+            socket.on('match:begin', function (payload) {
+              room = null;
+              $('roomLobby').hidden = true;
+              $('roomGuestHint').hidden = true;
+              $('roomActive').hidden = true;
+              $('roomStarted').hidden = false;
+              var mine = (payload.players || []).find(function (player) { return me && player.userId === me.id; }) || null;
+              $('startedLevel').textContent = payload.levelId;
+              $('startedMatchId').textContent = payload.matchId;
+              $('startedFaction').textContent = mine ? (mine.faction === 'blue' ? '蓝方' : '红方') : '—';
+              $('startedPrep').textContent = payload.prepSeconds + ' 秒';
+              log('MATCH begin ' + payload.matchId + ' · ' + payload.levelId);
+            });
+            socket.on('match:end', function (payload) {
+              log('MATCH end · ' + payload.winner + ' · ' + payload.reason);
+              showRoomMessage('对局结束：' + (payload.winner === 'draw' ? '平局' : (payload.winner === 'blue' ? '蓝方胜' : '红方胜')) +
+                (payload.reason ? '（' + payload.reason + '）' : ''), false);
+            });
+            socket.on('error', function (payload) {
+              log('WS error · ' + (payload && (payload.code || payload.message)));
             });
             socket.on('connect_error', function (error) {
               setState('Ws', false, '连接失败');
@@ -325,6 +616,8 @@
             log('WS 失败：' + error.message);
           });
       }
+      function reconnectSocket() { connectSocket(); }
+
       var pingTimer = null;
       function startPing() {
         stopPing();
@@ -352,6 +645,7 @@
       });
 
       // 首屏
+      resetRoomView();
       refreshMe();
       checkRest();
       connectSocket();

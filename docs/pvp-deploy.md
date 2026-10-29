@@ -141,6 +141,35 @@ curl -s http://179.255.135.95/api/health | head -c 300; echo
 > 判据一览：注册 201、重复用户名 409、口令 <8 位 400、错口令 401、同一 IP 连错 5 次后 429、登出后 `/me` 401。
 > 若这些全对，说明 REST 反代 + SQLite + 会话 Cookie 在生产环境都正常。
 
+### 6.2 房间码匹配（P3）验收
+
+先准备两个账号（浏览器里注册两个，或用 curl），然后：
+
+```bash
+# A 建房（用 A 的 Cookie 文件）
+curl -s -c /tmp/a.txt -X POST http://179.255.135.95/api/auth/login \
+  -H 'content-type: application/json' -d '{"username":"probe_001","password":"probe-password-1"}'
+curl -s -b /tmp/a.txt -X POST http://179.255.135.95/api/rooms \
+  -H 'content-type: application/json' -d '{"levelId":"dujiang_pvp"}'
+# → {"ok":true,"room":{"code":"AB3D7K",...}}   记下 code
+
+# B 用房间码加入（B 先登录）
+curl -s -c /tmp/b.txt -X POST http://179.255.135.95/api/auth/login \
+  -H 'content-type: application/json' -d '{"username":"probe_002","password":"probe-password-1"}'
+curl -s -b /tmp/b.txt -X POST http://179.255.135.95/api/rooms/AB3D7K/join
+# → 200 + room.you.faction = "red"
+
+# 错误码抽查
+curl -s -o /dev/null -w '%{http_code}\n' -X POST http://179.255.135.95/api/rooms/ZZZZZZ/join -b /tmp/b.txt   # 404
+```
+
+浏览器（两个窗口 / 一个无痕）打开 `http://179.255.135.95/pvp.html`：
+A 登录 → 「创建房间」→ 页面显示 6 位房间码；B 登录 → 输入房间码 → 「加入房间」→
+两端都出现 2 名玩家（蓝方/红方）→ 双方点「准备」→ **3 秒倒计时** → 两端都显示「对局已开始」，
+阵营分别为蓝方/红方。
+若卡在"等待对手加入"→ 检查 B 是否真的加入了（房间满/已开局会提示）；
+若准备后不进入倒计时 → 检查 `/socket.io` 反代（`match:state` 推送走 WebSocket）。
+
 ---
 
 ## 7. 本地怎么检验（不碰服务器，两条路）
