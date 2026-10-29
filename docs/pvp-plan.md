@@ -14,7 +14,8 @@
 - [x] **P2 权威对局（MatchSim）**（已实现并本地实测，见 §11.3）：`server/src/match.js`（60Hz 固定步长 + 命令队列 + 胜负 + 超时判定）、`server/src/snapshot.js`（按阵营过滤视野）、`server/src/levels.js`、`public/assets/pvp/*.json`（对称兵力模板）、`scripts/pvp-selftest.mjs`、`tests/unit/pvp-match.test.js` + `pvp-levels.test.js`（28 条）
 - [x] **P3 房间码匹配**（已实现并本地实测，见 §11.4）：`server/src/rooms.js`（状态机 + 6 位码 + TTL/倒计时/离场）、`server/src/routes/rooms.js`、`/api/rooms/*`、socket `match:join|ready|leave` + `match:state|begin|end`、`pvp.html` 房间大厅、`tests/unit/server-rooms.test.js`（10 条）、`tests/e2e/pvp-rooms.spec.js`（3 条）
 - [x] **P4 对局同步与胜负**（已实现并本地实测，见 §11.5）：`server/src/driver.js`（单 60Hz 调度 + 15Hz 分阵营快照 + 结束只结算一次）、socket `cmd` 上行、`pvp-battle.html` + `src/pvp/battle.js`（复用地形/迷雾/单位渲染 + 插值 + DOM HUD）、`src/pvp/interpolate.js`、`tests/unit/pvp-driver.test.js` + `pvp-interpolate.test.js`（10 条）、`tests/e2e/pvp-battle.spec.js`（双上下文全流程）
-- [ ] P5 断线重连 → P6 部署配置与验收 → P7 打磨
+- [x] **P5 断线重连**（已实现并本地实测，见 §11.7）：座位 `connected`/`reconnectToken`、静默期后播报 `opponent:left`、30s 宽限内 `match:join` 续局、超时判负（`disconnect-timeout`）、重开页面/服务器重启的提示、`tests/unit/pvp-reconnect.test.js`（5 条）、`tests/e2e/pvp-reconnect.spec.js`（2 条）
+- [ ] P6 部署配置与验收 → P7 打磨（含 §11.6 的 PvP 交互对齐，待排期）
 
 ---
 
@@ -804,3 +805,49 @@ PvP 的本地世界只是"被快照覆盖的镜像"，且快照目前不含 `rou
 2. 轨迹显示：快照为**己方**单位增加 `route` / `pendingQueue`（约 50–120 B/移动单位，满编 16 个约 +1–2 KB/帧，或改成变化时才发）；
 3. HUD：单位卡片、补给线、控制线叠加（纯展示，可后置）。
 每项都配一条 `cmd` 契约单测 + 一条双上下文 e2e（例：A 按 S 后，两端快照里该部队都停下）。
+
+---
+
+## 11.7 已实现：P5 断线重连（含实测）
+
+**机制**
+
+| 项 | 实现 |
+|---|---|
+| 掉线标记 | socket `disconnect` 时若该玩家在房间里已无其它 socket → `rooms.markDisconnected()`（**座位保留**，`connected=false`，记 `disconnectedAt`） |
+| 静默期 | 掉线后先等 `disconnectNoticeMs`（默认 1.5s）再打扰对手 —— 大厅→对局页的页面跳转不会刷"对手掉线"横幅 |
+| 播报 | 静默期后仍不在线 → 向房间频道发 `opponent:left { userId, username, graceSeconds }`，并推一次 `match:state`（`players[].connected=false`） |
+| 宽限 | `disconnectGraceMs`（默认 30s，`PVP_RECONNECT_SECONDS` 可调）；`rooms.sweep()` 每 250ms 检查，到点 → `finishRoom(room, 对手, 'disconnect-timeout')` |
+| 重连 | `match:join { roomCode, reconnectToken }`：宽带内 → `markConnected`（带 token 时校验，不匹配返回 403 `BAD_TOKEN`）→ ack 里 `reconnected: true` + `match.prepRemainingMs/result` → 立刻补一份快照；并通知对手 `opponent:rejoin` |
+| 重连凭证 | 每个座位一个 24 字节随机 token，**只在本人的 `room.you.reconnectToken` 里下发**（对手的视图里没有）；对局页把它存 `sessionStorage`，重开页面自动带上 |
+| 已结束的对局 | 掉线被判负后重连仍返回 `ok:true` + `match.result`，让掉线方能看到结算（而不是被拒绝） |
+| 服务器重启 | 房间是内存态 → 重连时 `ROOM_NOT_FOUND`；对局页识别为"对局已中断（服务器可能重启过）"并显示横幅 |
+| 双方都掉线 | 房间在宽限后回收（`reason='abandoned'`），不占 `maxRooms` 名额 |
+
+**Socket 事件补充**
+
+| 方向 | 事件 | 说明 |
+|---|---|---|
+| S→C | `opponent:left { userId, username, graceSeconds }` | 对手掉线（客户端按 `userId` 过滤掉"关于自己"的广播） |
+| S→C | `opponent:rejoin { userId, username }` | 对手回来了（仅在播报过掉线后才发） |
+| C→S | `match:join { roomCode, reconnectToken? }` | 重连带 token；ack 增加 `reconnected` / `room.you.reconnectToken` / `match.reconnectGraceMs` |
+
+**实测**
+
+| 项 | 结果 |
+|---|---|
+| `tests/unit/pvp-reconnect.test.js` | **5 passed**：token 只发给本人（对手视图里没有）、断线→`opponent:left`（带宽限秒数）、宽限内带 token 重连→`opponent:rejoin`+`reconnected:true`+快照继续、错误 token→`BAD_TOKEN`、超宽限→`match:end{winner:蓝, reason:disconnect-timeout}`、被判负后重连能看到结算 |
+| `tests/e2e/pvp-reconnect.spec.js`（Edge，双上下文） | **2 passed**：关掉 B 页面 → A 出现"对手掉线：4 秒内可重连"且快照继续涨 → 宽限内重开 B → A 出现"对手已重连"，两端继续收快照；B 不回来 → A 的结算弹窗出现「胜利！· 对手掉线超时」 |
+| 回归（auth + rooms + battle e2e） | **7 passed** |
+| 全量单测 | **561 passed / 8 failed**（8 条仍是既有供应/配置漂移） |
+
+**本地怎么看**
+```bash
+npm run server            # 宽限默认 30s；想快跑可用 PVP_RECONNECT_SECONDS=4
+npm run dev               # 两个无痕窗口开一局，然后直接关掉一方页面
+# 另一方：1.5s 后出现"对手掉线：30 秒内可重连"→ 重开页面 → "对手已重连"
+# 若超过宽限：留下的一方直接看到结算（reason=disconnect-timeout）
+npx vitest run tests/unit/pvp-reconnect.test.js
+```
+
+> e2e 用 `playwright.config.js` 里的 `PVP_RECONNECT_SECONDS=4` 把宽限压到 4 秒，线上仍是 30 秒。

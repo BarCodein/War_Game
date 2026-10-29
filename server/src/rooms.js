@@ -1,4 +1,4 @@
-import { randomInt, randomUUID } from 'node:crypto';
+import { randomBytes, randomInt, randomUUID } from 'node:crypto';
 
 // 房间码匹配（P3）：只做"好友约战"的 6 位房间码，不做快速匹配队列。
 //
@@ -56,7 +56,7 @@ export class RoomRegistry {
     this.timer = null;
   }
 
-  /** 定期推进：倒计时到点 → 开局；过期的等待房间 → 回收 */
+  /** 定期推进：倒计时到点 → 开局；过期的等待房间 → 回收；掉线超过宽限 → 判负 */
   sweep(nowMs = this.now()) {
     let changed = false;
     for (const room of [...this.rooms.values()]) {
@@ -70,6 +70,16 @@ export class RoomRegistry {
       if (room.state === 'countdown' && room.countdownEndsAt <= nowMs) {
         this.begin(room);
         changed = true;
+        continue;
+      }
+      // P5：对局中有人掉线超过宽限（默认 30s）→ 判他负
+      if (room.state === 'playing') {
+        const absent = room.players.find((player) => player.connected === false
+          && player.disconnectedAt !== null
+          && nowMs - player.disconnectedAt >= this.config.disconnectGraceMs);
+        if (absent) {
+          this.onForfeit?.(room, absent.id, 'disconnect-timeout');
+        }
       }
     }
     if (changed) this.notifyAll();
@@ -166,10 +176,10 @@ export class RoomRegistry {
     player.ready = false;
 
     if (wasPlaying) {
-      // P5 会把这里换成"30 秒重连窗口 + 超时判负"；P3 先直接结束并通知对手
+      // 主动退出 = 直接判负（被动掉线走 markDisconnected + 宽限，见 sweep）
       room.state = 'finished';
       room.reason = 'forfeit';
-      this.onForfeit?.(room, userId);
+      this.onForfeit?.(room, userId, 'forfeit');
       this.rooms.delete(room.code);
       this.onStateChange?.(room);
       return { room, closed: true };
@@ -213,6 +223,47 @@ export class RoomRegistry {
     return room;
   }
 
+  // ---------- 断线重连（P5） ----------
+  /** 标记掉线：由 socket disconnect 调用（同一玩家可能还有别的 socket，调用方负责判断） */
+  markDisconnected({ code, userId, nowMs = this.now() }) {
+    const room = this.get(code);
+    const player = room ? this.playerOf(room, userId) : null;
+    if (!player) return null;
+    if (player.connected === false) return room;   // 已经在掉线状态
+    player.connected = false;
+    player.disconnectedAt = nowMs;
+    return room;
+  }
+
+  /** 首次进入 / 重复进入：只清理掉线标记，不校验 token */
+  ensureConnected({ code, userId }) {
+    const room = this.require(code);
+    const player = this.playerOf(room, userId);
+    if (!player) throw new RoomError('NOT_IN_ROOM', '你不在这个房间里', 409);
+    player.connected = true;
+    player.disconnectedAt = null;
+    return room;
+  }
+
+  /** 重连：把座位标记为在线（宽限内续局）。token 若提供则必须匹配（防止串座） */
+  markConnected({ code, userId, token }) {
+    const room = this.require(code);
+    const player = this.playerOf(room, userId);
+    if (!player) throw new RoomError('NOT_IN_ROOM', '你不在这个房间里', 409);
+    if (token && player.reconnectToken && player.reconnectToken !== token) {
+      throw new RoomError('BAD_TOKEN', '重连凭证不匹配（可能不是同一局）', 403);
+    }
+    player.connected = true;
+    player.disconnectedAt = null;
+    return room;
+  }
+
+  /** 玩家是否在宽限内可重连 */
+  canReconnect(room, player, nowMs = this.now()) {
+    if (!player || player.connected !== false) return false;
+    return nowMs - (player.disconnectedAt ?? 0) < this.config.disconnectGraceMs;
+  }
+
   newPlayer(user, faction) {
     return {
       id: user.id,
@@ -220,6 +271,10 @@ export class RoomRegistry {
       displayName: user.displayName ?? user.username,
       faction,
       ready: false,
+      connected: true,          // P5：socket 是否在线（掉线后 30s 内可重连）
+      disconnectedAt: null,
+      leftNotified: false,      // 是否已向对手播报过"掉线"（避免页面跳转刷横幅）
+      reconnectToken: randomBytes(24).toString('base64url'),
     };
   }
 
@@ -236,7 +291,7 @@ export function normalizeCode(code) {
   return String(code ?? '').trim().toUpperCase();
 }
 
-/** 对外安全视图：不含内部字段（match 实例、socketId 等） */
+/** 对外安全视图：不含内部字段（match 实例、socketId 等）；reconnectToken 只发给本人 */
 export function roomView(room, viewerId = null) {
   if (!room) return null;
   const view = {};
@@ -247,13 +302,29 @@ export function roomView(room, viewerId = null) {
     displayName: player.displayName,
     faction: player.faction,
     ready: player.ready,
+    connected: player.connected !== false,
   }));
   if (viewerId !== null) {
     const mine = room.players.find((player) => player.id === viewerId) ?? null;
-    view.you = mine ? { id: mine.id, faction: mine.faction, ready: mine.ready } : null;
+    view.you = mine
+      ? {
+        id: mine.id,
+        faction: mine.faction,
+        ready: mine.ready,
+        connected: mine.connected !== false,
+        reconnectToken: mine.reconnectToken ?? null,   // 只给本人（重连凭证）
+      }
+      : null;
     const opponent = room.players.find((player) => player.id !== viewerId) ?? null;
     view.opponent = opponent
-      ? { id: opponent.id, username: opponent.username, displayName: opponent.displayName, faction: opponent.faction, ready: opponent.ready }
+      ? {
+        id: opponent.id,
+        username: opponent.username,
+        displayName: opponent.displayName,
+        faction: opponent.faction,
+        ready: opponent.ready,
+        connected: opponent.connected !== false,
+      }
       : null;
   }
   return view;

@@ -37,6 +37,7 @@ const hud = {
   prep: document.getElementById('prepOverlay'),
   prepNumber: document.getElementById('prepNumber'),
   status: document.getElementById('battleStatus'),
+  banner: document.getElementById('connBanner'),
   result: document.getElementById('resultOverlay'),
   resultTitle: document.getElementById('resultTitle'),
   resultDetail: document.getElementById('resultDetail'),
@@ -374,13 +375,32 @@ function showResult(result) {
     'captured-all-cities': '占领全部城市',
     'time-limit': '到达时限，按城市数/兵力判定',
     forfeit: '对手退出对局',
-    aborted: '对局中断',
+    'disconnect-timeout': '对手掉线超时（判定胜负）',
+    aborted: '对局中断（服务器重启）',
   }[result?.reason] ?? (result?.reason ?? '');
   if (hud.resultDetail) {
     hud.resultDetail.textContent = `${reasonText} · 用时 ${fmtClock(result?.atMs ?? 0)}`
       + (result?.casualties ? ` · 伤亡 蓝 ${result.casualties.blue} / 红 ${result.casualties.red}` : '');
   }
   setStatus('对局结束');
+}
+
+// ---------------- 断线重连（P5） ----------------
+// 重连凭证：服务端在 match:join 的 ack 里下发，存在 sessionStorage（按房间码），
+// 页面被关掉再打开（同一标签页/同一浏览器）就能凭它续局。
+const tokenKey = () => `pvp:token:${roomCode}`;
+const readToken = () => {
+  try { return sessionStorage.getItem(tokenKey()); } catch { return null; }
+};
+const saveToken = (token) => {
+  try { if (token) sessionStorage.setItem(tokenKey(), token); } catch { /* 隐私模式忽略 */ }
+};
+
+function showBanner(text, tone = 'warn') {
+  if (!hud.banner) return;
+  hud.banner.hidden = !text;
+  hud.banner.textContent = text ?? '';
+  hud.banner.className = `banner ${tone}`;
 }
 
 // ---------------- 网络 ----------------
@@ -390,16 +410,29 @@ function showResult(result) {
 function onConnect() {
   debug.socketConnected = true;
   setStatus('已连接，进入房间…');
-  socket.emit('match:join', { roomCode }, (response) => {
+  showBanner('');
+  socket.emit('match:join', { roomCode, reconnectToken: readToken() }, (response) => {
     if (!response?.ok) {
-      setStatus(`进入对局失败：${response?.code ?? 'UNKNOWN'}`, true);
+      const code = response?.code ?? 'UNKNOWN';
+      if (code === 'RECONNECT_EXPIRED') {
+        setStatus('掉线超时，本局已判负', true);
+        showBanner('掉线超过宽限时间，对局已结束', 'bad');
+      } else if (code === 'ROOM_NOT_FOUND' && readToken()) {
+        setStatus('对局已中断（服务器可能重启过）', true);
+        showBanner('对局已中断：房间不存在（服务器可能重启过）', 'bad');
+      } else {
+        setStatus(`进入对局失败：${code}`, true);
+      }
       return;
     }
     debug.myFaction = response.room?.you?.faction ?? null;
+    debug.myUserId = response.room?.you?.id ?? null;
     debug.matchId = response.match?.matchId ?? null;
     debug.prepRemainingMs = response.match?.prepRemainingMs ?? 0;
     debug.phase = response.match?.phase ?? 'prep';
-    setStatus(`已进入对局（${debug.myFaction === 'red' ? '红方' : '蓝方'}）`);
+    debug.reconnectGraceMs = response.match?.reconnectGraceMs ?? 30000;
+    saveToken(response.reconnectToken ?? response.room?.you?.reconnectToken);
+    setStatus(`已进入对局（${debug.myFaction === 'red' ? '红方' : '蓝方'}）${response.reconnected ? ' · 已重连续局' : ''}`);
     if (response.match?.result) showResult(response.match.result);
     updateHud();
   });
@@ -421,17 +454,37 @@ function bindSocket() {
   }
   socket.on('connect', onConnect);
   socket.on('tick', (snapshot) => applySnapshot(snapshot));
-  socket.on('match:end', (payload) => showResult(payload));
+  socket.on('match:end', (payload) => {
+    showBanner('');
+    showResult(payload);
+  });
   socket.on('match:state', (state) => {
     if (state?.closed && state.result) showResult(state.result);
+  });
+  // P5：对手掉线 / 回来（广播给整个房间频道，所以要先排除"说的就是我"）
+  socket.on('opponent:left', (payload) => {
+    if (payload?.userId && debug.myUserId && payload.userId === debug.myUserId) return;
+    debug.opponentLeft = true;
+    const seconds = payload?.graceSeconds ?? Math.round((debug.reconnectGraceMs ?? 30000) / 1000);
+    showBanner(`对手掉线：${seconds} 秒内可重连，超时判胜`, 'warn');
+    setStatus(`对手掉线（${payload?.username ?? '对手'}），等待重连…`);
+  });
+  socket.on('opponent:rejoin', (payload) => {
+    if (payload?.userId && debug.myUserId && payload.userId === debug.myUserId) return;
+    debug.opponentLeft = false;
+    showBanner('对手已重连，对局继续', 'ok');
+    window.setTimeout(() => showBanner(''), 2500);
+    setStatus('对手已重连');
   });
   socket.on('connect_error', (error) => {
     debug.socketConnected = false;
     setStatus(`连接失败：${error.message}`, true);
+    showBanner('连接失败，正在重试…', 'bad');
   });
   socket.on('disconnect', (reason) => {
     debug.socketConnected = false;
     setStatus(`连接断开：${reason}`, true);
+    showBanner('与你服务器的连接断开，正在重连…', 'warn');
   });
   if (socket.connected) onConnect();
 }

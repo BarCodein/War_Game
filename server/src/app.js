@@ -70,10 +70,10 @@ export function createPvpServer(overrides = {}) {
       // 房间刚进入 playing（双方 ready + 倒计时结束）→ 交给 60Hz 驱动
       if (room.state === 'playing' && room.match) driver?.attach(room);
     },
-    onForfeit: (room, userId) => {
+    onForfeit: (room, userId, reason = 'forfeit') => {
       const quitter = room.players.find((player) => player.id === userId);
       const winner = quitter?.faction === 'blue' ? 'red' : 'blue';
-      io.to(roomChannel(room.code)).emit('match:end', { winner, reason: 'forfeit' });
+      finishRoom(room, winner, reason);
     },
   });
 
@@ -95,8 +95,35 @@ export function createPvpServer(overrides = {}) {
     },
   });
 
-  function emitState(room) {
-    if (!room) return;
+  /**
+   * 结束一局（P5）：统一出口 —— 标记房间 finished、让 MatchSim 也进入终态、
+   * 停掉驱动、向房间广播 match:end 与 closed 状态。
+   * reason: captured-all-cities | time-limit | forfeit | disconnect-timeout | aborted
+   */
+  function finishRoom(room, winner, reason) {
+    if (!room || room.state === 'finished') return;
+    room.state = 'finished';
+    room.reason = reason;
+    if (room.match && !room.match.result) {
+      room.match.finish(winner ?? 'draw', reason);
+    }
+    driver.detach(room.code);
+    io.to(roomChannel(room.code)).emit('match:end', {
+      winner: winner ?? 'draw',
+      reason,
+      matchId: room.matchId,
+      ...(room.match?.result ?? {}),
+    });
+    io.to(roomChannel(room.code)).emit('match:state', {
+      ...roomView(room, null),
+      serverNow: Date.now(),
+      closed: true,
+      reason,
+      result: room.match?.result ?? null,
+    });
+  }
+
+  function emitState(room) {    if (!room) return;
     if (room.state === 'finished') {
       io.to(roomChannel(room.code)).emit('match:state', {
         ...roomView(room, null),
@@ -132,6 +159,8 @@ export function createPvpServer(overrides = {}) {
     activeRooms: rooms.countActive(),
     matches: driver.size,          // 正在推进的对局数
     maxRooms: config.maxRooms,
+    // 运维参数：掉线重连宽限、快照频率（线上默认 30s / 15Hz；e2e 会调小）
+    reconnectGraceSeconds: Math.round(config.disconnectGraceMs / 1000),
     snapshotHz: config.snapshotHz,
     accounts: countUsers(db),     // 注册用户数（运维可观测，不含任何敏感字段）
     socketClients: io?.engine?.clientsCount ?? 0,
@@ -191,12 +220,25 @@ export function createPvpServer(overrides = {}) {
         const room = rooms.require(code);
         const player = rooms.playerOf(room, me.id);
         if (!player) throw new RoomError('NOT_IN_ROOM', '你不在这个房间里', 409);
+
+        // P5：重连校验（只有"曾经掉线"才要求 token；宽限内才允许续局）
+        const wasDisconnected = player.connected === false;
+        if (wasDisconnected) {
+          if (room.state === 'playing' && !rooms.canReconnect(room, player)) {
+            throw new RoomError('RECONNECT_EXPIRED',
+              `掉线已超过 ${Math.round(config.disconnectGraceMs / 1000)} 秒，对局已判负`, 409);
+          }
+          rooms.markConnected({ code, userId: me.id, token: payload?.reconnectToken });
+        } else {
+          rooms.ensureConnected({ code, userId: me.id });
+        }
+
         socket.join(roomChannel(code));
         socket.join(SNAPSHOT_CHANNEL(code, player.faction));   // 只收自己阵营的快照
         socket.data.roomCode = code;
         socket.data.faction = player.faction;
 
-        // 对局信息（战斗页 bootstrap / 断线重连都用它，P5 会在此基础上加 token）
+        // 对局信息（战斗页 bootstrap / 断线重连都用它）
         const match = room.match;
         const matchInfo = room.state === 'playing' || room.state === 'finished'
           ? {
@@ -207,12 +249,24 @@ export function createPvpServer(overrides = {}) {
             elapsedMs: match?.elapsedMs() ?? 0,
             timeLeftMs: match?.timeLeftMs() ?? 0,
             prepRemainingMs: match?.prepRemainingMs() ?? 0,
+            reconnectGraceMs: config.disconnectGraceMs,
             result: match?.result ?? null,
           }
           : null;
 
-        ack?.({ ok: true, room: roomView(room, me.id), match: matchInfo });
+        ack?.({
+          ok: true,
+          room: roomView(room, me.id),
+          match: matchInfo,
+          reconnectToken: player.reconnectToken,
+          reconnected: wasDisconnected,
+        });
         emitState(room);
+        // 对手回来 / 自己重连：只有在"已经播报过掉线"时才通知另一端，避免页面跳转刷横幅
+        if (wasDisconnected && room.state === 'playing' && player.leftNotified) {
+          player.leftNotified = false;
+          io.to(roomChannel(code)).emit('opponent:rejoin', { userId: me.id, username: me.username });
+        }
         if (match && room.state === 'playing') driver.emitSnapshots(room);
       } catch (error) {
         replyError(socket, ack, error);
@@ -269,17 +323,42 @@ export function createPvpServer(overrides = {}) {
 
     socket.on('disconnect', (reason) => {
       if (!config.quiet) console.log(`[ws] disconnected ${socket.id} (${reason})`);
-      // 房间里一个人都不剩 → 等 disconnectGraceMs（默认 30s，兼作 P5 的重连窗口）再回收；
-      // 从大厅跳到对局页会有 1s 左右的连接空档，不能立刻删房间，否则对局页会 ROOM_NOT_FOUND。
       const code = socket.data.roomCode;
       if (!code) return;
-      const stillPresent = () => (io.sockets.adapter.rooms.get(roomChannel(code))?.size ?? 0) > 0;
-      if (stillPresent()) return;   // 对手还在房间里，对局继续
       const room = rooms.get(code);
       if (!room) return;
+
+      // 这个玩家在房间频道里还有别的 socket 吗？（多标签页 / 刚重连）
+      const socketsHere = [...(io.sockets.adapter.rooms.get(roomChannel(code)) ?? [])];
+      const stillOnline = socketsHere.some((id) => io.sockets.sockets.get(id)?.data?.user?.id === socket.data.user?.id);
+
+      if (!stillOnline) {
+        // P5：标记掉线（座位保留）→ 静默 disconnectNoticeMs 后仍不在线才打扰对手
+        if (room.state === 'playing') {
+          const userId = socket.data.user?.id;
+          rooms.markDisconnected({ code, userId });
+          const noticeTimer = setTimeout(() => {
+            const current = rooms.get(code);
+            const player = current ? rooms.playerOf(current, userId) : null;
+            if (!current || current.state !== 'playing' || !player || player.connected !== false) return;
+            player.leftNotified = true;
+            io.to(roomChannel(code)).emit('opponent:left', {
+              userId,
+              username: player.username,
+              graceSeconds: Math.round(config.disconnectGraceMs / 1000),
+            });
+            emitState(current);
+          }, config.disconnectNoticeMs);
+          noticeTimer.unref?.();
+        }
+      }
+
+      // 双方都不在房间里：宽限后回收（从大厅跳到对局页也有 1s 左右的空档，不能立刻删房间）
+      const noneOnline = (io.sockets.adapter.rooms.get(roomChannel(code))?.size ?? 0) === 0;
+      if (!noneOnline) return;
       const timer = setTimeout(() => {
-        if (stillPresent()) return;              // 这段时间里有人重连回来了
-        if (rooms.get(code) !== room) return;    // 房间已经被别处回收
+        if ((io.sockets.adapter.rooms.get(roomChannel(code))?.size ?? 0) > 0) return;  // 有人回来了
+        if (rooms.get(code) !== room) return;                                        // 已被别处回收
         driver.detach(code);
         room.state = 'finished';
         room.reason = 'abandoned';

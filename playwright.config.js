@@ -39,10 +39,15 @@ export default defineConfig({
       // 用临时 SQLite 文件，避免 e2e 污染本地 server/data/pvp.db；
       // env 里的 PVP_DB 只在 Playwright 拉起的进程里生效。
       // e2e 会反复注册新账号，所以要放宽注册限速（默认 10 次/小时/IP 会被自己打满）。
+      // 重连宽限压到 4 秒（线上默认 30 秒），否则断线用例要等半分钟。
       command: 'node server/src/index.js',
       url: 'http://127.0.0.1:3001/api/health',
       reuseExistingServer: true,
-      env: { PVP_DB: 'server/data/e2e.db', PVP_REGISTER_MAX_PER_HOUR: '1000' },
+      env: {
+        PVP_DB: 'server/data/e2e.db',
+        PVP_REGISTER_MAX_PER_HOUR: '1000',
+        PVP_RECONNECT_SECONDS: '4',
+      },
     },
   ],
 });

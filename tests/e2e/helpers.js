@@ -53,3 +53,40 @@ export async function firstRedUnit(page) {
     return unit ? { id: unit.id, x: unit.x, y: unit.y } : null;
   });
 }
+
+// ---------- PvP 页面的表单辅助 ----------
+//
+// 为什么不用 page.fill：Edge 偶尔会在填充后触发自动填充/密码管理器，把用户名清空，
+// 造成"偶发注册失败"。这里直接给 input.value 赋值并派发 input 事件 ——
+// pvp.html 的提交逻辑只读 `.value`，所以行为一致且稳定。
+// （pvp-auth.spec.js 仍然走真实的 fill/click，因为那个用例本身就是在测表单。）
+export async function fillByScript(page, selector, value) {
+  await page.locator(selector).evaluate((element, next) => {
+    element.value = next;
+    element.dispatchEvent(new Event('input', { bubbles: true }));
+  }, value);
+}
+
+export async function registerDirect(page, username, password) {
+  await page.goto('/pvp.html');
+  await page.waitForLoadState('load');
+  await fillByScript(page, '#inputUsername', username);
+  await fillByScript(page, '#inputPassword', password);
+  await page.click('#btnRegister');
+  await expect(page.locator('#authLoggedIn')).toBeVisible({ timeout: 20000 });
+  await expect(page.locator('#meName')).toHaveText(username);
+}
+
+/** 建房并返回 6 位房间码 */
+export async function createRoom(page) {
+  await page.click('#btnCreateRoom');
+  await expect(page.locator('#roomActive')).toBeVisible({ timeout: 20000 });
+  return (await page.locator('#roomCode').textContent()).trim();
+}
+
+/** 用房间码加入 */
+export async function joinRoom(page, code) {
+  await page.fill('#inputRoomCode', code);
+  await page.click('#btnJoinRoom');
+  await expect(page.locator('#roomActive')).toBeVisible({ timeout: 20000 });
+}

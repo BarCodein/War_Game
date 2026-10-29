@@ -31,6 +31,15 @@
       position: absolute; left: 50%; top: 46%; transform: translate(-50%, -50%);
       text-align: center; pointer-events: none;
     }
+    #connBanner {
+      position: absolute; left: 50%; top: 58px; transform: translateX(-50%);
+      padding: 8px 16px; border-radius: 10px; font-size: 14px; letter-spacing: .5px;
+      background: rgba(24,12,6,.92); border: 1px solid rgba(212,168,67,.6); color: #ffe9b8;
+      max-width: 80vw; text-align: center;
+    }
+    #connBanner.ok { border-color: rgba(125,216,74,.7); color: #d8ffc8; }
+    #connBanner.bad { border-color: rgba(255,139,128,.8); color: #ffd2cc; }
+    #connBanner.warn { border-color: rgba(212,168,67,.7); }
     #prepNumber { font-size: 96px; font-weight: 700; color: #ffe9b8; text-shadow: 0 4px 12px rgba(0,0,0,.7); }
     #prepHint { margin-top: 6px; padding: 6px 14px; border-radius: 8px; background: rgba(241,233,210,.82); color: #241a12; font-size: 14px; }
     #resultOverlay {
@@ -66,6 +75,9 @@
       <div id="prepNumber">5</div>
       <div id="prepHint">准备阶段：可以先给部队下令</div>
     </div>
+
+    <!-- P5：断线 / 对手掉线 / 重连 的横幅提示 -->
+    <div id="connBanner" class="banner" hidden></div>
 
     <div id="resultOverlay" hidden>
       <h2 id="resultTitle">—</h2>

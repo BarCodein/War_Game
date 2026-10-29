@@ -65,6 +65,8 @@ export const config = {
   matchTimeLimitMs: number(process.env.PVP_MATCH_MINUTES, 10) * 60 * 1000,
   // 房间里一个人都不剩时的宽限（P5 用它做 30s 重连窗口；从大厅跳到对局页也有 1s 左右空档）
   disconnectGraceMs: number(process.env.PVP_RECONNECT_SECONDS, 30) * 1000,
+  // 掉线播报的"静默期"：短暂闪断（例如大厅→对局页的页面跳转）不打扰对手
+  disconnectNoticeMs: number(process.env.PVP_DISCONNECT_NOTICE_SECONDS, 1.5) * 1000,
   // 可选择的对战地图（对称兵力模板，见 public/assets/pvp/）
   pvpLevels: String(process.env.PVP_LEVELS ?? 'dujiang_pvp,pingjin_pvp')
     .split(',').map((item) => item.trim()).filter(Boolean),
