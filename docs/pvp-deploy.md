@@ -318,3 +318,117 @@ systemctl status war-game --no-pager
 sudo /opt/war-game-server/deploy/update.sh              # 拉代码 + 装依赖 + 重启 + 健康检查
 sudo /opt/war-game-server/deploy/update.sh --check-only # 只做健康检查
 ```
+
+---
+
+## 11. 静态站仓库损坏的恢复（`git status` 显示 No commits yet）
+
+### 11.1 症状与含义
+
+在 `/var/www/html/war_game/repo` 里执行 `git status` 得到：
+
+```
+On branch master
+No commits yet
+Untracked files: ...
+```
+
+含义：**这个目录里的 `.git` 是一个空仓库**（没有任何提交、分支还是 `master`），所有页面文件都被当成"未跟踪文件"。
+所以 `git pull` 无法工作（它没有可合并的历史），自动更新脚本自然失败；站点还能打开是因为 Nginx 直接读这些文件。
+
+常见成因（按可能性排序）：
+
+1. 更新脚本里写了 `git init` / `git clone`，在失败后用空仓库覆盖了原来的 `.git`；
+2. `rsync --delete` 之类的同步把 `.git` 删掉了，脚本再 `git init` 补了一个空仓库；
+3. 有人手动改过 `battlebackground.html` / `battlechoose.html` / `ending.html`（旁边有 `*.bak-20261028`），
+   `git pull` 因"本地改动会被覆盖"失败，后续步骤把仓库搞成了空仓库。
+
+> 注意：`.bak-20261028` 说明这些文件**在服务器上被手改过**。如果这些改动没有同步回仓库，重新同步会丢掉它们 ——
+> 先按 11.2 对一下差异，必要时先把文件备份到 `/root/`。
+
+### 11.2 先诊断（只读，不改任何东西）
+
+```bash
+cd /var/www/html/war_game/repo
+# ① 现在是谁的 .git、远程是什么
+ls -la .git | head -5
+cat .git/config
+git remote -v
+# ② 备份文件与当前文件的差异（如果有手改，会在这里体现）
+diff -u battlechoose.html.bak-20261028 battlechoose.html | head -40
+diff -u battlebackground.html.bak-20261028 battlebackground.html | head -40
+diff -u ending.html.bak-20261028 ending.html | head -40
+```
+
+把 `cat .git/config` 的输出留着（看 origin 地址和分支），后面要用。
+
+### 11.3 恢复方案 A（推荐：原地复原，不用重新克隆）
+
+```bash
+cd /var/www/html/war_game/repo
+# 0) 保险：把当前目录整体备份一份（出问题可以回滚）
+sudo cp -a /var/www/html/war_game/repo /root/repo-backup-$(date +%F-%H%M)
+
+# 1) 丢掉损坏的空仓库，换成指向部署仓库的正常仓库（保留工作区文件）
+sudo rm -rf .git
+sudo -u www-data git init -b main
+sudo -u www-data git remote add origin https://github.com/BarCodein/war_game_deploy_repo.git
+#   私有仓库请改用（把 TOKEN 换成有 read 权限的 token）：
+#   sudo -u www-data git remote set-url origin https://x-access-token:<TOKEN>@github.com/BarCodein/war_game_deploy_repo.git
+
+# 2) 拉远端并让工作区与远端完全一致（会删除远端没有的多余文件，保留 *.bak-*）
+sudo -u www-data git fetch --prune --depth 1 origin main
+sudo -u www-data git reset --hard origin/main
+sudo -u www-data git clean -fdx -e '*.bak-*'
+
+# 3) 校验
+sudo -u www-data git log --oneline -1
+ls index.html game.html pvp.html pvp-battle.html members/member.html climb/climb.html
+curl -sI http://127.0.0.1/ | head -3
+```
+
+> 如果 `git fetch` 报 `couldn't find remote ref main`，把 `main` 换成 `master` 再试（部署仓库由 CI 创建，分支名以实际为准）。
+
+### 11.4 恢复方案 B（最干净：整目录换成新克隆）
+
+```bash
+cd /var/www/html/war_game
+sudo mv repo repo.broken-$(date +%F-%H%M)          # 保留旧目录，随时可回滚
+sudo -u www-data git clone --depth 1 https://github.com/BarCodein/war_game_deploy_repo.git repo
+#   私有仓库：git clone https://x-access-token:<TOKEN>@github.com/...
+sudo chown -R www-data:www-data repo
+curl -sI http://127.0.0.1/ | head -3
+```
+
+方案 B 会**丢掉服务器上的手改文件**（包括 `*.bak-*`），但它们都还在 `repo.broken-*` 里，需要时拷回去即可。
+
+### 11.5 以后怎么更新（不要再手写 git init/clone）
+
+仓库里已经放了幂等脚本 `deploy/update-static.sh`，它就是为这种场景写的：
+
+```bash
+# 只看看会删掉什么（不动手）
+sudo ./deploy/update-static.sh --dry-run
+
+# 正式同步（fetch + reset --hard + clean，保留 *.bak-*）
+sudo ./deploy/update-static.sh
+
+# 私有仓库 / 首次换远端时指定地址
+sudo REMOTE_URL=https://x-access-token:<TOKEN>@github.com/BarCodein/war_game_deploy_repo.git \
+     ./deploy/update-static.sh
+```
+
+它做的事：自检 `.git`（没有就 `init -b main`）→ 校验 origin → 自动识别 `main`/`master` →
+打印将被删除的未跟踪文件 → `reset --hard` + `clean -fdx`（保留 `*.bak-*`）→ 校验关键页面与首页 HTTP。
+
+**建议把它挂到定时任务里**（替代旧的拉取脚本）：
+
+```bash
+# 每 5 分钟同步一次静态站
+echo '*/5 * * * * root /opt/war-game-server/deploy/update-static.sh >> /var/log/war-game-static.log 2>&1' \
+  | sudo tee /etc/cron.d/war-game-static
+sudo chmod 644 /etc/cron.d/war-game-static
+```
+
+> 若你更希望"CI 一推就生效"，也可以在 GitHub Actions 里加一步 `rsync`/`ssh`（需要部署密钥）；
+> 但定时 `update-static.sh` 已经足够，且不需要在 CI 里存 secret。
