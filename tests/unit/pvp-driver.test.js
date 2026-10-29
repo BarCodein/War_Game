@@ -122,4 +122,22 @@ describe('对局驱动：快照广播', () => {
     for (let ms = 0; ms < 200; ms += 16) driver.tickOnce(ms);
     expect(match.ticks).toBe(ticks);
   });
+
+  it('stats() 汇总 tick 成本与快照条数（/api/health 的 sim 字段）', () => {
+    const io = fakeIo();
+    const match = makeMatch();
+    const room = { code: 'STAT01', match };
+    const driver = createMatchDriver({ io, config: { snapshotHz: 15 }, roomChannel });
+    driver.attach(room);
+    for (let ms = 0; ms <= 200; ms += 16) driver.tickOnce(1000 + ms);
+
+    const stats = driver.stats();
+    expect(stats.matches).toBe(1);
+    expect(stats.ticks).toBeGreaterThan(5);
+    expect(stats.snapshotsSent).toBeGreaterThanOrEqual(2);
+    expect(stats.tickMsAvg).toBeGreaterThan(0);
+    expect(stats.tickMsMax).toBeGreaterThan(0);
+    expect(stats.slowTicks).toBeGreaterThanOrEqual(0);
+    expect(Number.isFinite(stats.slowTicks)).toBe(true);
+  });
 });

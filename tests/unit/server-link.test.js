@@ -37,6 +37,10 @@ describe('PvP 链路：REST', () => {
     expect(typeof body.version).toBe('string');
     expect(body.node).toMatch(/^v\d+/);
     expect(Number.isFinite(body.uptimeSeconds)).toBe(true);
+    // P6：容量观测字段（压测脚本 scripts/pvp-load.mjs 据此判定 1 核是否够用）
+    expect(body.sim).toMatchObject({ matches: expect.any(Number), snapshotsSent: expect.any(Number) });
+    expect(Number.isFinite(body.sim.tickMsAvg)).toBe(true);
+    expect(Number.isFinite(body.reconnectGraceSeconds)).toBe(true);
   });
 
   it('/api 下的未知路径给出 404 JSON（而不是 HTML 或静态回退）', async () => {

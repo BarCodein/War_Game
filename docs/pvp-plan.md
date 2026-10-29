@@ -15,7 +15,8 @@
 - [x] **P3 房间码匹配**（已实现并本地实测，见 §11.4）：`server/src/rooms.js`（状态机 + 6 位码 + TTL/倒计时/离场）、`server/src/routes/rooms.js`、`/api/rooms/*`、socket `match:join|ready|leave` + `match:state|begin|end`、`pvp.html` 房间大厅、`tests/unit/server-rooms.test.js`（10 条）、`tests/e2e/pvp-rooms.spec.js`（3 条）
 - [x] **P4 对局同步与胜负**（已实现并本地实测，见 §11.5）：`server/src/driver.js`（单 60Hz 调度 + 15Hz 分阵营快照 + 结束只结算一次）、socket `cmd` 上行、`pvp-battle.html` + `src/pvp/battle.js`（复用地形/迷雾/单位渲染 + 插值 + DOM HUD）、`src/pvp/interpolate.js`、`tests/unit/pvp-driver.test.js` + `pvp-interpolate.test.js`（10 条）、`tests/e2e/pvp-battle.spec.js`（双上下文全流程）
 - [x] **P5 断线重连**（已实现并本地实测，见 §11.7）：座位 `connected`/`reconnectToken`、静默期后播报 `opponent:left`、30s 宽限内 `match:join` 续局、超时判负（`disconnect-timeout`）、重开页面/服务器重启的提示、`tests/unit/pvp-reconnect.test.js`（5 条）、`tests/e2e/pvp-reconnect.spec.js`（2 条）
-- [ ] P6 部署配置与验收 → P7 打磨（含 §11.6 的 PvP 交互对齐，待排期）
+- [x] **P6 容量验收与部署脚本**（已实现并本地实测，见 §11.8）：`scripts/pvp-load.mjs`（4 房间 × 8 人压测，自动判 PASS/FAIL）、`deploy/update.sh`（服务器一键更新 + 健康检查）、`/api/health` 增加 `sim.*`（tick 成本/超预算次数/快照条数）；实测 4 房间平均 0.712 ms/tick、超预算占比 0.053%、快照 13.4 Hz、RTT 4 ms、第 5 房间 503
+- [ ] P7 打磨（含 §11.6 的 PvP 交互对齐，待排期）
 
 ---
 
@@ -851,3 +852,53 @@ npx vitest run tests/unit/pvp-reconnect.test.js
 ```
 
 > e2e 用 `playwright.config.js` 里的 `PVP_RECONNECT_SECONDS=4` 把宽限压到 4 秒，线上仍是 30 秒。
+
+---
+
+## 11.8 已实现：P6 容量验收与部署脚本（含实测）
+
+**交付物**
+
+| 文件 | 作用 |
+|---|---|
+| `scripts/pvp-load.mjs` | 容量压测：自动注册 2×N 个账号 → 建房/加入/准备 → 持续下令（默认 2–3 Hz/人，保持单位移动的最坏负载）→ 每秒采样 `/api/health` 与每个玩家的快照速率/RTT → 打印 PASS/FAIL |
+| `server/src/driver.js` | 新增 `stats()`：活动对局数、已发快照条数、`tickMsAvg` / `tickMsMax` / `slowTicks`（超出 `values.performance.simTickBudgetMs`=8ms 的 tick 数） |
+| `server/src/match.js` | `stats.slowTicks` 计数（单次 GC 尖峰不应判失败，用"超预算占比"作为判据） |
+| `server/src/app.js` | `/api/health` 增加 `sim`（容量观测）与 `reconnectGraceSeconds`（运维参数） |
+| `deploy/update.sh` | 服务器侧一键更新：`git pull`（跳过 LFS）→ `npm ci --omit=dev` → `systemctl restart` → `/api/health` 校验 → 打印最近日志；支持 `--check-only` 只做健康检查 |
+
+**压测判据**（与 §3.10 的 1 核容量结论一致）
+
+| 指标 | 阈值 |
+|---|---|
+| 活动对局数 | = 建房数（4 房间 / 8 人） |
+| 平均 tick | < 2 ms |
+| 超预算 tick 占比 | < 0.1%（最大 tick 只作观察值） |
+| 快照速率 | 11–16 Hz（15 Hz 的 ±25%） |
+| RTT | < 300 ms |
+| 掉线 | 0 次 |
+| 命令 | 全部被接受（无 `BAD_COMMAND` / 超频拒绝） |
+| 容量上限 | 第 5 个房间返回 503 `ROOM_LIMIT` |
+
+**实测（本机 4 房间 × 8 人 × 40 秒，3 Hz/人下令）**
+
+```
+tick 平均 0.712 ms · 最大 11.6 ms · 超预算 5/9392 · 已发快照 4740 条
+✅ 对局数 4/4   ✅ 平均 tick 0.712 ms   ✅ 超预算占比 0.053%
+✅ 快照 13.4 Hz  ✅ RTT 4 ms  ✅ 无掉线  ✅ 命令 ok 952 / 失败 0
+✅ 第 5 个房间被拒（503 ROOM_LIMIT）
+结论：全部通过
+```
+
+**怎么跑**
+```bash
+# 本机（服务器端与压测同一台机器，数字最保守）
+PVP_REGISTER_MAX_PER_HOUR=300 npm run server      # 压测要注册很多账号，先放宽
+node scripts/pvp-load.mjs --rooms 4 --seconds 600 --cmd-hz 3
+
+# 打线上服务器（在你自己的电脑上跑，顺便量真实网络 RTT）
+node scripts/pvp-load.mjs --server http://179.255.135.95 --rooms 4 --seconds 600
+```
+
+> 注意：压测会消耗注册限速（默认 10 次/小时/IP），线上跑之前把 `PVP_REGISTER_MAX_PER_HOUR` 临时调大，
+> 或先用 2 个房间（4 个账号）。服务器上的 `matches`、`sim.*` 也可以在压测过程中用 `curl /api/health` 直接观察。

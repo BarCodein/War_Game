@@ -159,6 +159,8 @@ export function createPvpServer(overrides = {}) {
     activeRooms: rooms.countActive(),
     matches: driver.size,          // 正在推进的对局数
     maxRooms: config.maxRooms,
+    // 容量观测（P6）：tick 成本与快照条数，压测脚本据此判定 1 核是否够用
+    sim: driver.stats(),
     // 运维参数：掉线重连宽限、快照频率（线上默认 30s / 15Hz；e2e 会调小）
     reconnectGraceSeconds: Math.round(config.disconnectGraceMs / 1000),
     snapshotHz: config.snapshotHz,

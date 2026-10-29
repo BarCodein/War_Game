@@ -12,6 +12,7 @@ export const SNAPSHOT_CHANNEL = (code, faction) => `room:${code}:${faction}`;
 export function createMatchDriver({ io, config, roomChannel, onMatchEnd = null, now = () => Date.now() }) {
   const active = new Map();          // code → { room, lastSnapshotAt }
   const snapshotMs = Math.max(16, Math.round(1000 / config.snapshotHz));
+  const totals = { snapshots: 0, frames: 0, tickMsTotal: 0, tickMsMax: 0 };
   let timer = null;
 
   function attach(room) {
@@ -31,6 +32,7 @@ export function createMatchDriver({ io, config, roomChannel, onMatchEnd = null, 
     for (const faction of ['blue', 'red']) {
       io.to(SNAPSHOT_CHANNEL(room.code, faction)).emit('tick', match.snapshotFor(faction));
     }
+    totals.snapshots += 2;   // 两个阵营各一份
   }
 
   function finish({ room }) {
@@ -51,12 +53,14 @@ export function createMatchDriver({ io, config, roomChannel, onMatchEnd = null, 
   }
 
   function tickOnce(nowMs = now()) {
+    totals.frames += 1;
     for (const entry of active.values()) {
       const { room } = entry;
       if (!room.match) continue;
       if (room.match.phase === 'finished') { finish(entry); continue; }
 
       room.match.update(nowMs);
+
       if (room.match.phase === 'finished') { finish(entry); continue; }
 
       if (nowMs - entry.lastSnapshotAt >= snapshotMs) {
@@ -66,10 +70,39 @@ export function createMatchDriver({ io, config, roomChannel, onMatchEnd = null, 
     }
   }
 
+  /**
+   * 容量观测（/api/health 用）：活动对局数、快照条数、tick 平均成本与"超出 8ms 预算"的次数。
+   * 注意 tickMsAvg 是**所有活动对局以来的累计平均**（不是瞬时值），便于压测时看整体水平。
+   */
+  function stats() {
+    let ticks = 0;
+    let total = 0;
+    let max = 0;
+    let slowTicks = 0;
+    for (const { room } of active.values()) {
+      const match = room.match;
+      if (!match) continue;
+      ticks += match.ticks;
+      total += match.stats?.tickMsTotal ?? 0;
+      slowTicks += match.stats?.slowTicks ?? 0;
+      if ((match.stats?.tickMsMax ?? 0) > max) max = match.stats.tickMsMax;
+    }
+    return {
+      matches: active.size,
+      snapshotsSent: totals.snapshots,
+      frames: totals.frames,
+      ticks,
+      slowTicks,
+      tickMsAvg: ticks ? Number((total / ticks).toFixed(3)) : 0,
+      tickMsMax: Number(max.toFixed(2)),
+    };
+  }
+
   return {
     attach,
     detach,
     emitSnapshots,
+    stats,
     /** 单步推进（测试用；生产由 start() 的定时器调用） */
     tickOnce,
     start() {

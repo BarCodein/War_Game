@@ -267,3 +267,54 @@ curl -s http://127.0.0.1:3001/api/health | head -c 120; echo
 | 自检页 REST 正常、WS 一直"连接中→失败" | `location /socket.io/` 少了 `proxy_set_header Upgrade/Connection`，或 `proxy_read_timeout` 太短 |
 | `journalctl` 里内存被杀 | 1 核 2 GB：确认没在服务器上跑 `npm run build`；检查 `MemoryMax=1G` 与 `PVP_MAX_ROOMS` |
 | `npm ci` 在服务器上很慢/失败 | 只装运行时依赖（`--omit=dev`）；主仓私有则先配好 Deploy Key |
+
+---
+
+## 10. 压测与容量验收（P6）
+
+服务器是 1 核 / 2 GB，容量结论见 `docs/pvp-plan.md` §3.10：**同时最多 4 个对局（8 人）**，第 5 个房间返回 503。
+压测脚本在本地跑（也能打线上）：
+
+```bash
+# ① 服务器上先把注册限速放宽（压测要注册 2×房间数 个账号）
+sudo systemctl stop war-game
+sudo env PVP_REGISTER_MAX_PER_HOUR=300 node /opt/war-game-server/server/src/index.js   # 临时前台跑，或改 unit 的 Environment=
+# ② 在任意机器上压测（4 房间 × 8 人 × 10 分钟）
+node scripts/pvp-load.mjs --server http://179.255.135.95 --rooms 4 --seconds 600 --cmd-hz 3
+```
+
+判据（脚本会自己打 ✅/❌）：
+
+| 指标 | 阈值 |
+|---|---|
+| 活动对局数 | = 建房数（4） |
+| 平均 tick | < 2 ms |
+| 超预算 tick 占比（>8ms） | < 0.1% |
+| 快照速率 | 11–16 Hz |
+| RTT | < 300 ms |
+| 掉线 | 0 次 |
+| 命令 | 全部接受 |
+| 第 5 个房间 | 503 `ROOM_LIMIT` |
+
+压测过程中也可以直接看服务器：
+
+```bash
+curl -s http://127.0.0.1:3001/api/health | python3 -m json.tool | head -30
+# matches=4、sim.tickMsAvg、sim.slowTicks、sim.snapshotsSent
+top -b -n1 | head -12        # 看 node 的 CPU%
+systemctl status war-game --no-pager
+```
+
+### 10.1 验收记录（填这里）
+
+| 日期 | 房间数 | 时长 | 平均 tick | 超预算占比 | 快照 Hz | RTT | CPU% | RSS | 结论 |
+|---|---|---|---|---|---|---|---|---|---|
+| 2026-10-29（本机） | 4 | 40s | 0.712 ms | 0.053%（5/9392） | 13.4 Hz | 4 ms | — | — | 全部通过 |
+| 待填（服务器） | 4 | 600s |  |  |  |  |  |  |  |
+
+### 10.2 日常更新（P6 交付）
+
+```bash
+sudo /opt/war-game-server/deploy/update.sh              # 拉代码 + 装依赖 + 重启 + 健康检查
+sudo /opt/war-game-server/deploy/update.sh --check-only # 只做健康检查
+```

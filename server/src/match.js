@@ -62,7 +62,7 @@ export class MatchSim {
     this.result = null;
     this.events = [];
     this.eventCursor = 0;
-    this.stats = { tickMsTotal: 0, tickMsMax: 0, commands: { blue: 0, red: 0 }, rejected: 0 };
+    this.stats = { tickMsTotal: 0, tickMsMax: 0, slowTicks: 0, commands: { blue: 0, red: 0 }, rejected: 0 };
     this.commandWindows = { blue: { start: 0, count: 0 }, red: { start: 0, count: 0 } };
   }
 
@@ -126,6 +126,9 @@ export class MatchSim {
     const cost = performance.now() - beganAt;
     this.stats.tickMsTotal += cost;
     if (cost > this.stats.tickMsMax) this.stats.tickMsMax = cost;
+    // 超出单帧预算（values.performance.simTickBudgetMs，默认 8ms）的次数：
+    // 比"绝对值最大"更能说明 1 核上是否真的卡（一次 GC 尖峰不该算失败）
+    if (cost > values.performance.simTickBudgetMs) this.stats.slowTicks += 1;
 
     this.ticks += 1;
     this.collectEvents();
