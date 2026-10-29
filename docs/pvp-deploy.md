@@ -178,11 +178,15 @@ PVP_SERVE_STATIC=1 npm run server                    # Windows PowerShell：
 ### 7.3 自动化测试（每次改完代码跑）
 
 ```bash
-npx vitest run tests/unit/server-link.test.js
+npx vitest run tests/unit/server-link.test.js     # 链路契约（4 条）
+npx vitest run tests/unit/server-auth.test.js     # 账号契约（10 条）
+npx vitest run tests/unit/pvp-match.test.js tests/unit/pvp-levels.test.js   # 权威对局 + 对称兵力（28 条）
+node scripts/pvp-selftest.mjs --seconds 600       # 无头跑一整局，打印 tick 成本与结算
+node scripts/pvp-selftest.mjs --seconds 240 --verify   # 重放确定性比对（逐 tick 快照哈希）
 ```
 
 覆盖：`/api/health` 字段与容量、`/api/*` 未知路径 404 JSON、socket.io 握手 `link:hello`、
-`link:ping` 往返 ack、连接数出现在 `/api/health` 里。
+`link:ping` 往返 ack、连接数出现在 `/api/health` 里；账号全链路；对局初始化/准备/命令校验/视野/胜负/超时/确定性/性能。
 
 ---
 

@@ -11,7 +11,8 @@
 - [x] **P0 需求与前置**：七项决定 + 服务器实情确认（§2）
 - [x] **P1a 链路打通**（已实现并本地实测，见 §11）：`server/`（express + socket.io）、`GET /api/health`、`/socket.io` 握手与 `link:ping`、`pvp.html` 自检页、`deploy/` 模板、`docs/pvp-deploy.md`、`tests/unit/server-link.test.js`
 - [x] **P1b 账号体系**（已实现并本地实测，见 §11.2）：SQLite（better-sqlite3 + 迁移）、注册/登录/登出/`me`、scrypt 加盐、HttpOnly 会话 Cookie、按 IP 失败限速、`pvp.html` 账号面板、`tests/unit/server-auth.test.js`（10 条）、`tests/e2e/pvp-auth.spec.js`（3 条）
-- [ ] P2 引擎上服务器（MatchSim）→ P3 房间码 → P4 对局同步 → P5 断线 → P6 部署配置与验收 → P7 打磨
+- [x] **P2 权威对局（MatchSim）**（已实现并本地实测，见 §11.3）：`server/src/match.js`（60Hz 固定步长 + 命令队列 + 胜负 + 超时判定）、`server/src/snapshot.js`（按阵营过滤视野）、`server/src/levels.js`、`public/assets/pvp/*.json`（对称兵力模板）、`scripts/pvp-selftest.mjs`、`tests/unit/pvp-match.test.js` + `pvp-levels.test.js`（28 条）
+- [ ] P3 房间码 → P4 对局同步 → P5 断线 → P6 部署配置与验收 → P7 打磨
 
 ---
 
@@ -224,12 +225,17 @@ match_players(match_id TEXT, user_id INTEGER, faction TEXT, reconnect_token TEXT
 | `opponent:left` / `opponent:rejoin` | `{graceSeconds}` | 掉线播报与重连提示 |
 | `error` | `{code, message}` | 统一错误码（见 `docs/pvp-protocol.md`） |
 
-### 3.8 对称 1v1 兵力模板（P2 交付）
+### 3.8 对称 1v1 兵力模板（P2 已交付）
 
-现有战役关卡的 `forces` 是**剧本化**的（平津 17v23、渡江 20v21，城市数对称但兵力不对称）。PvP 需要：
+现有战役关卡的 `forces` 是**剧本化**的（平津 17v23、渡江 20v21，城市数对称但兵力不对称），直接拿来打 PvP 不公平。最终实现：
 
-- 新增 `public/assets/pvp/dujiang_pvp.json`、`pingjin_pvp.json`：`map` 引用**同一张地图**，`forces` 左右镜像（取较少一方为基准复制给双方，出生点/朝向镜像），`victory: { "mode": "normal" }`；
-- 验收：蓝/红兵力数量与兵种构成完全相等（单测断言），出生点到最近城市距离对称（±5%）。
+- 新增 `public/assets/pvp/dujiang_pvp.json`、`pingjin_pvp.json`：`map` 引用**同一张地图**，`victory: { "mode": "normal" }`，**没有 AI 脚本**；
+- **双方兵种与数量完全相同**（渡江 10 轻 + 6 重 = 16v16；平津 8 轻 + 4 重 = 12v12），每侧 2 个集结点；
+- **各自只使用本方地图出生点**（不采用"坐标镜像"：渡江有河，镜像坐标会把部队放进水里；用地图自带出生点可保证出生即可通行，测试里逐单位断言 `terrain.passableAt`）；
+- 双方集结点**最小间距 ≥ 400px**（视野 140/160、城市 180），避免开局就被对方目视；
+- 验收（`tests/unit/pvp-levels.test.js`，6 条）：兵种/数量相等、只用本方出生点、出生点可通行、间距 ≥ 400、双方各持城市且数量相等、normal + 无 AI。
+
+> 说明：地图上城市是交错的，城市视野（180）会让双方在开局看到**部分**敌军——这是地图本身决定的，不是漏发数据；`tests/unit/pvp-match.test.js` 用"快照里的敌军恰好等于被目视的集合"来锁定防透视契约。
 
 ### 3.9 部署（基于你现有的 Nginx 配置，你手动执行）
 
@@ -528,6 +534,7 @@ CI 增补（P6）：`npm test` + `npm run test:e2e`（含 PvP 双上下文用例
 | 2026-10-29 | 三轮确认：公网 **179.255.135.95**、静态根 `/var/www/html/war_game/repo`、`/videos/` → `/var/www/html/videos/`。§3.9 重写为“可直接贴进你现有 `sites-enabled/default` 的 Nginx 片段 + Node 22/克隆（跳过 LFS）/systemd（`MemoryMax=1G`、`StateDirectory`）逐步清单”；记录旧视频 IP 待统一（非本计划范围） |
 | 2026-10-29 | **P1a 链路打通已实现**（§11）：`server/`（express 5 + socket.io 4）、`/api/health`、`/socket.io` 握手 + `link:ping`、`pvp.html` 自检页、`deploy/` 模板、`docs/pvp-deploy.md`、`tests/unit/server-link.test.js`；依赖改挂仓库根；Vite 加 `/api`、`/socket.io` 开发代理 |
 | 2026-10-29 | **P1b 账号体系已实现**（§11.2）：`server/src/db.js`（better-sqlite3 + 迁移）、`server/src/auth.js`（scrypt/会话/限速/Cookie 解析）、`server/src/routes/auth.js`、`/api/auth/*` 四个接口、`pvp.html` 账号面板、`tests/unit/server-auth.test.js`（10）、`tests/e2e/pvp-auth.spec.js`（3）、`playwright.config.js` 增加 Node 服务 webServer、`AGENTS.md` 记录 PvP 例外 |
+| 2026-10-29 | **P2 权威对局已实现**（§11.3）：`server/src/match.js`、`snapshot.js`、`levels.js`、`public/assets/pvp/*.json`（对称 16v16 / 12v12）、`scripts/pvp-selftest.mjs`、28 条单测。实测 0.65–0.85 ms/tick、快照 4.2–6 KB、重放 14400 tick 哈希一致；修正 §3.8 的兵力方案（改用"双方同编制 + 各自出生点 + 最小间距 400px"，不采用坐标镜像） |
 
 ---
 
@@ -599,3 +606,46 @@ CI 增补（P6）：`npm test` + `npm run test:e2e`（含 PvP 双上下文用例
 
 **本地怎么看**：`npm run server` + `npm run dev` → `http://localhost:5173/pvp.html`，账号面板里注册/登录/登出；
 或单进程 `npm run build` + `PVP_SERVE_STATIC=1 npm run server` → `http://127.0.0.1:3001/pvp.html`。
+
+---
+
+## 11.3 已实现：P2 权威对局 MatchSim（含实测）
+
+**新增文件**
+
+| 文件 | 作用 |
+|---|---|
+| `server/src/match.js` | `MatchSim`：60Hz 固定步长（`values.simulation.fixedStep`）、`update(now)` 按真实时间补步（单次最多 5 步）、`step(n)` 确定性推进、`queueCommand`（阵营归属 + `validateCommand` + 20 条/秒限频）、`snapshotFor(faction)`、胜负与超时结算、`warmupEngine()` 预热 |
+| `server/src/snapshot.js` | 按阵营过滤视野的快照序列化：己方全量、敌方仅 `isSpotted` 为真、死亡单位不下发；数值保留 1 位小数控制体积 |
+| `server/src/levels.js` | 读 `public/assets/pvp/<id>.json` + 对应地图，复用战役的 `parseLevel` 校验 |
+| `public/assets/pvp/dujiang_pvp.json` / `pingjin_pvp.json` | 对称兵力模板（16v16 / 12v12），`victory: normal`，无 AI |
+| `scripts/pvp-selftest.mjs` | 无头自检 CLI：跑一整局并打印 tick 成本/快照体积/视野过滤/结算；`--verify` 做重放比对 |
+| `tests/unit/pvp-match.test.js`（22）+ `tests/unit/pvp-levels.test.js`（6） | 见下表 |
+
+**对局时间模型**
+
+| 项 | 实现 |
+|---|---|
+| 逻辑步长 | 1/60 s（`STEP_MS ≈ 16.67`），"权威时间" = tick 数 × 步长 |
+| 实时驱动 | `update(now)` 用单调时钟累加；单次最多补 5 步，单帧间隔上限 1000 ms，积压过多直接丢弃（不追帧瞬移） |
+| 准备阶段 | 复用 `values.prep.seconds`（5 s），期间模拟冻结但**允许下预备命令**；`prepMs: 0` 可直接开打（测试/自检用） |
+| 时长上限 | `timeLimitMs` 默认 600 s；到点按「城市数 → 存活单位总血量 → 判平」定胜负 |
+| 胜负 | 引擎 `victory.js` 的 `normal`（占光全部城市）；结算**只发生一次**（`result` + 一条 `matchEnd` 事件） |
+| 预热 | 建局时 `warmupEngine({level,map,ticks:60})` 用一次性 World 空跑，抹掉首帧 28–34 ms 的 JIT 尖峰（实测正式对局最大 tick 34.1 → 16.5 ms） |
+
+**实测（本机 Node 24；服务器 Node 22 + 1 核，按 §3.10 乘以 2–3 倍余量）**
+
+| 项 | 结果 |
+|---|---|
+| 全量单测（PvP 部分） | **28 passed**：初始化对称（16v16 / 12v12）、准备阶段冻结+预备命令、补步上限、命令归属/非法命令/限频 20 条、视野过滤契约、normal 胜负只结算一次、超时判定、结束后拒命令、预热独立性、**重放 600 tick 快照哈希逐个一致**、**12000 tick 平均 0.65–0.75 ms/tick、最大 6.4 ms、快照 5.95 KB** |
+| 无头整局（`--seconds 600`） | 36000 tick / 600 s 模拟 · 平均 **0.85 ms/tick** · 最大 16.5 ms（预热后）· 快照 4.2–5.4 KB · 双方各 16 单位 · 城市 9:7 · **winner=blue, reason=time-limit** · 伤亡 blue 704 / red 2105 |
+| 确定性（`--verify`） | 两次重放的 **14400 个 tick 快照哈希完全一致** |
+| 视野过滤 | blue 视角只看到 9/16 个红军（其余在视野外，压根没下发） |
+
+**本地怎么看（不需要浏览器）**
+```bash
+node scripts/pvp-selftest.mjs --seconds 600            # 跑一整局，看结算与 tick 成本
+node scripts/pvp-selftest.mjs --seconds 240 --verify   # 额外做重放确定性比对
+node scripts/pvp-selftest.mjs --level pingjin_pvp --seconds 120 --no-prep
+npx vitest run tests/unit/pvp-match.test.js tests/unit/pvp-levels.test.js
+```

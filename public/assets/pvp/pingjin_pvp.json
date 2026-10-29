@@ -1,0 +1,51 @@
+{
+  "version": 1,
+  "id": "pingjin_pvp",
+  "name": "平津战役 · 1v1",
+  "subtitle": "PvP 对称对峙",
+  "type": "offensive",
+  "difficulty": "",
+  "order": 901,
+  "description": "1v1 联机专用：沿用平津地图（城市 4v4），双方兵力完全相同，各 2 个集结点；占光对方全部城市即胜；10 分钟时限。",
+  "map": "/assets/maps/pingjin.json",
+  "anchors": {},
+  "forces": [
+    {
+      "faction": "blue",
+      "at": { "spawnId": "s35" },
+      "group": "blue-west",
+      "units": [
+        { "type": "light", "count": 4, "spacing": { "x": 32, "y": 0 } },
+        { "type": "heavy", "count": 2, "offset": { "x": 0, "y": 40 }, "spacing": { "x": 32, "y": 0 } }
+      ]
+    },
+    {
+      "faction": "blue",
+      "at": { "spawnId": "s47" },
+      "group": "blue-main",
+      "units": [
+        { "type": "light", "count": 4, "spacing": { "x": 32, "y": 0 } },
+        { "type": "heavy", "count": 2, "offset": { "x": 0, "y": 40 }, "spacing": { "x": 32, "y": 0 } }
+      ]
+    },
+    {
+      "faction": "red",
+      "at": { "spawnId": "s49" },
+      "group": "red-east",
+      "units": [
+        { "type": "light", "count": 4, "spacing": { "x": 32, "y": 0 } },
+        { "type": "heavy", "count": 2, "offset": { "x": 0, "y": 40 }, "spacing": { "x": 32, "y": 0 } }
+      ]
+    },
+    {
+      "faction": "red",
+      "at": { "spawnId": "s48" },
+      "group": "red-main",
+      "units": [
+        { "type": "light", "count": 4, "spacing": { "x": 32, "y": 0 } },
+        { "type": "heavy", "count": 2, "offset": { "x": 0, "y": 40 }, "spacing": { "x": 32, "y": 0 } }
+      ]
+    }
+  ],
+  "victory": { "mode": "normal" }
+}
