@@ -238,6 +238,12 @@ export class MatchSim {
     return Math.max(0, this.timeLimitMs - this.elapsedMs());
   }
 
+  /** 准备阶段剩余毫秒（客户端据此显示 5 秒读秒；非准备阶段返回 0） */
+  prepRemainingMs(nowMs = this.now()) {
+    if (this.phase !== 'prep' || this.prepEndsAt === null) return 0;
+    return Math.max(0, this.prepEndsAt - nowMs);
+  }
+
   cityCount(faction) {
     return this.world.cities.filter((city) => city.faction === faction).length;
   }

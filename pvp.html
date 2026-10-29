@@ -592,6 +592,11 @@
               $('startedFaction').textContent = mine ? (mine.faction === 'blue' ? '蓝方' : '红方') : '—';
               $('startedPrep').textContent = payload.prepSeconds + ' 秒';
               log('MATCH begin ' + payload.matchId + ' · ' + payload.levelId);
+              // P4：进入对局页（画布只渲染服务器快照；房间码/关卡通过 query 传过去）
+              var code = payload.roomCode || roomCode || '';
+              var battleUrl = 'pvp-battle.html?room=' + encodeURIComponent(code) +
+                '&level=' + encodeURIComponent(payload.levelId);
+              setTimeout(function () { location.href = battleUrl; }, 400);
             });
             socket.on('match:end', function (payload) {
               log('MATCH end · ' + payload.winner + ' · ' + payload.reason);

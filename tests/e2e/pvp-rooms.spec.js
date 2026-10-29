@@ -8,8 +8,11 @@ const password = 'room-e2e-pass-1';
 
 async function register(page, username) {
   await page.goto('/pvp.html');
+  await page.waitForLoadState('load');
   await page.fill('#inputUsername', username);
+  await expect(page.locator('#inputUsername')).toHaveValue(username);
   await page.fill('#inputPassword', password);
+  await expect(page.locator('#inputPassword')).toHaveValue(password);
   await page.click('#btnRegister');
   await expect(page.locator('#authLoggedIn')).toBeVisible({ timeout: 15000 });
   await expect(page.locator('#meName')).toHaveText(username);
@@ -50,13 +53,13 @@ test.describe('PvP 房间码匹配', () => {
       await expect(pageA.locator('#btnReady')).toHaveText('取消准备');
       await pageB.click('#btnReady');
 
-      // 倒计时 3 秒后开局（两端都收到 match:begin）
-      await expect(pageA.locator('#roomStarted')).toBeVisible({ timeout: 20000 });
-      await expect(pageB.locator('#roomStarted')).toBeVisible({ timeout: 20000 });
-      await expect(pageA.locator('#startedLevel')).toHaveText('dujiang_pvp');
-      await expect(pageA.locator('#startedFaction')).toHaveText('蓝方');
-      await expect(pageB.locator('#startedFaction')).toHaveText('红方');
-      await expect(pageA.locator('#startedPrep')).toContainText('5');
+      // 倒计时 3 秒后开局：P4 起自动跳转到对局页（pvp-battle.html?room=..&level=..）
+      await pageA.waitForURL(/pvp-battle\.html/, { timeout: 30000 });
+      await pageB.waitForURL(/pvp-battle\.html/, { timeout: 30000 });
+      expect(pageA.url()).toContain(`room=${code}`);
+      expect(pageA.url()).toContain('level=dujiang_pvp');
+      await expect(pageA.locator('#battleStatus')).toContainText('已进入对局', { timeout: 20000 });
+      await expect(pageB.locator('#battleStatus')).toContainText('已进入对局', { timeout: 20000 });
     } finally {
       await contextA.close();
       await contextB.close();

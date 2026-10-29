@@ -63,6 +63,8 @@ export const config = {
   roomCountdownMs: number(process.env.PVP_ROOM_COUNTDOWN_SECONDS, 3) * 1000,
   // 对局时长上限（到点按城市数 → 总血量判胜）
   matchTimeLimitMs: number(process.env.PVP_MATCH_MINUTES, 10) * 60 * 1000,
+  // 房间里一个人都不剩时的宽限（P5 用它做 30s 重连窗口；从大厅跳到对局页也有 1s 左右空档）
+  disconnectGraceMs: number(process.env.PVP_RECONNECT_SECONDS, 30) * 1000,
   // 可选择的对战地图（对称兵力模板，见 public/assets/pvp/）
   pvpLevels: String(process.env.PVP_LEVELS ?? 'dujiang_pvp,pingjin_pvp')
     .split(',').map((item) => item.trim()).filter(Boolean),

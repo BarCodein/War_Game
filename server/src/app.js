@@ -11,6 +11,7 @@ import { createRoomRouter } from './routes/rooms.js';
 import { RoomError, RoomRegistry, normalizeCode, roomView } from './rooms.js';
 import { loadPvpLevel } from './levels.js';
 import { MatchSim, warmupEngine } from './match.js';
+import { SNAPSHOT_CHANNEL, createMatchDriver } from './driver.js';
 
 // PvP 服务端。
 //   · REST  GET  /api/health                —— 给 Nginx / 监控 / 自检页用
@@ -52,8 +53,9 @@ export function createPvpServer(overrides = {}) {
   });
 
   const roomChannel = (code) => `room:${code}`;
+  let driver = null;   // 60Hz 对局驱动（P4），在下面创建
 
-  // 房间管理器：开局时在这里创建权威对局（P4 再接 60Hz 驱动与快照广播）
+  // 房间管理器：开局时在这里创建权威对局；进入 playing 后由 driver 接管推进
   const rooms = new RoomRegistry({
     config,
     onBegin: (room) => {
@@ -63,11 +65,33 @@ export function createPvpServer(overrides = {}) {
       match.start(Date.now());
       return { matchId: randomUUID(), match };
     },
-    onStateChange: (room) => emitState(room),
+    onStateChange: (room) => {
+      emitState(room);
+      // 房间刚进入 playing（双方 ready + 倒计时结束）→ 交给 60Hz 驱动
+      if (room.state === 'playing' && room.match) driver?.attach(room);
+    },
     onForfeit: (room, userId) => {
       const quitter = room.players.find((player) => player.id === userId);
       const winner = quitter?.faction === 'blue' ? 'red' : 'blue';
       io.to(roomChannel(room.code)).emit('match:end', { winner, reason: 'forfeit' });
+    },
+  });
+
+  // 对局驱动：一个定时器推进所有进行中的对局，按 15Hz 给两个阵营分别发快照
+  driver = createMatchDriver({
+    io,
+    config,
+    roomChannel,
+    onMatchEnd: (room, result) => {
+      room.state = 'finished';
+      room.reason = result.reason;
+      io.to(roomChannel(room.code)).emit('match:state', {
+        ...roomView(room, null),
+        serverNow: Date.now(),
+        closed: true,
+        reason: result.reason,
+        result,
+      });
     },
   });
 
@@ -87,6 +111,7 @@ export function createPvpServer(overrides = {}) {
       room.beginEmitted = true;
       io.to(roomChannel(room.code)).emit('match:begin', {
         matchId: room.matchId,
+        roomCode: room.code,
         levelId: room.levelId,
         prepSeconds: values.prep.seconds,
         serverTime: Date.now(),
@@ -105,6 +130,7 @@ export function createPvpServer(overrides = {}) {
     uptimeSeconds: Math.round((Date.now() - startedAt) / 1000),
     rooms: rooms.size(),
     activeRooms: rooms.countActive(),
+    matches: driver.size,          // 正在推进的对局数
     maxRooms: config.maxRooms,
     snapshotHz: config.snapshotHz,
     accounts: countUsers(db),     // 注册用户数（运维可观测，不含任何敏感字段）
@@ -163,11 +189,52 @@ export function createPvpServer(overrides = {}) {
         const me = requireAuth();
         const code = normalizeCode(payload?.roomCode);
         const room = rooms.require(code);
-        if (!rooms.playerOf(room, me.id)) throw new RoomError('NOT_IN_ROOM', '你不在这个房间里', 409);
+        const player = rooms.playerOf(room, me.id);
+        if (!player) throw new RoomError('NOT_IN_ROOM', '你不在这个房间里', 409);
         socket.join(roomChannel(code));
+        socket.join(SNAPSHOT_CHANNEL(code, player.faction));   // 只收自己阵营的快照
         socket.data.roomCode = code;
-        ack?.({ ok: true, room: roomView(room, me.id) });
+        socket.data.faction = player.faction;
+
+        // 对局信息（战斗页 bootstrap / 断线重连都用它，P5 会在此基础上加 token）
+        const match = room.match;
+        const matchInfo = room.state === 'playing' || room.state === 'finished'
+          ? {
+            matchId: room.matchId,
+            levelId: room.levelId,
+            phase: match?.phase ?? 'finished',
+            tick: match?.ticks ?? 0,
+            elapsedMs: match?.elapsedMs() ?? 0,
+            timeLeftMs: match?.timeLeftMs() ?? 0,
+            prepRemainingMs: match?.prepRemainingMs() ?? 0,
+            result: match?.result ?? null,
+          }
+          : null;
+
+        ack?.({ ok: true, room: roomView(room, me.id), match: matchInfo });
         emitState(room);
+        if (match && room.state === 'playing') driver.emitSnapshots(room);
+      } catch (error) {
+        replyError(socket, ack, error);
+      }
+    });
+
+    // 指挥命令上行：服务器校验归属/格式/频率后注入权威模拟（P4）
+    socket.on('cmd', (payload, ack) => {
+      try {
+        requireAuth();
+        const code = socket.data.roomCode;
+        if (!code) throw new RoomError('NOT_IN_ROOM', '你不在对局房间里', 409);
+        const room = rooms.get(code);
+        if (!room || room.state !== 'playing' || !room.match) {
+          throw new RoomError('MATCH_NOT_PLAYING', '对局未在进行中', 409);
+        }
+        const faction = socket.data.faction;
+        const result = room.match.queueCommand(faction, {
+          unitIds: Array.isArray(payload?.unitIds) ? payload.unitIds.slice(0, 200) : [],
+          command: payload?.command,
+        });
+        ack?.(result);
       } catch (error) {
         replyError(socket, ack, error);
       }
@@ -190,7 +257,9 @@ export function createPvpServer(overrides = {}) {
         const code = normalizeCode(payload?.roomCode ?? socket.data.roomCode);
         const result = rooms.leave({ code, userId: me.id });
         socket.leave(roomChannel(code));
+        if (socket.data.faction) socket.leave(SNAPSHOT_CHANNEL(code, socket.data.faction));
         if (socket.data.roomCode === code) socket.data.roomCode = null;
+        driver.detach(code);   // 对局已结束/关闭：停止推进
         ack?.({ ok: true, closed: result.closed });
         if (result.room.players.length) emitState(result.room);
       } catch (error) {
@@ -200,7 +269,24 @@ export function createPvpServer(overrides = {}) {
 
     socket.on('disconnect', (reason) => {
       if (!config.quiet) console.log(`[ws] disconnected ${socket.id} (${reason})`);
-      // P5 会在这里开启 30s 重连窗口；P3 只记录（房间座位保留，等待对手重连）
+      // 房间里一个人都不剩 → 等 disconnectGraceMs（默认 30s，兼作 P5 的重连窗口）再回收；
+      // 从大厅跳到对局页会有 1s 左右的连接空档，不能立刻删房间，否则对局页会 ROOM_NOT_FOUND。
+      const code = socket.data.roomCode;
+      if (!code) return;
+      const stillPresent = () => (io.sockets.adapter.rooms.get(roomChannel(code))?.size ?? 0) > 0;
+      if (stillPresent()) return;   // 对手还在房间里，对局继续
+      const room = rooms.get(code);
+      if (!room) return;
+      const timer = setTimeout(() => {
+        if (stillPresent()) return;              // 这段时间里有人重连回来了
+        if (rooms.get(code) !== room) return;    // 房间已经被别处回收
+        driver.detach(code);
+        room.state = 'finished';
+        room.reason = 'abandoned';
+        rooms.rooms.delete(code);
+        if (!config.quiet) console.log(`[rooms] ${code} 双方都已断开超过 ${config.disconnectGraceMs}ms → 回收`);
+      }, config.disconnectGraceMs);
+      timer.unref?.();
     });
   });
 
@@ -210,6 +296,7 @@ export function createPvpServer(overrides = {}) {
   });
 
   rooms.start();
+  driver.start();
 
   // 每小时清一次过期会话（1 核机器上这点开销可忽略）
   const sweep = setInterval(() => {
@@ -247,6 +334,7 @@ export function createPvpServer(overrides = {}) {
     close() {
       clearInterval(sweep);
       rooms.stop();
+      driver.stop();
       return new Promise((resolve) => {
         io.close(() => {
           httpServer.close(() => {

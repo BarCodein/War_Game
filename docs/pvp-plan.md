@@ -13,7 +13,8 @@
 - [x] **P1b 账号体系**（已实现并本地实测，见 §11.2）：SQLite（better-sqlite3 + 迁移）、注册/登录/登出/`me`、scrypt 加盐、HttpOnly 会话 Cookie、按 IP 失败限速、`pvp.html` 账号面板、`tests/unit/server-auth.test.js`（10 条）、`tests/e2e/pvp-auth.spec.js`（3 条）
 - [x] **P2 权威对局（MatchSim）**（已实现并本地实测，见 §11.3）：`server/src/match.js`（60Hz 固定步长 + 命令队列 + 胜负 + 超时判定）、`server/src/snapshot.js`（按阵营过滤视野）、`server/src/levels.js`、`public/assets/pvp/*.json`（对称兵力模板）、`scripts/pvp-selftest.mjs`、`tests/unit/pvp-match.test.js` + `pvp-levels.test.js`（28 条）
 - [x] **P3 房间码匹配**（已实现并本地实测，见 §11.4）：`server/src/rooms.js`（状态机 + 6 位码 + TTL/倒计时/离场）、`server/src/routes/rooms.js`、`/api/rooms/*`、socket `match:join|ready|leave` + `match:state|begin|end`、`pvp.html` 房间大厅、`tests/unit/server-rooms.test.js`（10 条）、`tests/e2e/pvp-rooms.spec.js`（3 条）
-- [ ] P4 对局同步 → P5 断线 → P6 部署配置与验收 → P7 打磨
+- [x] **P4 对局同步与胜负**（已实现并本地实测，见 §11.5）：`server/src/driver.js`（单 60Hz 调度 + 15Hz 分阵营快照 + 结束只结算一次）、socket `cmd` 上行、`pvp-battle.html` + `src/pvp/battle.js`（复用地形/迷雾/单位渲染 + 插值 + DOM HUD）、`src/pvp/interpolate.js`、`tests/unit/pvp-driver.test.js` + `pvp-interpolate.test.js`（10 条）、`tests/e2e/pvp-battle.spec.js`（双上下文全流程）
+- [ ] P5 断线重连 → P6 部署配置与验收 → P7 打磨
 
 ---
 
@@ -711,3 +712,95 @@ npx playwright test tests/e2e/pvp-rooms.spec.js   # 自动化双上下文（本�
 
 > 注意：e2e 会反复注册账号，而注册限速默认 10 次/小时/IP。`playwright.config.js` 里已给 Node 服务设了
 > `PVP_REGISTER_MAX_PER_HOUR=1000`，只在 e2e 拉起的进程里生效，线上仍是默认值。
+
+---
+
+## 11.5 已实现：P4 对局同步与胜负（含实测）
+
+**新增文件**
+
+| 文件 | 作用 |
+|---|---|
+| `server/src/driver.js` | 唯一的 60Hz 调度器：遍历所有进行中对局 → `match.update(now)` → 按 `snapshotHz`（15Hz）节流，**分阵营频道**（`room:<code>:blue` / `:red`）发 `tick` 快照；对局结束只发一次 `match:end` 并从活动表移除 |
+| `server/src/app.js` | socket `match:join`（同时加入房间频道与**自己阵营**的快照频道，ack 返回 match 信息）、`cmd`（归属/格式/频率校验后注入 MatchSim）、`disconnect` 的 30s 宽限回收 |
+| `pvp-battle.html` | 对局页：全屏 Phaser 画布 + DOM HUD（房间/阵营、计时、城市数、可见敌军、RTT、准备读秒、结算弹窗、操作提示） |
+| `src/pvp/battle.js` | 客户端：用同一份关卡/地图建**镜像 World**（单位 id 与服务器一致），收到快照只覆盖状态、从不 tick；复用地形/迷雾/单位渲染器；左键点选/框选 + 右键移动 / Shift+右键攻击前进 → `cmd` 上行；`window.__pvp` 调试钩子 |
+| `src/pvp/interpolate.js` | 纯函数插值（15Hz 快照 → 60FPS 渲染），静止时精确等于快照坐标 |
+| `tests/unit/pvp-driver.test.js`（5）+ `tests/unit/pvp-interpolate.test.js`（5） | 见下方实测 |
+| `tests/e2e/pvp-battle.spec.js` | 双浏览器上下文全流程 |
+
+**数据流**
+
+```
+玩家点选/右键 ──socket 'cmd'{unitIds,command}──► MatchSim.queueCommand(faction)  ← 归属校验 + validateCommand + 20 条/秒
+                                                        │
+                                         60Hz driver.tickOnce()
+                                                        │ 每 1/15s
+                        ┌───────────────────────────────┴──────────────────────────┐
+              'tick' → room:<code>:blue（只含蓝方可见的）              'tick' → room:<code>:red
+                        │                                                          │
+              镜像 world（覆盖位置/血量/归属）+ 本地迷雾 + 插值 ◄──────── 各自浏览器
+```
+
+**验收对照**
+
+| P4 验收项 | 结果 |
+|---|---|
+| 客户端坐标与服务器快照误差 < 0.5 px | 单测锁定"alpha=1 时精确等于快照"；e2e 实测静止单位 `max|坐标 − 快照|` **< 0.5 px** |
+| 胜负两端一致 | 单测：城市全被占 → `match:end` 只发一次且 `winner/reason` 正确；e2e：双端进入对局并持续收到快照 |
+| 视野隔离 | 单测：快照里的敌军 = 恰好被 `isSpotted` 的集合；e2e：开局 `visibleEnemies < 16`；截图里 16 个红军只显示 8 个 |
+| 5s 准备两端同步 | `match:begin` 带 `prepSeconds=5`；客户端 `#prepOverlay` 读秒，阶段切到 playing 后隐藏（e2e 断言） |
+| 到点按城市数判胜 | `MatchSim` 超时判定（P2 单测）+ driver 把 `match:end` 广播 |
+| 输入→画面反馈 < 200 ms | 同机实测：命令 ack 往返显示在 `#battleStatus`（截图里 RTT 2 ms） |
+| 暂停/加速键禁用 | 对局页不加载 `createKeyboard`，没有任何暂停/加速入口 |
+
+**实测**
+
+| 项 | 结果 |
+|---|---|
+| `tests/unit/pvp-driver.test.js` | **5 passed**：分阵营频道各发一份（`you` 正确）、200ms 内模拟 ≥10 tick 而快照仅 2–5 批（60Hz vs 15Hz）、结束只结算一次、attach 幂等、detach 后不再推进 |
+| `tests/unit/pvp-interpolate.test.js` | **5 passed**：clamp/alpha、端点精确、静止时误差 0、缺数据不出 NaN |
+| `tests/e2e/pvp-battle.spec.js`（Edge，双上下文） | **passed**：注册 → 建房 → 加入 → 双方准备 → 自动跳转对局页 → `snapshotCount > 3` 且 `#battleStatus` 显示"已进入对局" → 阵营 蓝/红 → 城市 16 座、`ownUnits ≥ 16`、`visibleEnemies < 16` → 静止单位与快照 < 0.5px → 点选 ≥ 1 个单位 → 右键下令 `commandsSent` 增长 → 单位开始移动 → 阶段转 playing、`#prepOverlay` 隐藏、计时器在走 |
+| 回归（rooms + auth e2e） | 大厅跳转对局页时会有一瞬间房间无人，被"双方断开回收"误删 → 改成 30s 宽限后通过 |
+| 全量单测 | **552 passed / 8 failed**（8 条仍是既有供应/配置漂移） |
+
+**截图**：`test-results/pvp-battle.png`（房间 F7G3PG、蓝方、城市 8:8、可见敌军 8、RTT 2 ms、准备结束后的计时 09:56）。
+
+**本地怎么看（浏览器，两人对战）**
+```bash
+npm run server                 # 终端 A
+npm run dev                    # 终端 B → http://localhost:5173/pvp.html
+# 无痕窗口注册第二个账号 → A 建房 → B 输码加入 → 双方准备 → 3 秒后自动进入对局页
+# 对局页：左键点选/框选己方部队，右键移动，Shift+右键 攻击前进
+npx vitest run tests/unit/pvp-driver.test.js tests/unit/pvp-interpolate.test.js
+```
+
+**两处实现说明（与原计划的偏差）**
+1. 客户端不做"快照缓冲 + 回放"式插值，而是"上一帧位置 → 最新快照"的线性追赶（`alphaFor` + `interpolatePosition`）：静止时必然精确等于快照，运动中最多滞后约一个快照间隔（~66ms），实现简单且可测。
+2. 快照按**阵营频道**广播（`room:<code>:blue` / `:red`）而不是逐 socket 单发：加入房间时 socket 同时加入自己阵营的频道，服务端只需两次 `emit`，1 核上更省。
+
+---
+
+## 11.6 已知差异：PvP 的交互暂未对齐战役（待排期）
+
+`src/simulation` 是同一套内核，但**界面交互层没有沿用**战役的那一套。原因不是"内核不同"，而是
+**客户端不再拥有世界状态**：战役里 `createOrders` 直接往本地 `world` 下命令、并读 `unit.route` 画轨迹；
+PvP 的本地世界只是"被快照覆盖的镜像"，且快照目前不含 `route` / `pendingQueue`。
+
+| 战役里的能力 | PvP 现状 | 缺的层 |
+|---|---|---|
+| 左键拖轨迹下令（`move` / `appendRoute` / `enqueueRoute`）、E 急行军 | ❌ 只有右键 `move`、Shift+右键 `attackMove` | 客户端输入层（`src/input/orders.js` 未复用） |
+| 行军路径显示 / 轨迹箭头 | ❌ 只有 700ms 落点圆圈 | 快照需为**己方**单位补 `route`（敌方绝不能发） |
+| S 停止/坚守（`hold`）、ESC 清空选择 | ❌ 无键盘处理 | 客户端输入层 |
+| 攻击指定敌军（`attack` / `lock`） | ❌ 只能攻击前进 | 客户端输入层 |
+| 单位卡片 / 补给线 / 控制线叠加 / 城市卡 | ❌ 只有薄 HUD（计时/城市数/可见敌军/RTT/读秒/结算） | HUD 面板 + 快照补派生数据 |
+| 暂停（SPACE）/ 加速（1/2/3） | **有意不做** | 服务器权威 60Hz，单人暂停会让两端时间线分叉 |
+
+**重点**：服务端的 `cmd` 通道已经支持引擎的全部命令（`validateCommand` + `world.issueCommands`），
+所以 `hold` / `attack` / 急行军 / 排队路径**现在就能执行**，缺的只是对局页的按钮与按键。
+
+**补齐方案（约 1.5–2 人日，建议放在 P5 之后或并入 P7）**
+1. 输入端：键盘 `S`→`hold`、`ESC`→清空、`E`+拖→`forced` 急行军、Shift+右键→`enqueueRoute`、右键敌方单位→`attack`；
+2. 轨迹显示：快照为**己方**单位增加 `route` / `pendingQueue`（约 50–120 B/移动单位，满编 16 个约 +1–2 KB/帧，或改成变化时才发）；
+3. HUD：单位卡片、补给线、控制线叠加（纯展示，可后置）。
+每项都配一条 `cmd` 契约单测 + 一条双上下文 e2e（例：A 按 S 后，两端快照里该部队都停下）。
