@@ -1,4 +1,4 @@
-﻿import { isSpotted } from '../simulation/systems/fog.js';
+import { isSpotted } from '../simulation/systems/fog.js';
 import { t } from '../i18n/index.js';
 import { values } from '../config/index.js';
 
@@ -51,7 +51,13 @@ const SELECTED_TINT = 0x5a5a5a;
 // 层级：terrain 0 < fog 1 < 控制线 2 < 城市/基地 3 < 单位贴图 4 < 覆盖层(裂纹/血条/虚影) 5 < 城市标签 6 < 状态标签 7。
 // 单位改为贴图精灵（等比缩放至对角线 = 碰撞直径、随行进/交战方向旋转、选中着色加深），
 // 贴图缺失时回退圆形；城市、裂纹、血条/补给存量条、交战抖动、溃逃闪圈、敌军虚影仍用 Graphics 绘制。
-export function createUnitRenderer(scene, world, selection) {
+export function createUnitRenderer(scene, world, selection, options = {}) {
+  // 观察者阵营：战役里玩家永远是蓝方；PvP 的红方玩家要按**自己的**视野过滤敌军、
+  // 并且只有自己的部队显示血条/补给条（否则会把对面当成"自己人"）。
+  // 允许传函数：PvP 对局页在 socket 握手完成后才知道自己是哪一方。
+  const resolveViewer = typeof options.faction === 'function'
+    ? options.faction
+    : () => options.faction ?? 'blue';
   // 城市/基地单独一层，深度低于单位精灵，避免基地图案遮挡单位（bugfix）
   const cityGraphics = scene.add.graphics().setDepth(3);
   const graphics = scene.add.graphics().setDepth(5);
@@ -150,7 +156,7 @@ export function createUnitRenderer(scene, world, selection) {
         if (text) text.setVisible(false);
         continue;
       }
-      if (unit.faction === 'red' && !isSpotted(world, unit, 'blue')) {
+      if (unit.faction !== resolveViewer() && !isSpotted(world, unit, resolveViewer())) {
         const text = badgeTextPool.get(unit.id);
         if (text) text.setVisible(false);
         continue;
@@ -193,9 +199,9 @@ export function createUnitRenderer(scene, world, selection) {
         hideSprite(unit.id);
         continue;
       }
-      if (unit.faction === 'red' && !isSpotted(world, unit, 'blue')) {
+      if (unit.faction !== resolveViewer() && !isSpotted(world, unit, resolveViewer())) {
         hideSprite(unit.id); // 未被目视：隐藏贴图，改画最后已知位置虚影
-        const last = unit.lastSeen.blue;
+        const last = unit.lastSeen?.[resolveViewer()];
         if (last) {
           stats.ghostCount += 1;
           drawGhost(last.x, last.y, unit.radius);
@@ -335,7 +341,7 @@ export function createUnitRenderer(scene, world, selection) {
   }
 
   function drawBars(unit, cx, cy) {
-    if (unit.faction !== 'blue') return; // 隐藏敌方血条与补给存量条
+    if (unit.faction !== resolveViewer()) return; // 隐藏敌方血条与补给存量条
     const { radius } = unit;
     const width = radius * 2; // 接近圆点直径（截图效果）
     const hpHeight = 5;

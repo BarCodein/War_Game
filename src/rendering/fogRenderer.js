@@ -77,7 +77,13 @@ export function fogAlphaField(cols, rows, cellSize, sources, softPx) {
   return alpha;
 }
 
-export function createFogRenderer(scene, world) {
+export function createFogRenderer(scene, world, options = {}) {
+  // 观察者阵营：战役里玩家永远是蓝方；PvP 里红方玩家要看到**自己的**视野
+  //（否则两边看到的迷雾覆盖完全一样，等于没有迷雾）。
+  // 允许传函数：PvP 对局页在 socket 握手完成后才知道自己是哪一方。
+  const resolveViewer = typeof options.faction === 'function'
+    ? options.faction
+    : () => options.faction ?? 'blue';
   const terrain = world.terrain;
   const cols = terrain.cols;
   const rows = terrain.rows;
@@ -96,19 +102,20 @@ export function createFogRenderer(scene, world) {
   let image = null;
   let lastSignature = null;
 
-  // 视野源：与 fog.js 的 paintVision 同源同半径（蓝方 = 玩家阵营）。
+  // 视野源：与 fog.js 的 paintVision 同源同半径（观察者阵营 = 玩家阵营）。
   function visionSources() {
+    const viewerFaction = resolveViewer();
     const list = [];
     for (const unit of world.units) {
-      if (unit.state === 'dead' || unit.faction !== 'blue') continue;
+      if (unit.state === 'dead' || unit.faction !== viewerFaction) continue;
       list.push({ x: unit.x, y: unit.y, r: values.units[unit.type].vision });
     }
     for (const city of world.cities) {
-      if (city.faction !== 'blue') continue;
+      if (city.faction !== viewerFaction) continue;
       list.push({ x: city.x, y: city.y, r: values.cities.vision });
     }
     for (const point of world.capturePoints ?? []) {
-      if (point.faction !== 'blue') continue;
+      if (point.faction !== viewerFaction) continue;
       list.push({ x: point.x, y: point.y, r: values.capturePoints.vision });
     }
     return list;
