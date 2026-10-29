@@ -495,3 +495,46 @@ curl -sI http://127.0.0.1/ | head -3
 > **不要在服务器上存 CI 用的 `DEPLOY_TOKEN`**（那是写权限 token）。读侧用只读 Deploy Key 或只读 PAT 即可。
 > 也建议顺手确认 Nginx 到底指向哪个目录：`sudo nginx -T | grep -E 'root|alias'` —— 若与 `~/server/web/dist`
 > 不一致，`update-static.sh` 要加 `STATIC_DIR=...`，并且 `deploy/nginx-wargame.conf` 里的 `root` 也要同步改。
+
+### 11.7 现场复核记录（2026-10-29）
+
+真实部署目录（`sudo nginx -T` 的 `root`）与它当时的 git 状态：
+
+```text
+$ sudo nginx -T | grep -nE 'server_name|root|alias'
+234:    server_name _;
+239:            alias /var/www/html/videos/;
+243:            root /var/www/html/war_game/repo;
+
+$ cd /var/www/html/war_game/repo
+$ git status -sb && git log --oneline -3 && git remote -v
+## main...origin/main
+0e64a37 (HEAD -> main, origin/main, origin/HEAD) build: 20cbe98
+origin  https://github_pat_11BGAP…@github.com/BarCodein/war_game_deploy_repo.git
+
+$ ls -1 pvp.html pvp-battle.html members/member.html climb/climb.html
+climb/climb.html
+members/member.html
+pvp-battle.html
+pvp.html
+```
+
+结论：**这个目录是健康的**（`main` 与 `origin/main` 同步、CI 产物 `build: 20cbe98` 已落地、PvP 两个页面都在），
+之前报错的 `~/server/web/dist` 是个无关的空目录 → `rm -rf ~/server/web/dist/.git` 清掉即可，别再在里面操作。
+
+> ⚠️ **安全提醒（重要）**：上面 `git remote -v` 里能看到明文 PAT（`github_pat_11BGAP…`）。
+> 1) 立刻去 GitHub → Settings → Developer settings → Tokens **撤销/轮换**这个 token；
+> 2) 换成**只读 Deploy Key**（第 11.6 节方案 B），然后
+>    `git remote set-url origin git@gh-war-deploy:BarCodein/war_game_deploy_repo.git`；
+> 3) `git config --local --unset-all credential.helper`（如果曾用 store 保存过凭据）；
+> 4) 任何 token 都不要贴进聊天/日志；轮换后只需要更新服务器上的 remote，不影响 CI（CI 用自己仓库里的 secret）。
+
+### 11.8 当前线上状态（2026-10-29 复核，公网探测）
+
+| 路径 | 状态 | 说明 |
+|---|---|---|
+| `/`、`/pvp.html`、`/pvp-battle.html`、`/members/member.html` | **200** | 静态产物已是最新（含 PvP 页面） |
+| `/api/health` | **404** | Node 服务尚未部署（Nginx 还没有 `/api` 与 `/socket.io` 反代） |
+| `/socket.io/?EIO=4&transport=polling` | **404** | 同上 |
+
+也就是说：**静态部分已完成，PvP 还差后端**。下一步按 §3–§6 部署 Node 服务并加上两段反代即可（见下方清单）。

@@ -35,7 +35,8 @@ mask() { sed -E 's#(https://)[^@/]*@#\1***@#'; }
 
 # ---------- 0) 探测目录 ----------
 if [[ -z "${STATIC_DIR:-}" ]]; then
-  for candidate in "$HOME/server/web/dist" /var/www/html/war_game/repo; do
+  # 按确认过的部署布局优先：Nginx root 指向 /var/www/html/war_game/repo
+  for candidate in /var/www/html/war_game/repo "$HOME/server/web/dist"; do
     if [[ -d "$candidate" ]]; then STATIC_DIR="$candidate"; break; fi
   done
 fi
