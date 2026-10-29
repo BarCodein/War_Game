@@ -432,3 +432,66 @@ sudo chmod 644 /etc/cron.d/war-game-static
 
 > 若你更希望"CI 一推就生效"，也可以在 GitHub Actions 里加一步 `rsync`/`ssh`（需要部署密钥）；
 > 但定时 `update-static.sh` 已经足够，且不需要在 CI 里存 secret。
+
+### 11.6 案例：`.git` 是空仓库 + 远程未配置 + 私有仓库认证失败
+
+实测排查过一台服务器，症状正好是这三条同时出现：
+
+```text
+~/server/web/dist$ git status
+On branch master
+No commits yet          ← 空仓库（git init 出来的，没有任何提交）
+Untracked files: ...    ← 所以所有页面文件都是"未跟踪"
+
+~/server/web/dist$ git remote -v
+（空）                  ← .git/config 里只有 [core]，没有 [remote "origin"]
+
+$ git ls-remote https://github.com/BarCodein/war_game_deploy_repo.git
+Password authentication is not supported for Git operations.
+fatal: Authentication failed
+```
+
+结论：**部署仓库是私有的，而这里既没有远程地址也没有凭据**。历史/远程都在某次自动更新时被覆盖掉了，
+所以"自动拉取"永远失败、站点内容不再更新（但 Nginx 仍能打开旧文件）。
+
+**修复顺序（先有凭据，再重建检出）**
+
+```bash
+cd ~/server/web/dist
+
+# ① 先让"读"能通过（三选一）
+#    A. 把部署仓库改成 Public（最省事，内容是公开的游戏产物）：
+#       GitHub → 仓库 Settings → Change visibility → Public
+#    B. 只读 Deploy Key（推荐，长期有效）：
+ssh-keygen -t ed25519 -C "war-game-deploy" -f ~/.ssh/war_game_deploy -N ''
+cat ~/.ssh/war_game_deploy.pub      # 贴到 部署仓库 → Settings → Deploy keys（不要勾 Write access）
+cat >> ~/.ssh/config <<'EOF'
+Host gh-war-deploy
+  HostName github.com
+  User git
+  IdentityFile ~/.ssh/war_game_deploy
+  IdentitiesOnly yes
+EOF
+chmod 600 ~/.ssh/config
+git ls-remote git@gh-war-deploy:BarCodein/war_game_deploy_repo.git   # 应列出 refs/heads/main
+#    C. 细粒度 PAT（Contents: Read）：
+#       git ls-remote https://x-access-token:<TOKEN>@github.com/BarCodein/war_game_deploy_repo.git
+
+# ② 用仓库里的幂等脚本重建检出（它会 git init -b main、配 origin、识别 main/master、reset+clean）
+REMOTE_URL=git@gh-war-deploy:BarCodein/war_game_deploy_repo.git \
+  ~/server/web/dist/../../war-game-server/deploy/update-static.sh --dry-run   # 先看会删什么
+REMOTE_URL=git@gh-war-deploy:BarCodein/war_game_deploy_repo.git \
+  ~/server/web/dist/../../war-game-server/deploy/update-static.sh
+
+# ③ 校验
+git -C ~/server/web/dist log --oneline -1
+ls ~/server/web/dist | head
+curl -sI http://127.0.0.1/ | head -3
+```
+
+脚本 `deploy/update-static.sh` 默认会自动探测 `~/server/web/dist` 或 `/var/www/html/war_game/repo`，
+执行用户默认当前用户（可 `RUN_USER=woo` 覆盖）；如果远程不可访问，它会直接打印上面三种凭据方案而不是干瞪眼。
+
+> **不要在服务器上存 CI 用的 `DEPLOY_TOKEN`**（那是写权限 token）。读侧用只读 Deploy Key 或只读 PAT 即可。
+> 也建议顺手确认 Nginx 到底指向哪个目录：`sudo nginx -T | grep -E 'root|alias'` —— 若与 `~/server/web/dist`
+> 不一致，`update-static.sh` 要加 `STATIC_DIR=...`，并且 `deploy/nginx-wargame.conf` 里的 `root` 也要同步改。
