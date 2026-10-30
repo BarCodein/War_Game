@@ -117,7 +117,7 @@ async function main() {
       const player = {
         socket, code, faction: socket === socketA ? 'blue' : 'red',
         snapshots: 0, lastSnapshotAt: 0, rates: [], rtts: [], disconnects: 0, cmdAcks: 0, cmdErrors: 0,
-        unitIds: [],
+        cmdErrorsByCode: {}, matchOver: false, unitIds: [],
       };
       socket.on('tick', (snapshot) => {
         player.snapshots += 1;
@@ -129,6 +129,8 @@ async function main() {
         }
       });
       socket.on('disconnect', () => { player.disconnects += 1; });
+      // 对局结束后不再下令：MATCH_OVER 属于"预期拒绝"，不能算压测失败
+      socket.on('match:end', () => { player.matchOver = true; });
       players.push(player);
     }
     console.log(`  房间 ${code} 已开局（${host.user.username} vs ${guest.user.username}）`);
@@ -148,14 +150,19 @@ async function main() {
   const healthSamples = [];
   let commandTimer = setInterval(() => {
     for (const player of players) {
-      if (!player.unitIds.length) continue;
+      if (player.matchOver || !player.unitIds.length) continue;
       const target = { x: 200 + Math.random() * 880, y: 120 + Math.random() * 560 };
       const command = Math.random() < 0.5
         ? { type: 'move', path: [target] }
         : { type: 'attackMove', target };
       player.socket.emit('cmd', { unitIds: player.unitIds, command }, (response) => {
-        if (response?.ok) player.cmdAcks += 1;
-        else player.cmdErrors += 1;
+        if (response?.ok) {
+          player.cmdAcks += 1;
+          return;
+        }
+        player.cmdErrors += 1;
+        const code = response?.code ?? 'UNKNOWN';
+        player.cmdErrorsByCode[code] = (player.cmdErrorsByCode[code] ?? 0) + 1;
       });
     }
   }, Math.max(100, Math.round(1000 / CMD_HZ)));
@@ -204,15 +211,29 @@ async function main() {
 
   const sim = lastHealth.sim ?? {};
   const slowRatio = sim.ticks ? (sim.slowTicks ?? 0) / sim.ticks : 0;
+  // 拒绝按错误码分类：只有"不该发生"的码算失败，MATCH_OVER（对局已结束）是预期
+  const errorsByCode = {};
+  for (const player of players) {
+    for (const [code, count] of Object.entries(player.cmdErrorsByCode)) {
+      errorsByCode[code] = (errorsByCode[code] ?? 0) + count;
+    }
+  }
+  const unexpected = Object.entries(errorsByCode).filter(([code]) => code !== 'MATCH_OVER');
+  const unexpectedCount = unexpected.reduce((sum, [, count]) => sum + count, 0);
+  const breakdown = Object.entries(errorsByCode)
+    .map(([code, count]) => `${code} ${count}`)
+    .join(' · ') || '无';
+
   const checks = [
-    ['对局数达到预期', peakMatches === ROOMS, `${peakMatches} / ${ROOMS}`],
+    // 服务器上可能还有别的对局（含上一次未收尾的），所以用 >= 判定
+    ['对局数达到预期', peakMatches >= ROOMS, `${peakMatches} / ${ROOMS}`],
     [`平均 tick < ${THRESHOLDS.tickMsAvg}ms`, (sim.tickMsAvg ?? 999) < THRESHOLDS.tickMsAvg, `${sim.tickMsAvg ?? '?'} ms`],
     // 单次 GC 尖峰不该算失败：用"超过 8ms 预算的 tick 占比"来判定，最大 tick 只作观察值
     ['超预算 tick 占比 < 0.1%', slowRatio < 0.001, `${(slowRatio * 100).toFixed(3)}%（${sim.slowTicks ?? 0}/${sim.ticks ?? 0}，最大 ${sim.tickMsMax ?? '?'} ms）`],
     [`快照速率 ≈ ${THRESHOLDS.snapshotHzMin}–${THRESHOLDS.snapshotHzMax}Hz`, snapshotHz >= THRESHOLDS.snapshotHzMin && snapshotHz <= THRESHOLDS.snapshotHzMax, `${snapshotHz.toFixed(1)} Hz`],
     [`RTT < ${THRESHOLDS.rttMsMax}ms`, rttAvg < THRESHOLDS.rttMsMax, `${rttAvg.toFixed(0)} ms`],
     ['无掉线', disconnects === 0, `${disconnects} 次`],
-    ['命令被接受', cmdErrors === 0 && cmdAcks > 0, `ok ${cmdAcks} / 失败 ${cmdErrors}`],
+    ['命令被接受（除 MATCH_OVER）', unexpectedCount === 0 && cmdAcks > 0, `ok ${cmdAcks} · 拒绝 ${cmdErrors}（${breakdown}）`],
     overflowRejected === null
       ? [`容量上限检查（需 ${maxRooms} 房间才测）`, true, `跳过（本次 ${ROOMS} 房间）`]
       : [`第 ${maxRooms + 1} 个房间被拒（503）`, overflowRejected, overflowRejected ? '503 ROOM_LIMIT' : '未被拒绝'],
@@ -222,6 +243,11 @@ async function main() {
   console.log(`时长 ${elapsed.toFixed(1)}s · 人数 ${players.length} · 快照总量 ${Math.round(totalSnapshots)}`);
   if (lastHealth.sim) {
     console.log(`tick 平均 ${sim.tickMsAvg} ms · 最大 ${sim.tickMsMax} ms · 超预算 ${sim.slowTicks ?? 0}/${sim.ticks ?? 0} · 已发快照 ${sim.snapshotsSent} 条`);
+    // 服务端统计的拒绝原因（与脚本侧 ack 计数互相印证）
+    const serverRejected = Object.entries(sim.rejectedByCode ?? {})
+      .map(([code, count]) => `${code} ${count}`)
+      .join(' · ') || '无';
+    console.log(`服务端拒绝 ${sim.rejected ?? 0} 次 · ${serverRejected}`);
   }
   for (const [label, ok, detail] of checks) {
     console.log(`${ok ? '✅' : '❌'} ${label.padEnd(26)} ${detail}`);

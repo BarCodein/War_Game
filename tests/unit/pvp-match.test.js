@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { MatchSim, STEP_MS, warmupEngine } from '../../server/src/match.js';
+import { MatchSim, STEP_MS, resetWarmupCache, warmupEngine } from '../../server/src/match.js';
 import { loadPvpLevel } from '../../server/src/levels.js';
 import { attackMoveCommand, holdCommand, moveCommand } from '../../src/simulation/commands.js';
 import { isSpotted } from '../../src/simulation/systems/fog.js';
@@ -94,6 +94,24 @@ describe('MatchSim：命令校验', () => {
     const rejected = match.queueCommand('blue', { unitIds: enemyIds, command: holdCommand() });
     expect(rejected.ok).toBe(false);
     expect(rejected.code).toBe('NO_UNITS');
+  });
+
+  it('拒绝原因按错误码计数（压测时能看出"被拒"到底是什么原因）', () => {
+    const match = makeMatch();
+    const ownIds = [unitsOf(match, 'blue')[0].id];
+
+    match.queueCommand('blue', { unitIds: [unitsOf(match, 'red')[0].id], command: holdCommand() }); // NO_UNITS
+    match.queueCommand('blue', { unitIds: ownIds, command: { type: 'teleport' } });                  // BAD_COMMAND
+    match.queueCommand('purple', { unitIds: ownIds, command: holdCommand() });                       // BAD_FACTION
+
+    expect(match.stats.rejected).toBe(3);
+    expect(match.stats.rejectedByCode).toMatchObject({ NO_UNITS: 1, BAD_COMMAND: 1, BAD_FACTION: 1 });
+
+    // 对局结束后，所有命令都应记为 MATCH_OVER（压测脚本据此区分"预期拒绝"）
+    for (const city of match.world.cities) city.faction = 'blue';
+    match.step(1);
+    match.queueCommand('blue', { unitIds: ownIds, command: holdCommand() });
+    expect(match.stats.rejectedByCode.MATCH_OVER).toBe(1);
   });
 
   it('非法命令被拒绝（不会抛异常把服务器打挂）', () => {
@@ -203,8 +221,10 @@ describe('MatchSim：胜负', () => {
 
 describe('MatchSim：预热', () => {
   it('warmupEngine 空跑不碰正式对局（独立 World），用于抹掉首帧 JIT 尖峰', () => {
+    resetWarmupCache();
     const { level, map } = loadPvpLevel('dujiang_pvp');
     const warm = warmupEngine({ level, map, ticks: 30 });
+    expect(warm.skipped).toBe(false);
     expect(warm.ticks).toBe(30);
     expect(warm.stats.tickMsTotal).toBeGreaterThan(0);
 
@@ -213,6 +233,15 @@ describe('MatchSim：预热', () => {
     expect(match.ticks).toBe(0);
     expect(match.unitCounts()).toEqual({ blue: 16, red: 16 });
     expect(match.elapsedMs()).toBe(0);
+  });
+
+  it('同一张地图只预热一次（多房间同时开局时不叠加尖峰）', () => {
+    resetWarmupCache();
+    const { level, map } = loadPvpLevel('pingjin_pvp');
+    expect(warmupEngine({ level, map, ticks: 20 }).skipped).toBe(false);
+    const second = warmupEngine({ level, map, ticks: 20 });
+    expect(second.skipped).toBe(true);
+    expect(second.ticks).toBe(0);
   });
 });
 

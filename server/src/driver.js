@@ -79,12 +79,18 @@ export function createMatchDriver({ io, config, roomChannel, onMatchEnd = null, 
     let total = 0;
     let max = 0;
     let slowTicks = 0;
+    let rejected = 0;
+    const rejectedByCode = {};
     for (const { room } of active.values()) {
       const match = room.match;
       if (!match) continue;
       ticks += match.ticks;
       total += match.stats?.tickMsTotal ?? 0;
       slowTicks += match.stats?.slowTicks ?? 0;
+      rejected += match.stats?.rejected ?? 0;
+      for (const [code, count] of Object.entries(match.stats?.rejectedByCode ?? {})) {
+        rejectedByCode[code] = (rejectedByCode[code] ?? 0) + count;
+      }
       if ((match.stats?.tickMsMax ?? 0) > max) max = match.stats.tickMsMax;
     }
     return {
@@ -93,6 +99,8 @@ export function createMatchDriver({ io, config, roomChannel, onMatchEnd = null, 
       frames: totals.frames,
       ticks,
       slowTicks,
+      rejected,
+      rejectedByCode,
       tickMsAvg: ticks ? Number((total / ticks).toFixed(3)) : 0,
       tickMsMax: Number(max.toFixed(2)),
     };

@@ -62,7 +62,12 @@ export class MatchSim {
     this.result = null;
     this.events = [];
     this.eventCursor = 0;
-    this.stats = { tickMsTotal: 0, tickMsMax: 0, slowTicks: 0, commands: { blue: 0, red: 0 }, rejected: 0 };
+    this.stats = {
+      tickMsTotal: 0, tickMsMax: 0, slowTicks: 0,
+      commands: { blue: 0, red: 0 },
+      rejected: 0,
+      rejectedByCode: {},   // 按错误码计数（MATCH_OVER / RATE_LIMITED / BAD_COMMAND / NO_UNITS / BAD_FACTION）
+    };
     this.commandWindows = { blue: { start: 0, count: 0 }, red: { start: 0, count: 0 } };
   }
 
@@ -149,33 +154,35 @@ export class MatchSim {
    * @returns {{ok: boolean, code?: string, units?: number, message?: string}}
    */
   queueCommand(faction, payload) {
-    if (this.phase === 'finished') return { ok: false, code: 'MATCH_OVER' };
-    if (!this.factions.includes(faction)) return { ok: false, code: 'BAD_FACTION' };
-    if (!this.consumeCommandBudget(faction)) {
-      this.stats.rejected += 1;
-      return { ok: false, code: 'RATE_LIMITED' };
-    }
+    if (this.phase === 'finished') return this.reject('MATCH_OVER');
+    if (!this.factions.includes(faction)) return this.reject('BAD_FACTION');
+    if (!this.consumeCommandBudget(faction)) return this.reject('RATE_LIMITED');
 
     let command;
     try {
       command = validateCommand(payload?.command);
     } catch (error) {
-      this.stats.rejected += 1;
-      return { ok: false, code: 'BAD_COMMAND', message: error.message };
+      const rejected = this.reject('BAD_COMMAND');
+      rejected.message = error.message;
+      return rejected;
     }
 
     const requested = Array.isArray(payload?.unitIds) ? payload.unitIds : [];
     const owned = this.world.units
       .filter((unit) => unit.faction === faction && unit.state !== 'dead' && requested.includes(unit.id))
       .map((unit) => unit.id);
-    if (owned.length === 0) {
-      this.stats.rejected += 1;
-      return { ok: false, code: 'NO_UNITS' };
-    }
+    if (owned.length === 0) return this.reject('NO_UNITS');
 
     this.world.issueCommands(owned, command);
     this.stats.commands[faction] += 1;
     return { ok: true, units: owned.length };
+  }
+
+  /** 统一记一次拒绝（按错误码分类，便于压测/运维看出"被拒"到底是什么原因） */
+  reject(code) {
+    this.stats.rejected += 1;
+    this.stats.rejectedByCode[code] = (this.stats.rejectedByCode[code] ?? 0) + 1;
+    return { ok: false, code };
   }
 
   consumeCommandBudget(faction) {
@@ -301,13 +308,28 @@ export class MatchSim {
 /**
  * 预热引擎：用**一次性**的 World 空跑若干 tick，把模拟各系统的 JIT 路径与内存分配走一遍。
  * 为什么需要：实测冷启动时首帧 tick 会出现 28–34 ms 的尖峰（见 docs/pvp-plan.md §3.10），
- * 在 1 核服务器上会让开局瞬间卡一下。P3 建局时先调一次本函数（约 40 ms），再开始真正的对局。
+ * 在 1 核服务器上会让开局瞬间卡一下。建局时先调一次本函数，再开始真正的对局。
  * 注意：完全不碰真实对局的 world，只是让共享的引擎代码先热起来。
+ *
+ * 同一张地图只预热一次（进程级缓存）：4 个房间同时开局时，逐个 warmup 会在 1 核上叠加成
+ * 几十毫秒的尖峰（线上实测 79ms/帧），而引擎的热身对同一份代码只需一次。
  */
+const warmedLevels = new Set();
+
 export function warmupEngine({ level, map, ticks = 60 }) {
+  const key = level?.id ?? 'unknown';
+  if (warmedLevels.has(key)) {
+    return { ticks: 0, skipped: true, stats: { tickMsTotal: 0, tickMsMax: 0, slowTicks: 0 } };
+  }
   const warm = new MatchSim({ level, map, prepMs: 0 });
   warm.start(0);
   warm.startPlaying();
   for (let i = 0; i < ticks && warm.phase === 'playing'; i += 1) warm.tickOnce();
-  return { ticks: warm.ticks, stats: { ...warm.stats } };
+  warmedLevels.add(key);
+  return { ticks: warm.ticks, skipped: false, stats: { ...warm.stats } };
+}
+
+/** 仅测试用：清空预热缓存 */
+export function resetWarmupCache() {
+  warmedLevels.clear();
 }
