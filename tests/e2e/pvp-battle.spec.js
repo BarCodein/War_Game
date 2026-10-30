@@ -55,20 +55,25 @@ test.describe('PvP 对局页', () => {
       await expect(pageA.locator('#hudRoom')).toContainText('蓝方');
       await expect(pageB.locator('#hudRoom')).toContainText('红方');
 
-      // 快照里只有己方 + 可见敌军（视野过滤）
+      // 迷雾下放给客户端：快照含全部单位，但"可见敌军"由客户端本地迷雾判定
       const view = await pageA.evaluate(() => ({
         me: window.__pvp.myFaction,
         own: window.__pvp.ownUnits,
         enemiesVisible: window.__pvp.visibleEnemies,
+        enemiesKnown: window.__pvp.enemyUnitsKnown,
+        fogAuthority: window.__pvp.lastSnapshot?.fogAuthority,
         phase: window.__pvp.lastSnapshot?.phase,
         cities: window.__pvp.lastSnapshot?.cities?.length ?? 0,
         units: window.__pvp.lastSnapshot?.units?.length ?? 0,
       }));
       expect(view.me).toBe('blue');
+      expect(view.fogAuthority).toBe('client');
       expect(view.own).toBeGreaterThanOrEqual(16);
-      expect(view.enemiesVisible).toBeLessThan(16); // 开局不可能看到全部敌军
+      expect(view.units).toBeGreaterThanOrEqual(32);      // 16 蓝 + 16 红全部下发
+      expect(view.enemiesKnown).toBe(16);
+      expect(view.enemiesVisible).toBeLessThan(16);       // 但开局看不到全部敌军
+      expect(view.enemiesVisible).toBeGreaterThan(0);
       expect(view.cities).toBe(16);
-      expect(view.units).toBe(view.own + view.enemiesVisible);
 
       // 静止单位与快照坐标一致（插值收敛，验收要求 < 0.5px）
       await expect.poll(async () => pageA.evaluate(() => {

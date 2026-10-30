@@ -80,7 +80,11 @@ export function createPvpServer(overrides = {}) {
     onBegin: (room) => {
       const { level, map } = loadPvpLevel(room.levelId);
       warmupEngine({ level, map, ticks: 60 });   // 抹掉首帧 JIT 尖峰（docs/pvp-plan.md §3.10）
-      const match = new MatchSim({ level, map, timeLimitMs: config.matchTimeLimitMs });
+      const match = new MatchSim({
+        level, map,
+        timeLimitMs: config.matchTimeLimitMs,
+        fogAuthority: config.fogAuthority,   // 默认 'client'：快照含全部单位，迷雾由客户端本地算
+      });
       match.start(Date.now());
       return { matchId: randomUUID(), match };
     },
@@ -183,6 +187,7 @@ export function createPvpServer(overrides = {}) {
     // 运维参数：掉线重连宽限、快照频率（线上默认 30s / 15Hz；e2e 会调小）
     reconnectGraceSeconds: Math.round(config.disconnectGraceMs / 1000),
     snapshotHz: config.snapshotHz,
+    fogAuthority: config.fogAuthority,   // 'client' = 迷雾由客户端算（快照含全部单位）；'server' = 服务端过滤
     // 内存与 GC 观测（判断 100ms 级抖动是不是 GC 给的）
     memory: {
       rssMb: Math.round(process.memoryUsage().rss / 1048576),
@@ -254,6 +259,7 @@ export function createPvpServer(overrides = {}) {
 
         // P5：重连校验（只有"曾经掉线"才要求 token；宽限内才允许续局）
         const wasDisconnected = player.connected === false;
+        const wasNotified = player.leftNotified === true;   // 是否已向对手播报过掉线
         if (wasDisconnected) {
           if (room.state === 'playing' && !rooms.canReconnect(room, player)) {
             throw new RoomError('RECONNECT_EXPIRED',
@@ -290,7 +296,8 @@ export function createPvpServer(overrides = {}) {
           room: roomView(room, me.id),
           match: matchInfo,
           reconnectToken: player.reconnectToken,
-          reconnected: wasDisconnected,
+          // 只有"真的掉线并被播报过"才算重连；大厅→对局页的页面跳转不该显示"已重连续局"
+          reconnected: wasDisconnected && wasNotified,
         });
         emitState(room);
         // 对手回来 / 自己重连：只有在"已经播报过掉线"时才通知另一端，避免页面跳转刷横幅

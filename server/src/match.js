@@ -37,9 +37,11 @@ const summarizeEvent = (event) => {
 };
 
 export class MatchSim {
-  constructor({ level, map, levelId = level?.id ?? 'pvp', timeLimitMs = 600_000, prepMs = values.prep.seconds * 1000, now = () => Date.now() }) {
+  constructor({ level, map, levelId = level?.id ?? 'pvp', timeLimitMs = 600_000, prepMs = values.prep.seconds * 1000, fogAuthority = 'client', now = () => Date.now() }) {
     if (!level || !map) throw new Error('[match] 需要 level 与 map');
     this.levelId = levelId;
+    // 迷雾归属：'client' = 快照含全部单位、由客户端本地算迷雾（默认）；'server' = 服务器按视野过滤（防透视）
+    this.fogAuthority = fogAuthority === 'server' ? 'server' : 'client';
     this.level = level.scripts ? level : parseLevel(level);   // 允许传原始 JSON 或已解析的关卡
     this.world = new World(map);
     deployForces(this.world, this.level.forces, this.level.anchors);
@@ -273,7 +275,7 @@ export class MatchSim {
     return counts;
   }
 
-  /** 某个玩家能看到的快照（已按阵营过滤视野，见 server/src/snapshot.js） */
+  /** 快照（迷雾归属见 fogAuthority：默认 'client' 下发全部单位，'server' 按视野过滤） */
   snapshotFor(faction) {
     return buildSnapshot(this.world, faction, {
       tick: this.ticks,
@@ -283,6 +285,7 @@ export class MatchSim {
       events: this.events.slice(-20),
       result: this.result,
       unitsAlive: this.unitCounts(),
+      fogAuthority: this.fogAuthority,
     });
   }
 

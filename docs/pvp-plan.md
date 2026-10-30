@@ -141,12 +141,27 @@
 | 房间码 | 6 位大写字母数字 | 30 min 未开局自动过期；开局后房间转为 match |
 | 重连窗口 | 30 s | 期间对局继续推进（掉线方单位保持原命令） |
 
-### 3.4 视野与防作弊（重点）
+### 3.4 视野归属与防作弊（2026-10-30 精调：默认下放给客户端）
 
-1. **服务端过滤**：发给蓝军的快照里，只有当 `isSpotted(world, redUnit, 'blue')` 为真才含该红军单位；未目视的敌军**完全不下发**（客户端伪造也刷不出来）。
-2. **迷雾着色**：客户端用 `fog.js` 结合自己可见的数据本地计算三态与已探索区域（不下发 10240 字节/次的迷雾网格）。
-3. **命令校验**：`faction` 归属、单位存活、命令格式（`validateCommand`）、单玩家命令频率上限（≤ 20 条/秒）、payload 大小上限。
-4. **不做客户端预测**（MVP）：输入延迟 ≈ RTT/2 + 100 ms 插值；P7 视实测再决定是否加“移动指令本地乐观回显”。
+> ⚠️ 决定变更：原设计是"服务器按视野过滤快照"（防透视）。**2026-10-30 起默认改成 `PVP_FOG_AUTHORITY=client`**：
+> 服务器下发**全部存活单位**，迷雾完全由客户端本地计算。代价是**失去防透视**（打开 DevTools 能看到全图敌军），
+> 只适合朋友之间的对局；需要防作弊时设 `PVP_FOG_AUTHORITY=server` 即回到旧行为，代码不用改。
+
+| 模式 | 快照内容 | 迷雾计算 | 防透视 | 带宽 |
+|---|---|---|---|---|
+| **client（默认）** | 全部存活单位（16 蓝 + 16 红） | 客户端 `updateFog()`（只依赖己方单位/城市/占领点） | ❌ 改前端/DevTools 可见全图 | 32 单位 ≈ **5.6 KB**（+24%） |
+| server | 己方全部 + 仅 `isSpotted` 的敌军 | 两端口径一致（客户端只为着色） | ✅ 未目视敌军坐标根本不下发 | 24 单位 ≈ 4.7 KB |
+
+两种模式共同的部分：
+
+1. **迷雾判定只有一套规则**（`fog.js`）：己方单位视野（轻 140 / 重 160）∪ 己方城市 180 ∪ 己方占领点 180；森林里的敌军需 60 px 内才算目视。
+2. **城市 / 占领点归属与占领进度始终公开**（和战役 HUD 一致）。
+3. **命令校验**：`faction` 归属、单位存活、命令格式（`validateCommand`）、单玩家 ≤ 20 条/秒、payload 上限 —— 与视野模式无关。
+4. **不做客户端预测**（MVP）：输入延迟 ≈ RTT/2 + 100 ms 插值；P7 视实测再决定是否加"移动指令本地乐观回显"。
+
+实测（客户端模式，渡江 PvP，开局 4 秒）：快照 **32 个单位 / 5782 B**；蓝方迷雾可见 **5475 / 10240 格**；
+`enemiesKnown=16`，但 `isSpotted` 判定后只画 **8 个** → HUD「可见敌军 8」。**画面与"服务端过滤"时完全一样**，
+区别只在于数据是否到了客户端。
 
 ### 3.5 目录结构（新增，**不动**现有战役代码）
 
@@ -902,3 +917,43 @@ node scripts/pvp-load.mjs --server http://179.255.135.95 --rooms 4 --seconds 600
 
 > 注意：压测会消耗注册限速（默认 10 次/小时/IP），线上跑之前把 `PVP_REGISTER_MAX_PER_HOUR` 临时调大，
 > 或先用 2 个房间（4 个账号）。服务器上的 `matches`、`sim.*` 也可以在压测过程中用 `curl /api/health` 直接观察。
+
+---
+
+## 11.10 精调：迷雾下放到客户端（2026-10-30）
+
+**改了什么**
+
+| 位置 | 变化 |
+|---|---|
+| `server/src/config.js` | 新增 `fogAuthority`（`PVP_FOG_AUTHORITY=client\|server`，默认 **client**） |
+| `server/src/snapshot.js` | `client` 模式下不再调用 `isSpotted` 过滤，下发全部存活单位；快照新增 `fogAuthority` 字段 |
+| `server/src/match.js` | `MatchSim({ fogAuthority })`，`snapshotFor()` 把它传进快照 |
+| `server/src/app.js` | 建局时读 `config.fogAuthority`；`/api/health` 增加 `fogAuthority` |
+| `src/pvp/battle.js` | 「可见敌军」改由**客户端**用 `isSpotted` 判定；`client` 模式下敌军从快照消失即阵亡（`server` 模式下仍需 `isSpotted` 才判死）；暴露 `__pvp.enemyUnitsKnown / fogAuthority` |
+| `tests/unit/pvp-match.test.js` | 拆成三条：默认全量下发、`server` 模式仍过滤、视野外敌军"坐标到了但 isSpotted 为假" |
+| `tests/unit/pvp-fog-parity.test.js` | 断言两边快照都含全部单位，但各自算出的可见敌军数不同且都 < 16 |
+| `tests/e2e/pvp-battle.spec.js` | 断言 `fogAuthority==='client'`、快照 ≥32 单位、`enemiesKnown=16`、`enemiesVisible<16` |
+
+**实测（渡江 PvP，蓝方视角，开局 4 秒）**
+
+| 指标 | client 模式（现在） | server 模式（之前） |
+|---|---|---|
+| 快照单位数 | **32**（16 蓝 + 16 红） | 24（16 蓝 + 8 可见红） |
+| 快照体积 | **5782 B** | 4765 B |
+| 下单带宽（15 Hz） | ≈ 85 KB/s/人 | ≈ 70 KB/s/人 |
+| 客户端可见敌军 | `enemiesKnown=16` → 画 **8** | 只有 8 份数据 |
+| 迷雾可见格 | 5475 / 10240（不变） | 5475 / 10240 |
+| 画面 | 与服务端过滤时**完全一致** | — |
+| 防透视 | ❌ 可被 DevTools/改前端看到全图 | ✅ |
+
+**代价与适用场景（必须知道的取舍）**
+
+- 客户端手里有全部敌军坐标 → **任何玩家都能看到全图**（改 10 行前端，或直接用 DevTools 读 `window.__pvp.lastSnapshot`）。
+  因此当前配置只适合**朋友之间 / 课程演示**的对局，不适合有陌生人参与的公开对战。
+- 带宽 +24%（每个房间 2 人合计 ≈ +0.03 MB/s）；1 核容量结论不变（实测平均 tick 仍在 0.3–0.9 ms 量级）。
+- 想恢复防透视：服务器 `sudo systemctl edit war-game` 加 `Environment=PVP_FOG_AUTHORITY=server` → `daemon-reload && restart`，
+  或临时跑 `PVP_FOG_AUTHORITY=server npm run server`。**客户端代码无需改动**（它本来就会按 `isSpotted` 决定画不画）。
+
+**顺带修掉一个显示 bug**：从大厅跳到对局页时，旧 socket 关闭 + 新 socket 连上会被判定为"重连"，
+状态栏显示"已重连续局"。现在 `reconnected` 只在**已向对手播报过掉线**时才算，跳转不再误显示。

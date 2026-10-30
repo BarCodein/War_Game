@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { World } from '../../src/simulation/world.js';
 import { deployForces, parseLevel } from '../../src/simulation/level.js';
-import { updateFog } from '../../src/simulation/systems/fog.js';
+import { updateFog, isSpotted } from '../../src/simulation/systems/fog.js';
 import { MatchSim } from '../../server/src/match.js';
 import { loadPvpLevel } from '../../server/src/levels.js';
 
@@ -79,18 +79,28 @@ describe('PvP 迷雾：双方看到的是不同的区域', () => {
     expect(redStats.visible).toBeGreaterThan(1000);
   });
 
-  it('两边的快照也不同：各自只包含自己可见的敌军', () => {
+  it('默认全量下发（迷雾在客户端）：两边快照都含全部单位，但"谁能看见谁"不同', () => {
     const match = makeMatch();
+    match.step(1);
     const blueSnapshot = match.snapshotFor('blue');
     const redSnapshot = match.snapshotFor('red');
 
-    const blueSeesRed = blueSnapshot.units.filter((unit) => unit.faction === 'red').length;
-    const redSeesBlue = redSnapshot.units.filter((unit) => unit.faction === 'blue').length;
-    const redTotal = match.world.units.filter((unit) => unit.faction === 'red').length;
+    // 快照不再按视野过滤：蓝方拿到 16 蓝 + 16 红，红方同样 16 + 16
+    expect(blueSnapshot.fogAuthority).toBe('client');
+    expect(blueSnapshot.units.filter((unit) => unit.faction === 'red')).toHaveLength(16);
+    expect(redSnapshot.units.filter((unit) => unit.faction === 'blue')).toHaveLength(16);
+    expect(blueSnapshot.units.length).toBe(redSnapshot.units.length);
 
-    expect(blueSeesRed).toBeLessThan(redTotal);   // 蓝方看不到全部红军
-    expect(redSeesBlue).toBeLessThan(redTotal);   // 红方也看不到全部蓝军
-    expect(blueSnapshot.units.length).not.toBe(redSnapshot.units.length);
+    // 但客户端各自用迷雾算出的"可见敌军"都少于全部，而且两边不一样
+    const blueVisible = match.world.units
+      .filter((unit) => unit.faction === 'red' && isSpotted(match.world, unit, 'blue')).length;
+    const redVisible = match.world.units
+      .filter((unit) => unit.faction === 'blue' && isSpotted(match.world, unit, 'red')).length;
+    expect(blueVisible).toBeGreaterThan(0);
+    expect(redVisible).toBeGreaterThan(0);
+    expect(blueVisible).toBeLessThan(16);
+    expect(redVisible).toBeLessThan(16);
+    expect(blueVisible).not.toBe(redVisible);   // 红军更靠南，视野覆盖不同
   });
 });
 

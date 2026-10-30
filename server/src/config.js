@@ -67,6 +67,10 @@ export const config = {
   disconnectGraceMs: number(process.env.PVP_RECONNECT_SECONDS, 30) * 1000,
   // 掉线播报的"静默期"：短暂闪断（例如大厅→对局页的页面跳转）不打扰对手
   disconnectNoticeMs: number(process.env.PVP_DISCONNECT_NOTICE_SECONDS, 1.5) * 1000,
+  // 迷雾归属（2026-10-30 精调）：
+  //   'client'（默认）→ 快照下发全部存活单位，客户端本地算迷雾（表现完整、可调参；**无防透视**，带宽约 +20%）
+  //   'server'        → 服务器只下发目视到的敌军（防透视；客户端拿不到未目视敌军坐标）
+  fogAuthority: process.env.PVP_FOG_AUTHORITY === 'server' ? 'server' : 'client',
   // 可选择的对战地图（对称兵力模板，见 public/assets/pvp/）
   pvpLevels: String(process.env.PVP_LEVELS ?? 'dujiang_pvp,pingjin_pvp')
     .split(',').map((item) => item.trim()).filter(Boolean),

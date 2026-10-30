@@ -137,45 +137,56 @@ describe('MatchSim：命令校验', () => {
   });
 });
 
-describe('MatchSim：视野过滤（防透视）', () => {
-  it('快照里的敌军 = 恰好被目视的敌军（不多不少，且确实过滤掉了视野外的）', () => {
+describe('迷雾归属：默认全量下发，客户端自己过滤', () => {
+  it('默认（fogAuthority=client）：快照含全部存活单位，可见性由客户端 isSpotted 判定', () => {
     const match = makeMatch();
-    match.step(1); // 先跑一 tick，让迷雾网格算出来
+    match.step(1); // 让迷雾网格算出来
 
-    const expected = match.world.units
-      .filter((unit) => unit.faction === 'red' && unit.state !== 'dead' && isSpotted(match.world, unit, 'blue'))
-      .map((unit) => unit.id)
-      .sort();
-    const actual = match.snapshotFor('blue').units
-      .filter((unit) => unit.faction === 'red')
-      .map((unit) => unit.id)
-      .sort();
+    const snapshot = match.snapshotFor('blue');
+    expect(snapshot.fogAuthority).toBe('client');
+    // 32 个单位全部下发（16 蓝 + 16 红）
+    expect(snapshot.units.filter((unit) => unit.faction === 'blue')).toHaveLength(16);
+    expect(snapshot.units.filter((unit) => unit.faction === 'red')).toHaveLength(16);
 
-    expect(actual).toEqual(expected);
-    // 这些地图上城市交错（城市视野 180），开局能看到一部分敌军，但绝不可能全看到
-    expect(expected.length).toBeLessThan(16);
-    // 己方永远全可见
-    expect(match.snapshotFor('blue').units.filter((unit) => unit.faction === 'blue')).toHaveLength(16);
+    // 客户端用同一套规则算"我真能看见哪些" —— 只有一部分
+    const visibleFromClient = match.world.units
+      .filter((unit) => unit.faction === 'red' && isSpotted(match.world, unit, 'blue'));
+    expect(visibleFromClient.length).toBeGreaterThan(0);
+    expect(visibleFromClient.length).toBeLessThan(16);
   });
 
-  it('视野外的敌军不出现，挪到脚下才出现', () => {
+  it('切换为 fogAuthority=server 时恢复服务端过滤（未目视敌军不下发）', () => {
+    const match = makeMatch('dujiang_pvp', { fogAuthority: 'server' });
+    match.step(1);
+
+    const snapshot = match.snapshotFor('blue');
+    expect(snapshot.fogAuthority).toBe('server');
+    const sentEnemies = snapshot.units.filter((unit) => unit.faction === 'red').map((unit) => unit.id).sort();
+    const spotted = match.world.units
+      .filter((unit) => unit.faction === 'red' && isSpotted(match.world, unit, 'blue'))
+      .map((unit) => unit.id)
+      .sort();
+    expect(sentEnemies).toEqual(spotted);
+    expect(sentEnemies.length).toBeLessThan(16);
+  });
+
+  it('视野外的敌军：client 模式下坐标也到了客户端，但 isSpotted 为假（不画）', () => {
     const match = makeMatch();
     match.step(1);
 
     const hidden = unitsOf(match, 'red').find((unit) => !isSpotted(match.world, unit, 'blue'));
     expect(hidden, '开局应该至少有一个视野外的敌军').toBeTruthy();
-    expect(match.snapshotFor('blue').units.some((unit) => unit.id === hidden.id)).toBe(false);
+    // 坐标在快照里（客户端能拿到）
+    expect(match.snapshotFor('blue').units.some((unit) => unit.id === hidden.id)).toBe(true);
+    // 但客户端判定"看不见"
+    expect(isSpotted(match.world, hidden, 'blue')).toBe(false);
 
-    // 搬到蓝军脚下（模拟被侦察到）
+    // 搬到蓝军脚下 → 变为可见
     const blueUnit = unitsOf(match, 'blue')[0];
     hidden.x = blueUnit.x + 10;
     hidden.y = blueUnit.y;
     match.step(1);
-
-    expect(match.snapshotFor('blue').units.some((unit) => unit.id === hidden.id)).toBe(true);
-    // 红方视角不会因此看到蓝军更多细节（各自独立过滤）
-    expect(match.snapshotFor('red').units.filter((unit) => unit.faction === 'blue').length)
-      .toBeLessThanOrEqual(16);
+    expect(isSpotted(match.world, hidden, 'blue')).toBe(true);
   });
 });
 

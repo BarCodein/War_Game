@@ -325,15 +325,26 @@ function applySnapshot(snapshot) {
     local.supplyStock = unit.supplyStock;
   }
 
-  // 快照里消失的单位：己方 = 阵亡；敌方 = 可能只是脱离视野（不画即可，别当死）
+  // 迷雾完全由客户端本地算：只用到己方单位/城市/占领点（与服务器同一套规则）
+  debug.fogAuthority = snapshot.fogAuthority ?? 'client';
+  updateFog(world);
+
+  // 快照里消失的单位：
+  //   · 己方 → 阵亡
+  //   · 敌方 → 迷雾在客户端（快照是全量）时，缺席即阵亡；服务端过滤模式下，缺席可能只是脱离视野
   for (const unit of world.units) {
     if (seen.has(unit.id) || unit.state === 'dead') continue;
-    if (unit.faction === myFaction) unit.state = 'dead';
+    if (unit.faction === myFaction) { unit.state = 'dead'; continue; }
+    if (debug.fogAuthority !== 'server' || isSpotted(world, unit, myFaction)) unit.state = 'dead';
   }
 
-  // 迷雾：只用己方的单位/城市/占领点，算出来的结果与服务器一致
-  updateFog(world);
-  debug.visibleEnemies = (snapshot.units ?? []).filter((unit) => unit.faction !== myFaction).length;
+  // "可见敌军"由客户端用迷雾判定（服务端不再替我们过滤）
+  debug.visibleEnemies = world.units
+    .filter((unit) => unit.faction !== myFaction && unit.state !== 'dead' && isSpotted(world, unit, myFaction))
+    .length;
+  debug.enemyUnitsKnown = world.units
+    .filter((unit) => unit.faction !== myFaction && unit.state !== 'dead')
+    .length;
   debug.ownUnits = (snapshot.units ?? []).filter((unit) => unit.faction === myFaction).length;
   updateHud();
 }
