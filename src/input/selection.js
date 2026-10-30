@@ -5,7 +5,9 @@ import { values } from '../config/index.js';
 // 交互判定（bugfix）：按下即命中己方单位 → 本次是点击单选，绝不进入框选；
 // 只有按下空地并拖动超过阈值才进入框选，避免点击单位时的微小抖动触发框选。
 // 轨迹绘制期间由 orders 置位 routeBlocked，框选状态随之复位，不留悬挂拖动态。
-export function createSelection(scene, world) {
+export function createSelection(scene, world, options = {}) {
+  // 阵营：战役默认 blue；PvP 传入 getFaction()（蓝/红由服务器分配）
+  const getFaction = options.getFaction ?? (() => 'blue');
   const selected = new Set();
   const listeners = new Set();
   let pressPoint = null;   // 左键按下位置（尚未判定为框选）
@@ -20,7 +22,7 @@ export function createSelection(scene, world) {
   }
 
   function unitAt(p) {
-    return world.units.find(unit => unit.state !== 'dead' && unit.faction === 'blue'
+    return world.units.find(unit => unit.state !== 'dead' && unit.faction === getFaction()
       && Math.hypot(unit.x - p.x, unit.y - p.y) <= values.input.clickHitRadius) ?? null;
   }
 
@@ -84,7 +86,7 @@ export function createSelection(scene, world) {
       top: Math.min(boxStart.y, p.y),
       bottom: Math.max(boxStart.y, p.y),
     };
-    const hits = world.units.filter(unit => unit.state !== 'dead' && unit.faction === 'blue'
+    const hits = world.units.filter(unit => unit.state !== 'dead' && unit.faction === getFaction()
       && unit.x > box.left && unit.x < box.right && unit.y > box.top && unit.y < box.bottom);
     for (const unit of hits) selected.add(unit.id);
     notify();
@@ -94,6 +96,13 @@ export function createSelection(scene, world) {
     selected,
     isSelected(id) {
       return selected.has(id);
+    },
+    // 便利访问（PvP 的调试/测试与 HUD 都用它）
+    ids() {
+      return [...selected];
+    },
+    size() {
+      return selected.size;
     },
     // 直接设置选择（输入层在"从未选中的单位起笔"时用：先把该单位设为当前选择，
     // 再按拖动与否决定是"点选"还是"直接画出移动路径"）

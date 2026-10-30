@@ -8,10 +8,18 @@ import { UNIT_TEXTURES, createUnitRenderer } from '../rendering/unitRenderer.js'
 import { createControlLineRenderer } from '../rendering/controlLineRenderer.js';
 import { createSupplyLines } from '../rendering/supplyLines.js';
 import { createMapCamera } from '../rendering/cameraView.js';
-import { attackMoveCommand, moveCommand } from '../simulation/commands.js';
+import { createSelection } from '../input/selection.js';
+import { createOrders } from '../input/orders.js';
 import { alphaFor, interpolatePosition } from './interpolate.js';
 import { markVanishedUnits } from './missingUnits.js';
 import { createDeriveController } from './derive.js';
+import { createCommandQueue } from './commandQueue.js';
+import { createKeyboard } from '../input/keyboard.js';
+import { drawBattleOverlays, drawDashedPath } from '../rendering/battleOverlay.js';
+import { applyRoutePatch, applyRoutesFull, clearRoutesOfDead, countRoutes } from './routeState.js';
+import { t } from '../i18n/index.js';
+import { applyStaticI18n } from '../i18n/apply.js';
+import { previewForCommand, prunePreviews } from './routePreview.js';
 
 // PvP 对局页（P4）：**只渲染服务器发来的快照**，本地不推进任何模拟。
 //
@@ -82,6 +90,56 @@ function fmtClock(ms) {
   return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
 }
 
+// ---------------- 命令回执（U1/U2）----------------
+// 服务器 ack 回来了：把"生效单位数 / 被拒原因"用一条短提示告诉玩家
+function reportOrder(result, queue) {
+  debug.lastOrderResult = result;
+  if (!result) return;
+  const textOf = queue?.textFor ?? ((code) => code);
+  if (result.ok) {
+    const rejected = result.rejected ?? [];
+    if (rejected.length === 0) {
+      flashOrderToast(t('pvp.toast.orderAccepted', { units: result.units ?? 0 }), 'ok');
+    } else {
+      const reasons = [...new Set(rejected.map((item) => textOf(item.code)))].join('、');
+      flashOrderToast(t('pvp.toast.orderPartiallyRejected', {
+        units: result.units ?? 0,
+        count: rejected.length,
+        reasons,
+      }), 'warn');
+    }
+    return;
+  }
+  flashOrderToast(textOf(result.code), 'bad');
+}
+
+function flashOrderToast(text, tone = 'ok') {
+  debug.lastToast = { text, tone, at: performance.now() };
+  const element = document.getElementById('orderToast');
+  if (!element || !text) return;
+  element.textContent = text;
+  element.className = `order-toast ${tone}`;
+  element.hidden = false;
+  window.clearTimeout(flashOrderToast.timer);
+  flashOrderToast.timer = window.setTimeout(() => { element.hidden = true; }, 1800);
+}
+
+// ---------------- 预计路线（U3）----------------
+// 仅用于渲染：本地用同一套 planRoute 算一遍"预计怎么走"；服务器快照一到，偏离就丢弃（见 routePreview.js）
+function applyPreviewRoutes(world, unitIds, command) {
+  if (!world || !command || !Array.isArray(unitIds)) return;
+  const now = performance.now();
+  for (const id of unitIds) {
+    const unit = world.units.find((item) => item.id === id);
+    if (!unit) continue;
+    if (command.type === 'hold' || command.type === 'lock') {
+      unit.previewRoute = null;
+      continue;
+    }
+    unit.previewRoute = previewForCommand(unit, command, world, now);
+  }
+}
+
 // ---------------- 关卡/地图加载 ----------------
 async function loadLevelData(id) {
   const levelResponse = await fetch(`/assets/pvp/${id}.json`, { cache: 'no-cache' });
@@ -91,67 +149,6 @@ async function loadLevelData(id) {
   if (!mapResponse.ok) throw new Error(`地图 ${level.map} 加载失败（HTTP ${mapResponse.status}）`);
   const map = await mapResponse.json();
   return { level, map };
-}
-
-// ---------------- 选择框（PvP 版：按"我的阵营"选，不写死 blue） ----------------
-function createBattleSelection(scene, world, getFaction) {
-  const selected = new Set();
-  const listeners = new Set();
-  const notify = () => listeners.forEach((fn) => fn());
-  let pressPoint = null;
-  let dragPoint = null;
-  let dragging = false;
-
-  scene.input.on('pointerdown', (pointer) => {
-    if (pointer.button !== 0) return;
-    pressPoint = { x: pointer.worldX, y: pointer.worldY };
-    dragPoint = pressPoint;
-    dragging = false;
-  });
-  scene.input.on('pointermove', (pointer) => {
-    if (!pressPoint) return;
-    dragPoint = { x: pointer.worldX, y: pointer.worldY };
-    if (Math.hypot(dragPoint.x - pressPoint.x, dragPoint.y - pressPoint.y) > 8) dragging = true;
-  });
-  scene.input.on('pointerup', (pointer) => {
-    if (pointer.button !== 0 || !pressPoint) return;
-    const end = { x: pointer.worldX, y: pointer.worldY };
-    const faction = getFaction();
-    if (!pointer.event?.shiftKey) selected.clear();
-
-    const left = Math.min(pressPoint.x, end.x);
-    const right = Math.max(pressPoint.x, end.x);
-    const top = Math.min(pressPoint.y, end.y);
-    const bottom = Math.max(pressPoint.y, end.y);
-    for (const unit of world.units) {
-      if (unit.state === 'dead' || unit.faction !== faction) continue;
-      const hit = dragging
-        ? unit.x > left && unit.x < right && unit.y > top && unit.y < bottom
-        : Math.hypot(unit.x - end.x, unit.y - end.y) <= 26;
-      if (hit) selected.add(unit.id);
-    }
-    pressPoint = null;
-    dragPoint = null;
-    dragging = false;
-    notify();
-  });
-
-  return {
-    isSelected: (id) => selected.has(id),
-    ids: () => [...selected],
-    size: () => selected.size,
-    clear() { selected.clear(); notify(); },
-    onChange(fn) { listeners.add(fn); return () => listeners.delete(fn); },
-    getDragRect() {
-      if (!dragging || !pressPoint || !dragPoint) return null;
-      return {
-        left: Math.min(pressPoint.x, dragPoint.x),
-        right: Math.max(pressPoint.x, dragPoint.x),
-        top: Math.min(pressPoint.y, dragPoint.y),
-        bottom: Math.max(pressPoint.y, dragPoint.y),
-      };
-    },
-  };
 }
 
 // ---------------- 场景 ----------------
@@ -176,7 +173,7 @@ class BattleScene extends Phaser.Scene {
     this.world = world;
     debug.world = world;
 
-    this.selection = createBattleSelection(this, world, () => debug.myFaction ?? 'blue');
+    this.selection = createSelection(this, world, { getFaction: () => debug.myFaction ?? 'blue' });
     debug.selection = this.selection;
 
     createTerrainRenderer(this, world);
@@ -196,10 +193,30 @@ class BattleScene extends Phaser.Scene {
     debug.derive = this.derive;
 
     this.input.mouse?.disableContextMenu();
-    this.input.on('pointerdown', (pointer) => {
-      if (pointer.button !== 2) return;
-      this.issueOrder(pointer);
+    // 命令流水线（U1/U2/U3）：
+    //   createOrders 产出「每单位一条绝对路径」→ commandQueue 打包成一条 cmd → 服务器整批执行
+    //   同时用 planRoute 在本地算一条"预计路线"给渲染层画虚线（服务器快照一到就按偏离判断丢弃）
+    this.commandQueue = createCommandQueue({
+      getSocket: () => socket,
+      onResult: (result) => reportOrder(result, this.commandQueue),
+      onError: (code) => flashOrderToast(this.commandQueue?.textFor(code) ?? t('pvp.reject.SEND_FAILED'), 'bad'),
     });
+    debug.commandQueue = this.commandQueue;
+    const issue = (unitIds, command) => {
+      this.commandQueue.enqueue(unitIds, command);
+      applyPreviewRoutes(world, unitIds, command);
+      debug.commandsSent = (debug.commandsSent ?? 0) + unitIds.length;
+    };
+    this.orders = createOrders(this, world, this.selection, {
+      issue,
+      getFaction: () => debug.myFaction ?? 'blue',
+    });
+    // 键盘与战役共用（src/input/keyboard.js）：不传 controller → 暂停/变速只提示，S 走 issue
+    this.keyboard = createKeyboard(this, this.selection, {
+      issue,
+      onHint: (text) => flashOrderToast(text, 'warn'),
+    });
+    debug.orders = this.orders;
 
     this.scale.on('resize', () => this.cameras.main.setSize(this.scale.width, this.scale.height));
     debug.scene = this;
@@ -223,31 +240,13 @@ class BattleScene extends Phaser.Scene {
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => { /* 清理交给页面卸载 */ });
   }
 
-  issueOrder(pointer) {
-    const ids = this.selection.ids();
-    if (!ids.length) { setStatus('先左键选择部队，再右键下令', true); return; }
-    if (!socket || !socket.connected) { setStatus('WebSocket 未连接，命令未发送', true); return; }
-    const target = { x: Math.round(pointer.worldX), y: Math.round(pointer.worldY) };
-    const command = pointer.event?.shiftKey ? attackMoveCommand(target) : moveCommand([target]);
-    const sentAt = performance.now();
-    socket.emit('cmd', { unitIds: ids, command }, (response) => {
-      debug.commandsSent += 1;
-      if (response?.ok) {
-        this.lastOrder = { ...target, at: performance.now(), units: response.units ?? ids.length, attack: Boolean(pointer.event?.shiftKey) };
-        setStatus(`已下令 ${response.units ?? ids.length} 个单位（往返 ${Math.round(performance.now() - sentAt)} ms）`);
-      } else {
-        debug.commandErrors.push(response?.code ?? 'UNKNOWN');
-        setStatus(`命令被拒绝：${response?.code ?? 'UNKNOWN'}`, true);
-      }
-    });
-    this.orderFlash = { x: target.x, y: target.y, until: performance.now() + 700, attack: Boolean(pointer.event?.shiftKey) };
-  }
-
   update(time, delta) {
     this.mapCamera.update(delta / 1000);
     this.interpolate(performance.now());
     // 派生：控制线 10Hz / 补给分配 2Hz（本地算，服务器每 3s 校正一次）
     this.derive.update(delta);
+    // U3：预计路线超时或被服务器改了道就丢弃
+    debug.previewCount = prunePreviews(this.world, performance.now());
     this.unitRenderer.draw(delta / 1000);
     this.controlLineRenderer.draw();
     this.supplyLines.draw();
@@ -265,6 +264,12 @@ class BattleScene extends Phaser.Scene {
       supplyBacktrackDrawnMax: Math.round(this.supplyLines.state.maxBacktrackDrawnPx * 10) / 10,
       supplyRepath: this.supplyLines.state.repath,
     };
+    // §11.15 路线同步诊断（e2e 用）：带路线的己方单位数 / 应用过的增量条数 / 仍在占位的预计路线数
+    debug.routeStats = {
+      ownWithRoute: countRoutes(this.world, debug.myFaction ?? 'blue'),
+      deltasApplied: debug.routeDeltasApplied ?? 0,
+      previews: debug.previewCount ?? 0,
+    };
     updateHud();
   }
 
@@ -281,19 +286,25 @@ class BattleScene extends Phaser.Scene {
   }
 
   drawOverlay() {
-    this.overlay.clear();
-    const rect = this.selection.getDragRect();
-    if (rect) {
-      this.overlay.fillStyle(0x000000, 0.08);
-      this.overlay.fillRect(rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top);
-      this.overlay.lineStyle(2, 0xf1e9d2, 0.9);
-      this.overlay.strokeRect(rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top);
+    // 与战役共用同一套覆盖层绘制（rendering/battleOverlay.js）：
+    // 框选矩形、拖动轨迹、己方行军路线（实线 + 末端箭头）、排队路线（虚线）。
+    drawBattleOverlays(this.overlay, {
+      world: this.world,
+      viewerFaction: debug.myFaction ?? 'blue',
+      selection: this.selection,
+      routing: this.orders?.getCurrentRoute?.() ?? null,
+      forcedRouting: this.orders?.isForcedRouting?.() ?? false,
+    });
+
+    // §11.15：真实路线由服务器下发（变化才发），在它到达之前用本地"预计路线"占位（半透明虚线）。
+    for (const unit of this.world.units) {
+      const preview = unit.previewRoute;
+      if (!preview) continue;
+      this.overlay.lineStyle(2, 0x6fc3ff, 0.4);
+      drawDashedPath(this.overlay, preview.points, 12, 8);
+      this.overlay.strokePath();
     }
-    const flash = this.orderFlash;
-    if (flash && flash.until > performance.now()) {
-      this.overlay.lineStyle(3, flash.attack ? 0xff7043 : 0x9be15d, 0.9);
-      this.overlay.strokeCircle(flash.x, flash.y, 18);
-    }
+
     // 选中单位脚下画一圈
     this.overlay.lineStyle(2, 0xffe9b8, 0.55);
     for (const unit of this.world.units) {
@@ -302,7 +313,6 @@ class BattleScene extends Phaser.Scene {
     }
   }
 }
-
 // ---------------- 快照应用 ----------------
 function applySnapshot(snapshot) {
   const world = debug.world;
@@ -350,6 +360,13 @@ function applySnapshot(snapshot) {
     local.maxHp = unit.maxHp;
     local.state = unit.state;
     local.supplyStock = unit.supplyStock;
+
+    // §11.15：服务器只在"路线变化"时带 route/routeIndex/pendingQueue/forcedMarch；
+    // 缺失 = 保持缓存（合并语义在 routeState.js 里，有单测）。
+    if (applyRoutePatch(local, unit) && Array.isArray(unit.route)) {
+      local.previewRoute = null;   // 真实路线到手 → 丢弃本地"预计路线"占位
+      debug.routeDeltasApplied = (debug.routeDeltasApplied ?? 0) + 1;
+    }
   }
 
   // 迷雾完全由客户端本地算：只用到己方单位/城市/占领点（与服务器同一套规则）
@@ -358,6 +375,8 @@ function applySnapshot(snapshot) {
 
   // 快照里消失的单位 → 判定阵亡（规则见 src/pvp/missingUnits.js 与 docs/pvp-plan.md §11.13）
   debug.vanishedUnits = markVanishedUnits(world, seen, myFaction, debug.fogAuthority);
+  // 阵亡单位的路线缓存要一起清掉，否则"尸体还在画路线"
+  clearRoutesOfDead(world);
 
   // "可见敌军"由客户端用迷雾判定（服务端不再替我们过滤）
   debug.visibleEnemies = world.units
@@ -373,16 +392,21 @@ function applySnapshot(snapshot) {
 // ---------------- HUD ----------------
 function updateHud() {
   const snapshot = debug.lastSnapshot;
-  if (hud.room) hud.room.textContent = `房间 ${roomCode || '—'} · ${debug.myFaction === 'red' ? '红方' : '蓝方'}`;
+  if (hud.room) {
+    hud.room.textContent = t('pvp.room.label', {
+      code: roomCode || '—',
+      faction: debug.myFaction === 'red' ? t('pvp.faction.red') : t('pvp.faction.blue'),
+    });
+  }
   if (!snapshot) return;
-  if (hud.timer) hud.timer.textContent = snapshot.phase === 'prep' ? '准备中' : fmtClock(snapshot.timeLeftMs);
+  if (hud.timer) hud.timer.textContent = snapshot.phase === 'prep' ? t('pvp.hud.prep') : fmtClock(snapshot.timeLeftMs);
   const cities = snapshot.cities ?? [];
   const blue = cities.filter((city) => city.faction === 'blue').length;
   const red = cities.filter((city) => city.faction === 'red').length;
-  if (hud.cities) hud.cities.textContent = `城市 ${blue} : ${red}`;
-  if (hud.enemies) hud.enemies.textContent = `可见敌军 ${debug.visibleEnemies ?? 0}`;
+  if (hud.cities) hud.cities.textContent = t('pvp.hud.cities', { blue, red });
+  if (hud.enemies) hud.enemies.textContent = t('pvp.hud.enemies', { count: debug.visibleEnemies ?? 0 });
   if (hud.net) {
-    hud.net.textContent = debug.rttMs === null ? 'RTT —' : `RTT ${debug.rttMs} ms`;
+    hud.net.textContent = debug.rttMs === null ? t('pvp.hud.rttNone') : t('pvp.hud.rtt', { ms: debug.rttMs });
   }
   if (hud.prep) {
     const prepping = snapshot.phase === 'prep';
@@ -400,21 +424,21 @@ function showResult(result) {
   if (!hud.result) return;
   hud.result.hidden = false;
   const title = result?.winner === 'draw'
-    ? '平局'
-    : (result?.winner === debug.myFaction ? '胜利！' : '失败');
+    ? t('pvp.result.draw')
+    : (result?.winner === debug.myFaction ? t('pvp.result.win') : t('pvp.result.lose'));
   if (hud.resultTitle) hud.resultTitle.textContent = title;
   const reasonText = {
-    'captured-all-cities': '占领全部城市',
-    'time-limit': '到达时限，按城市数/兵力判定',
-    forfeit: '对手退出对局',
-    'disconnect-timeout': '对手掉线超时（判定胜负）',
-    aborted: '对局中断（服务器重启）',
+    'captured-all-cities': t('pvp.reason.capturedAllCities'),
+    'time-limit': t('pvp.reason.timeLimit'),
+    forfeit: t('pvp.reason.forfeit'),
+    'disconnect-timeout': t('pvp.reason.disconnectTimeout'),
+    aborted: t('pvp.reason.aborted'),
   }[result?.reason] ?? (result?.reason ?? '');
   if (hud.resultDetail) {
     hud.resultDetail.textContent = `${reasonText} · 用时 ${fmtClock(result?.atMs ?? 0)}`
       + (result?.casualties ? ` · 伤亡 蓝 ${result.casualties.blue} / 红 ${result.casualties.red}` : '');
   }
-  setStatus('对局结束');
+  setStatus(t('pvp.status.finished'));
 }
 
 // ---------------- 断线重连（P5） ----------------
@@ -441,19 +465,19 @@ function showBanner(text, tone = 'warn') {
 // 所以这里在创建 socket 之后**立刻**绑定监听，并在已连接时补一次 onConnect。
 function onConnect() {
   debug.socketConnected = true;
-  setStatus('已连接，进入房间…');
+  setStatus(t('pvp.status.connecting'));
   showBanner('');
   socket.emit('match:join', { roomCode, reconnectToken: readToken() }, (response) => {
     if (!response?.ok) {
       const code = response?.code ?? 'UNKNOWN';
       if (code === 'RECONNECT_EXPIRED') {
-        setStatus('掉线超时，本局已判负', true);
-        showBanner('掉线超过宽限时间，对局已结束', 'bad');
+        setStatus(t('pvp.status.expired'), true);
+        showBanner(t('pvp.banner.expired'), 'bad');
       } else if (code === 'ROOM_NOT_FOUND' && readToken()) {
-        setStatus('对局已中断（服务器可能重启过）', true);
-        showBanner('对局已中断：房间不存在（服务器可能重启过）', 'bad');
+        setStatus(t('pvp.status.aborted'), true);
+        showBanner(t('pvp.banner.aborted'), 'bad');
       } else {
-        setStatus(`进入对局失败：${code}`, true);
+        setStatus(t('pvp.status.joinFailed', { code }), true);
       }
       return;
     }
@@ -464,10 +488,17 @@ function onConnect() {
     debug.phase = response.match?.phase ?? 'prep';
     debug.reconnectGraceMs = response.match?.reconnectGraceMs ?? 30000;
     saveToken(response.reconnectToken ?? response.room?.you?.reconnectToken);
-    setStatus(`已进入对局（${debug.myFaction === 'red' ? '红方' : '蓝方'}）${response.reconnected ? ' · 已重连续局' : ''}`);
+    setStatus(t(response.reconnected ? 'pvp.status.reconnected' : 'pvp.status.joined', {
+      faction: debug.myFaction === 'red' ? t('pvp.faction.red') : t('pvp.faction.blue'),
+    }));
     if (response.match?.result) showResult(response.match.result);
     // 重连/首次进入：清空本地派生的控制线场与折线，等下一份校正包重新对齐
     debug.derive?.reset();
+    // §11.15：新进入/重连拿不到"变化才发"的历史增量 → 用 ack 里的全量路线覆盖己方单位
+    if (debug.world && Array.isArray(response.routes) && response.routes.length) {
+      debug.routeFullApplied = applyRoutesFull(debug.world, response.routes);
+      for (const unit of debug.world.units) unit.previewRoute = null;   // 有真实路线就不再占位
+    }
     updateHud();
   });
   setInterval(() => {
@@ -483,7 +514,7 @@ function onConnect() {
 
 function bindSocket() {
   if (!socket) {
-    setStatus('socket.io 客户端未加载（检查 /socket.io/socket.io.js）', true);
+    setStatus(t('pvp.status.loadingIo'), true);
     return;
   }
   socket.on('connect', onConnect);
@@ -505,24 +536,25 @@ function bindSocket() {
     debug.opponentLeft = true;
     const seconds = payload?.graceSeconds ?? Math.round((debug.reconnectGraceMs ?? 30000) / 1000);
     showBanner(`对手掉线：${seconds} 秒内可重连，超时判胜`, 'warn');
-    setStatus(`对手掉线（${payload?.username ?? '对手'}），等待重连…`);
+    // 横幅已经足够醒目；不要再覆盖 #battleStatus（那是"已进入对局…"这类稳定状态）
+    flashOrderToast(t('pvp.toast.opponentLeft', { name: payload?.username ?? '—' }), 'warn');
   });
   socket.on('opponent:rejoin', (payload) => {
     if (payload?.userId && debug.myUserId && payload.userId === debug.myUserId) return;
     debug.opponentLeft = false;
-    showBanner('对手已重连，对局继续', 'ok');
+    showBanner(t('pvp.banner.opponentRejoin'), 'ok');
     window.setTimeout(() => showBanner(''), 2500);
-    setStatus('对手已重连');
+    flashOrderToast(t('pvp.banner.opponentRejoin'), 'ok');
   });
   socket.on('connect_error', (error) => {
     debug.socketConnected = false;
     setStatus(`连接失败：${error.message}`, true);
-    showBanner('连接失败，正在重试…', 'bad');
+    showBanner(t('pvp.banner.connectError'), 'bad');
   });
   socket.on('disconnect', (reason) => {
     debug.socketConnected = false;
     setStatus(`连接断开：${reason}`, true);
-    showBanner('与你服务器的连接断开，正在重连…', 'warn');
+    showBanner(t('pvp.banner.disconnected'), 'warn');
   });
   if (socket.connected) onConnect();
 }
@@ -532,8 +564,9 @@ function bindSocket() {
 bindSocket();
 
 async function boot() {
+  applyStaticI18n();   // 静态文案（准备提示 / 操作提示 / 返回大厅）走 i18n
   if (!roomCode) {
-    setStatus('缺少房间参数（应形如 pvp-battle.html?room=ABC123&level=dujiang_pvp）', true);
+    setStatus(t('pvp.status.badRoom'), true);
     return;
   }
   if (hud.room) hud.room.textContent = `房间 ${roomCode} · 加载中…`;
