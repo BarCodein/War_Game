@@ -10,6 +10,7 @@ import { createSupplyLines } from '../rendering/supplyLines.js';
 import { createMapCamera } from '../rendering/cameraView.js';
 import { attackMoveCommand, moveCommand } from '../simulation/commands.js';
 import { alphaFor, interpolatePosition } from './interpolate.js';
+import { markVanishedUnits } from './missingUnits.js';
 import { createDeriveController } from './derive.js';
 
 // PvP 对局页（P4）：**只渲染服务器发来的快照**，本地不推进任何模拟。
@@ -355,14 +356,8 @@ function applySnapshot(snapshot) {
   debug.fogAuthority = snapshot.fogAuthority ?? 'client';
   updateFog(world);
 
-  // 快照里消失的单位：
-  //   · 己方 → 阵亡
-  //   · 敌方 → 迷雾在客户端（快照是全量）时，缺席即阵亡；服务端过滤模式下，缺席可能只是脱离视野
-  for (const unit of world.units) {
-    if (seen.has(unit.id) || unit.state === 'dead') continue;
-    if (unit.faction === myFaction) { unit.state = 'dead'; continue; }
-    if (debug.fogAuthority !== 'server' || isSpotted(world, unit, myFaction)) unit.state = 'dead';
-  }
+  // 快照里消失的单位 → 判定阵亡（规则见 src/pvp/missingUnits.js 与 docs/pvp-plan.md §11.13）
+  debug.vanishedUnits = markVanishedUnits(world, seen, myFaction, debug.fogAuthority);
 
   // "可见敌军"由客户端用迷雾判定（服务端不再替我们过滤）
   debug.visibleEnemies = world.units
