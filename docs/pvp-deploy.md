@@ -619,3 +619,20 @@ $ curl -o /dev/null -w '%{http_code}\n' http://179.255.135.95/pvp-battle.html
 
 > 至此 PvP 全链路已在真实服务器上跑通：浏览器 → Nginx（80）→ Node（127.0.0.1:3001）→ 权威模拟 → 分阵营快照 → 浏览器渲染。
 > 剩余可选项：线上压测（§10）、以及 docs/pvp-plan.md §11.6 的"交互对齐战役"（停止指令/路径显示，待排期）。
+
+### 10.4 派生校正通道（可选调参）
+
+控制线 / 补给线由浏览器本地算，服务器只按周期发一份校正包（见 `docs/pvp-plan.md` §11.11）。可调：
+
+| 环境变量 | 默认 | 说明 |
+|---|---|---|
+| `PVP_DERIVE_SYNC_MS` | `3` | 校正周期（秒）；`0` = 关闭该通道（客户端只显示本地线） |
+| `PVP_DERIVE_LOD` | `2` | 控制线折线抽样步长（越小越精确、越大越省流量） |
+
+观察：
+
+```bash
+curl -s http://127.0.0.1:3001/api/health | python3 -m json.tool | grep -E 'derive|fogAuthority'
+# "deriveSyncMs": 3000, "deriveLod": 2, "fogAuthority": "client"
+# sim.derivesSent / sim.deriveBytes：累计发出的校正包条数与字节（0.55 KB/s/人 为实测值）
+```

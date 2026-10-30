@@ -957,3 +957,93 @@ node scripts/pvp-load.mjs --server http://179.255.135.95 --rooms 4 --seconds 600
 
 **顺带修掉一个显示 bug**：从大厅跳到对局页时，旧 socket 关闭 + 新 socket 连上会被判定为"重连"，
 状态栏显示"已重连续局"。现在 `reconnected` 只在**已向对手播报过掉线**时才算，跳转不再误显示。
+
+---
+
+## 11.11 精调：控制线 / 补给线改为客户端派生（方案 B，2026-10-30）
+
+**做了什么**（草案见 `docs/pvp-derive-draft.md`）
+
+| 位置 | 变化 |
+|---|---|
+| `server/src/derive.js`（新） | `buildDerive()` 生成校正包：控制线折线（整数坐标、`lod` 抽样）+ 补给边 `[unitId, cityIdx]` + 断补 id 列表；`deriveHash()` 供"内容没变就不发"；`deriveBytes()` 供压测 |
+| `server/src/driver.js` | 每个活动对局按 `config.deriveSyncMs`（默认 3 s）向房间频道发 `world:derive`；内容哈希不变则跳过；`stats()` 增加 `derivesSent` / `deriveBytes` |
+| `server/src/config.js` | `PVP_DERIVE_SYNC_MS`（默认 3，0 = 关闭通道）、`PVP_DERIVE_LOD`（默认 2） |
+| `src/pvp/derive.js`（新） | 客户端派生控制器：本地跑 `updateControlLine()`（10 Hz）+ `refreshSupply()`（60 Hz 调用、内部 0.5 s/1 s 节流）；用校正包算 `mismatch` 并"轻拉/硬切/降级" |
+| `src/pvp/battle.js` | 挂 `createControlLineRenderer`（常显，与战役一致）与 `createSupplyLines`（选中才画）；收 `world:derive`；`__pvp.deriveStats` 暴露诊断量 |
+
+**信任边界（关键）**：客户端只调 `updateControlLine()` 与 `refreshSupply()`；**不调** `updateSupply()` /
+`updateSupplyStock()`（那些会回血、掉血、造兵）。单测断言"跑 120 帧后 hp 与补给存量完全不变"。
+
+**客户端校正策略**（决策：本地优先、零额外延迟）
+
+| 档 | 条件 | 动作 |
+|---|---|---|
+| 首包 | 刚进对局/重连 | 轻拉 0.9 s（此时本地本就没收敛） |
+| `soft` | `mismatch ≥ 2%` | 渲染折线 = 本地 × 0.85 + 服务器 × 0.15 |
+| `soft`（默认） | `mismatch < 2%` | **纯本地**，不干预 |
+| `hard` | `mismatch ≥ 25%` | 轻拉 + 计数 |
+| `freeze` | 连续 3 次 `hard` | 降级为只显示服务器折线；连续 2 包 < 5% 自动恢复 |
+
+**实测**
+
+| 指标 | 结果 |
+|---|---|
+| 客户端与服务端控制线偏差（稳态，e2e 实测） | **0.17%**（阈值 < 2%） |
+| 控制线折线 | 1 条 / 32 点（重采样后），渲染层正常绘制；形状与标签「实际控制线」与战役一致 |
+| 补给边 | 32 个单位全部有边；选中 1 个单位时 `supplyLines=1`、`supplySelected=1`（与战役一致：只画选中的） |
+| 本地派生 CPU | 0.173 ms×10 Hz + 0.383 ms×1 Hz + 0.034 ms×2 Hz ≈ **2.1 ms/s**（≈0.036 ms/帧） |
+| 校正包 | 18 包 / 20 s / 2 房间 = **43 950 B → ≈2.4 KB/包 → 0.55 KB/s/人**（目标 < 1 KB/s） |
+| 单测 | `tests/unit/pvp-derive.test.js`（6 条）+ `pvp-driver.test.js` 新增 3 条 = **15 条通过** |
+| e2e | `pvp-battle.spec.js` 增加派生断言（`mode=local`、`mismatch<10%`、`localPaths>0`、补给线被选中触发）→ **passed** |
+| 全量单测 | 574 passed / 8 failed（8 条仍是既有供应与配置漂移，与本次无关） |
+
+**为什么不改渲染层**：`createControlLineRenderer` 只读 `world.controlLinePaths`，`createSupplyLines` 只读
+`unit.supplyEdges` / `world.supplyToken` / `world.controlLine`，两者本来就不依赖"谁算的"，PvP 直接复用。
+
+**降级开关**：`PVP_DERIVE_SYNC_MS=0` 关闭校正通道（客户端只显示本地线）；
+`PVP_FOG_AUTHORITY=server` 时客户端拿不到全部敌军位置，会自动切到"只显示服务器折线"（`mode='server'`）。
+
+---
+
+## 11.12 修 bug：补给线"强制折回上一个途径点"（2026-10-30）
+
+**现象**（需求方反馈）：PvP 里本地渲染的补给线**有时**会先折回单位之前走过的位置，再折向前方的城市。
+
+**根因**：`createSupplyLines` 的路径缓存 key 是 `${unitId}|${cityId}|${relief}`，**不含单位位置**，
+缓存里存的是"从**当时**的单位位置算出来的 A* 折线"，只在 `world.supplyToken` 变化（代价场每 1 s 重算）时才失效。
+单位一旦继续移动，画出来的线就是：
+
+```
+[单位当前位置, 折线起点（旧位置）, …剩余路线, 城市]
+                ↑ 这一段就是"折回上一个途径点"
+```
+
+移动越快（急行军、溃逃、离开视野后的重定位）折回越明显，且每秒才被"修一次"，所以表现为"有时"。
+
+**修复**（两处，都在渲染层，规则与结算完全没动）
+
+| 位置 | 改动 |
+|---|---|
+| `src/rendering/supplyPathTrim.js`（新） | 纯几何工具：`offsetPx()`（单位到折线的**线段**距离）、`backtrackPx()`（首段是否往回走、回退多少像素）、`trimToUnit()`（把单位**投影**到折线上，返回 `[投影点, …剩余折线]`） |
+| `src/rendering/supplyLines.js` | 缓存改为 `{ path, x, y }`，命中时先 `trimToUnit()` 把线贴到单位身上；单位偏离缓存起点 **> 8 px** 就重跑 A*（实测 0.48 ms/次）；新增诊断量 `repath / startOffsetPx / backtrackPx / maxBacktrackRawPx / maxBacktrackDrawnPx` |
+
+**A/B 实测**（2 人一局，框选 12 个单位、长距离行军 10 秒，采样 16 次；数字是"折回像素"的最大值）
+
+| 配置 | 未裁剪折回（旧代码会画出来） | 实际画出的折回 |
+|---|---|---|
+| 修复前（缓存 1 s、不校验位置） | **29.4 px** | 29.4 px（等于没裁剪） |
+| 只加"位置失效重算"（8 px） | 12.2 px | 12.2 px |
+| **最终（投影裁剪 + 8 px 重算）** | 12.2 px | **0 px** ✅ |
+
+（残余的 12.2 px 是 A* 网格量化：路径起点是**格子中心**，与单位最多差半个格子；
+投影裁剪把这段垂直短跳画成"从单位垂直连到路线"，不再沿路线后退。）
+
+**代价**：A* 重跑 约 39 次/秒（12 个单位行进时）→ 39 × 0.479 ms ≈ **19 ms/s ≈ 0.3 ms/帧**；
+不选中单位时完全不跑（补给线只在选中时画）。
+
+**回归测试**：`tests/unit/supply-path-trim.test.js`（5 条：投影裁剪、起点附近不裁剪、真实折回检测、退化输入、
+线段偏移量）。全量单测 579 passed / 8 failed（8 条仍是既有供应与配置漂移）。
+
+**顺带说明**：这是战役渲染层的共享代码，所以单机战役的补给线也一起受益（同样的"折回"在战役里也存在，只是以前
+很少在移动中盯着看）。补给线**数值**（谁供谁、供多少、断没断）依旧完全由服务器/模拟决定，这里只改画法。

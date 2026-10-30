@@ -5,9 +5,12 @@ import { isSpotted, updateFog } from '../simulation/systems/fog.js';
 import { createTerrainRenderer } from '../rendering/terrainRenderer.js';
 import { createFogRenderer } from '../rendering/fogRenderer.js';
 import { UNIT_TEXTURES, createUnitRenderer } from '../rendering/unitRenderer.js';
+import { createControlLineRenderer } from '../rendering/controlLineRenderer.js';
+import { createSupplyLines } from '../rendering/supplyLines.js';
 import { createMapCamera } from '../rendering/cameraView.js';
 import { attackMoveCommand, moveCommand } from '../simulation/commands.js';
 import { alphaFor, interpolatePosition } from './interpolate.js';
+import { createDeriveController } from './derive.js';
 
 // PvP 对局页（P4）：**只渲染服务器发来的快照**，本地不推进任何模拟。
 //
@@ -184,6 +187,13 @@ class BattleScene extends Phaser.Scene {
     this.mapCamera = createMapCamera(this, world);
     this.overlay = this.add.graphics().setDepth(30);
 
+    // 控制线 / 补给线：与战役同款渲染器（控制线常显，补给线只在选中单位时画）。
+    // 数据由 src/pvp/derive.js 本地派生（服务器只按 3s 发一份校正包），见 docs/pvp-derive-draft.md。
+    this.controlLineRenderer = createControlLineRenderer(this, world);
+    this.supplyLines = createSupplyLines(this, world, this.selection);
+    this.derive = createDeriveController({ world, getSnapshot: () => debug.lastSnapshot });
+    debug.derive = this.derive;
+
     this.input.mouse?.disableContextMenu();
     this.input.on('pointerdown', (pointer) => {
       if (pointer.button !== 2) return;
@@ -235,9 +245,25 @@ class BattleScene extends Phaser.Scene {
   update(time, delta) {
     this.mapCamera.update(delta / 1000);
     this.interpolate(performance.now());
+    // 派生：控制线 10Hz / 补给分配 2Hz（本地算，服务器每 3s 校正一次）
+    this.derive.update(delta);
     this.unitRenderer.draw(delta / 1000);
+    this.controlLineRenderer.draw();
+    this.supplyLines.draw();
     this.fogRenderer.sync();
     this.drawOverlay();
+    debug.deriveStats = {
+      ...this.derive.stats(),
+      supplySelected: this.supplyLines.state.selected,
+      supplyLines: this.supplyLines.state.lines,
+      supplyCuts: this.supplyLines.state.cuts,
+      // 补给线路径缓存诊断：backtrack 是"折回上一个位置"的像素（修复前会到几十 px，修复后≈0）
+      supplyOffsetPx: Math.round(this.supplyLines.state.startOffsetPx * 10) / 10,
+      supplyBacktrackPx: Math.round(this.supplyLines.state.backtrackPx * 10) / 10,
+      supplyBacktrackRawMax: Math.round(this.supplyLines.state.maxBacktrackRawPx * 10) / 10,
+      supplyBacktrackDrawnMax: Math.round(this.supplyLines.state.maxBacktrackDrawnPx * 10) / 10,
+      supplyRepath: this.supplyLines.state.repath,
+    };
     updateHud();
   }
 
@@ -445,6 +471,8 @@ function onConnect() {
     saveToken(response.reconnectToken ?? response.room?.you?.reconnectToken);
     setStatus(`已进入对局（${debug.myFaction === 'red' ? '红方' : '蓝方'}）${response.reconnected ? ' · 已重连续局' : ''}`);
     if (response.match?.result) showResult(response.match.result);
+    // 重连/首次进入：清空本地派生的控制线场与折线，等下一份校正包重新对齐
+    debug.derive?.reset();
     updateHud();
   });
   setInterval(() => {
@@ -465,6 +493,10 @@ function bindSocket() {
   }
   socket.on('connect', onConnect);
   socket.on('tick', (snapshot) => applySnapshot(snapshot));
+  // 派生校正包（控制线折线 + 补给边）：低频（3s），用于本地派生的偏差度量与自愈
+  socket.on('world:derive', (packet) => {
+    debug.derive?.applyPacket(packet);
+  });
   socket.on('match:end', (payload) => {
     showBanner('');
     showResult(payload);

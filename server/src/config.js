@@ -71,6 +71,11 @@ export const config = {
   //   'client'（默认）→ 快照下发全部存活单位，客户端本地算迷雾（表现完整、可调参；**无防透视**，带宽约 +20%）
   //   'server'        → 服务器只下发目视到的敌军（防透视；客户端拿不到未目视敌军坐标）
   fogAuthority: process.env.PVP_FOG_AUTHORITY === 'server' ? 'server' : 'client',
+  // 派生数据校正包（方案 B，见 docs/pvp-derive-draft.md）：控制线/补给线由客户端本地算，
+  // 服务器每隔 deriveSyncMs 发一份最小校正数据（0 = 关闭该通道，客户端将只显示本地线）
+  deriveSyncMs: number(process.env.PVP_DERIVE_SYNC_MS, 3) * 1000,
+  // 控制线折线抽样步长（越小越精确、越大越省流量）
+  deriveLod: number(process.env.PVP_DERIVE_LOD, 2),
   // 可选择的对战地图（对称兵力模板，见 public/assets/pvp/）
   pvpLevels: String(process.env.PVP_LEVELS ?? 'dujiang_pvp,pingjin_pvp')
     .split(',').map((item) => item.trim()).filter(Boolean),

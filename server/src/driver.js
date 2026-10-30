@@ -9,21 +9,42 @@
 //   · 每局结束只结算一次（发 match:end + 从 active 表移除并通知房间管理器）
 export const SNAPSHOT_CHANNEL = (code, faction) => `room:${code}:${faction}`;
 
+import { buildDerive, deriveBytes, deriveHash } from './derive.js';
+
 export function createMatchDriver({ io, config, roomChannel, onMatchEnd = null, now = () => Date.now() }) {
-  const active = new Map();          // code → { room, lastSnapshotAt }
+  const active = new Map();          // code → { room, lastSnapshotAt, lastDeriveAt, deriveSeq, deriveHash }
   const snapshotMs = Math.max(16, Math.round(1000 / config.snapshotHz));
-  const totals = { snapshots: 0, frames: 0, tickMsTotal: 0, tickMsMax: 0 };
+  const deriveMs = Math.max(0, Math.round(config.deriveSyncMs ?? 0));
+  const totals = { snapshots: 0, frames: 0, tickMsTotal: 0, tickMsMax: 0, derives: 0, deriveBytes: 0 };
   let timer = null;
 
   function attach(room) {
     if (!room?.match || active.has(room.code)) return;
-    active.set(room.code, { room, lastSnapshotAt: 0 });
+    active.set(room.code, { room, lastSnapshotAt: 0, lastDeriveAt: 0, deriveSeq: 0, deriveHash: null });
     // 开局立刻给一次快照，客户端不用等到第一个 1/15s
     emitSnapshots(room);
   }
 
   function detach(code) {
     active.delete(code);
+  }
+
+  /**
+   * 派生包：控制线折线 + 补给边（见 docs/pvp-derive-draft.md）。
+   * 低频（默认 3 s）、内容没变就不发；发到房间频道（两阵营内容相同）。
+   */
+  function emitDerive(entry) {
+    if (!deriveMs || !entry.room?.match) return;
+    const payload = buildDerive(entry.room.match, { lod: config.deriveLod ?? 2 });
+    const hash = deriveHash(payload);
+    if (hash === entry.deriveHash) return;      // 无变化：省流量
+    entry.deriveHash = hash;
+    entry.deriveSeq += 1;
+    payload.seq = entry.deriveSeq;
+    const bytes = deriveBytes(payload);
+    totals.derives += 1;
+    totals.deriveBytes += bytes;
+    io.to(roomChannel(entry.room.code)).emit('world:derive', payload);
   }
 
   function emitSnapshots(room) {
@@ -67,6 +88,12 @@ export function createMatchDriver({ io, config, roomChannel, onMatchEnd = null, 
         entry.lastSnapshotAt = nowMs;
         emitSnapshots(room);
       }
+
+      // 派生包（控制线/补给边）：低频校正，内容没变不发
+      if (deriveMs && nowMs - entry.lastDeriveAt >= deriveMs) {
+        entry.lastDeriveAt = nowMs;
+        emitDerive(entry);
+      }
     }
   }
 
@@ -96,6 +123,9 @@ export function createMatchDriver({ io, config, roomChannel, onMatchEnd = null, 
     return {
       matches: active.size,
       snapshotsSent: totals.snapshots,
+      // 派生包（控制线/补给边）的条数与总字节，用于验收"<1 KB/s/人"
+      derivesSent: totals.derives,
+      deriveBytes: totals.deriveBytes,
       frames: totals.frames,
       ticks,
       slowTicks,

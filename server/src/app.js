@@ -188,6 +188,9 @@ export function createPvpServer(overrides = {}) {
     reconnectGraceSeconds: Math.round(config.disconnectGraceMs / 1000),
     snapshotHz: config.snapshotHz,
     fogAuthority: config.fogAuthority,   // 'client' = 迷雾由客户端算（快照含全部单位）；'server' = 服务端过滤
+    // 派生校正包（控制线/补给线本地算，服务器低频校正）：0 = 关闭该通道
+    deriveSyncMs: config.deriveSyncMs,
+    deriveLod: config.deriveLod,
     // 内存与 GC 观测（判断 100ms 级抖动是不是 GC 给的）
     memory: {
       rssMb: Math.round(process.memoryUsage().rss / 1048576),

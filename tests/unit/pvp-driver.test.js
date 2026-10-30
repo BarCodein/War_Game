@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { SNAPSHOT_CHANNEL, createMatchDriver } from '../../server/src/driver.js';
 import { MatchSim } from '../../server/src/match.js';
 import { loadPvpLevel } from '../../server/src/levels.js';
+import { moveCommand } from '../../src/simulation/commands.js';
 
 // P4 验收：60Hz 驱动 + 15Hz 快照广播 + 结束只结算一次。
 // 用假的 io 记录所有 emit，用真实的 MatchSim 推进（不需要 socket）。
@@ -139,5 +140,63 @@ describe('对局驱动：快照广播', () => {
     expect(stats.tickMsMax).toBeGreaterThan(0);
     expect(stats.slowTicks).toBeGreaterThanOrEqual(0);
     expect(Number.isFinite(stats.slowTicks)).toBe(true);
+  });
+});
+
+// 方案 B（docs/pvp-derive-draft.md）B1：服务器低频下发派生校正包
+describe('对局驱动：派生校正包 world:derive', () => {
+  const config = { snapshotHz: 15, deriveSyncMs: 300, deriveLod: 2 };
+
+  it('按 deriveSyncMs 节流，发到房间频道（两阵营共用一份）', () => {
+    const io = fakeIo();
+    const match = makeMatch();
+    // 让部队动起来：位置持续变化 → 折线/补给边跟着变 → 每个同步周期都会发
+    const blueIds = match.world.units.filter((unit) => unit.faction === 'blue').map((unit) => unit.id);
+    match.queueCommand('blue', { unitIds: blueIds, command: moveCommand([{ x: 640, y: 600 }]) });
+    const room = { code: 'DRV001', match };
+    const driver = createMatchDriver({ io, config, roomChannel });
+    driver.attach(room);
+
+    // 0.9 秒，每 16ms 一帧 → 300ms 一包 ⇒ 3 包左右
+    for (let ms = 0; ms <= 900; ms += 16) driver.tickOnce(5000 + ms);
+
+    const packets = io.byEvent('world:derive', 'room:DRV001');
+    expect(packets.length).toBeGreaterThanOrEqual(2);
+    expect(packets.length).toBeLessThanOrEqual(4);
+    // 只发到房间频道（不含 faction 后缀）
+    expect(io.sent.filter((item) => item.event === 'world:derive').every((item) => item.channel === 'room:DRV001')).toBe(true);
+
+    const payload = packets[0].payload;
+    expect(payload.controlLine.paths.length).toBeGreaterThan(0);
+    expect(payload.seq).toBe(1);
+    expect(payload.atTick).toBeGreaterThanOrEqual(0);
+    expect(driver.stats().derivesSent).toBe(packets.length);
+    expect(driver.stats().deriveBytes).toBeGreaterThan(0);
+  });
+
+  it('内容没变就不发（哈希跳过，seq 不增）', () => {
+    const io = fakeIo();
+    const match = makeMatch();
+    // 冻结模拟：世界状态不变 → 控制线/补给边内容相同 → 只应发首包
+    const frozen = Object.create(match);
+    frozen.update = () => {};
+    const room = { code: 'DRV002', match: frozen };
+    const driver = createMatchDriver({ io, config: { snapshotHz: 15, deriveSyncMs: 100 }, roomChannel });
+    driver.attach(room);
+    for (let ms = 0; ms <= 600; ms += 16) driver.tickOnce(1000 + ms);
+
+    const packets = io.byEvent('world:derive');
+    expect(packets).toHaveLength(1);
+    expect(packets[0].payload.seq).toBe(1);
+  });
+
+  it('deriveSyncMs=0 时完全不发（可一键关闭该通道）', () => {
+    const io = fakeIo();
+    const room = { code: 'DRV003', match: makeMatch() };
+    const driver = createMatchDriver({ io, config: { snapshotHz: 15, deriveSyncMs: 0 }, roomChannel });
+    driver.attach(room);
+    for (let ms = 0; ms <= 500; ms += 16) driver.tickOnce(ms);
+    expect(io.byEvent('world:derive').length).toBe(0);
+    expect(driver.stats().derivesSent).toBe(0);
   });
 });

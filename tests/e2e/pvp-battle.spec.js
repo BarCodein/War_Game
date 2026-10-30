@@ -75,6 +75,20 @@ test.describe('PvP 对局页', () => {
       expect(view.enemiesVisible).toBeGreaterThan(0);
       expect(view.cities).toBe(16);
 
+      // 控制线/补给线（方案 B）：客户端本地派生，服务器每 3s 校正一次
+      await expect.poll(() => pageA.evaluate(() => window.__pvp.deriveStats?.packets ?? 0), {
+        timeout: 15000, intervals: [500, 800, 1200],
+      }).toBeGreaterThanOrEqual(1);
+      const derive = await pageA.evaluate(() => ({
+        ...window.__pvp.deriveStats,
+        sceneWorldPaths: window.__pvp.world.controlLinePaths.length,
+      }));
+      expect(derive.mode).toBe('local');                 // 没有降级
+      expect(derive.localPaths).toBeGreaterThan(0);      // 本地算出了控制线
+      expect(derive.sceneWorldPaths).toBeGreaterThan(0); // 渲染层拿到的折线非空
+      expect(derive.mismatch).toBeLessThan(0.1);         // 稳态与服务端一致（草案要求 < 2%）
+      expect(derive.supplyEdges).toBeGreaterThan(0);     // 补给分配也跑通了
+
       // 静止单位与快照坐标一致（插值收敛，验收要求 < 0.5px）
       await expect.poll(async () => pageA.evaluate(() => {
         const debug = window.__pvp;
@@ -118,6 +132,14 @@ test.describe('PvP 对局页', () => {
         .toBe('playing');
       await expect(pageA.locator('#prepOverlay')).toBeHidden({ timeout: 20000 });
       await expect(pageA.locator('#hudTimer')).not.toHaveText('--:--');
+
+      // 选中单位后补给线叠加层应真的画出来（与战役一致：只在选中时画）
+      await expect.poll(() => pageA.evaluate(() => window.__pvp.deriveStats?.supplySelected ?? 0), {
+        timeout: 10000, intervals: [300, 600, 1000],
+      }).toBeGreaterThanOrEqual(1);
+      await expect.poll(() => pageA.evaluate(() => window.__pvp.deriveStats?.supplyLines ?? 0), {
+        timeout: 15000, intervals: [400, 800, 1200],
+      }).toBeGreaterThanOrEqual(1);
     } finally {
       await contextA.close();
       await contextB.close();

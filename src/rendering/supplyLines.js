@@ -1,6 +1,7 @@
 import { values } from '../config/index.js';
 import { t } from '../i18n/index.js';
 import { buildBlockedMask, findSupplyPath, inEnemyControl, supplyGrid } from '../simulation/supplyPath.js';
+import { backtrackPx, offsetPx, trimToUnit as trimToNearest } from './supplyPathTrim.js';
 
 // 补给线渲染（gdd.md §7）：**选中单位时**把它这一轮的补给线画出来。
 //
@@ -14,6 +15,8 @@ import { buildBlockedMask, findSupplyPath, inEnemyControl, supplyGrid } from '..
 // 路径按 world.supplyToken 缓存（代价场每 fieldRefreshSeconds 重算一次才失效），
 // 于是逐帧渲染的开销只有画线本身；单位那一端用实时坐标，线始终连在单位身上。
 const DEPTH = 7;        // 层级：地形 0 < 迷雾 1 < 控制线 2 < 城市 3 < 单位 4/5 < 城市标签 6 < 补给线 7
+// 单位偏离缓存折线起点超过这个距离就重跑 A*（实测 0.48 ms/次；走 40 px/s 时约 1.7 次/秒/单位）
+const REPATH_PX = 8;
 const LABEL_DEPTH = 8;
 const MAX_UNITS = 12;   // 同时选中很多单位时只画前 12 个，避免画面糊成一片
 
@@ -35,7 +38,16 @@ export function createSupplyLines(scene, world, selection) {
   let masks = {};          // 敌方控制区掩码（同一轮里所有 A* 共用，避免逐个 A* 重建）
   let cacheToken = -1;
   // 上一帧的画线结果，供 e2e / 调试读取（渲染层不做判断，只是把"画了什么"记下来）
-  const state = { selected: 0, lines: 0, cuts: 0, note: null };
+  const state = {
+    selected: 0, lines: 0, cuts: 0, note: null,
+    repath: 0,                 // 累计重跑 A* 的次数
+    startOffsetPx: 0,          // 本帧"画线起点 vs 单位位置"的最大距离
+    maxStartOffsetPx: 0,       // 上述值的累计最大
+    backtrackPx: 0,            // 本帧裁剪后仍"折回"的像素（应接近 0）
+    backtrackRawPx: 0,         // 本帧未裁剪时的"折回"像素（缓存路径起点相对单位的反向投影）
+    maxBacktrackDrawnPx: 0,    // 裁剪后折回的累计最大（修复效果）
+    maxBacktrackRawPx: 0,      // 未裁剪折回的累计最大（原来的 bug 幅度）
+  };
 
   function draw() {
     lines.clear();
@@ -61,6 +73,7 @@ export function createSupplyLines(scene, world, selection) {
     }
 
     let note = null; // { x, y, text }：只显示一条提示，避免多个单位时字叠在一起
+    state.startOffsetPx = 0;   // 每帧重置（只统计本帧画出来的线）
     let lineCount = 0;
     let cutCount = 0;
     for (const unit of selected) {
@@ -117,16 +130,48 @@ export function createSupplyLines(scene, world, selection) {
     }
   }
 
-  // 路径缓存：同一轮补给（同一个 supplyToken）内不重复跑 A*
+  // 路径缓存：同一轮补给（同一个 supplyToken）内不重复跑 A*。
+  //
+  // ⚠️ 缓存里存的是"从**当时**的单位位置算出来的折线"。单位一直在动，如果直接复用，
+  // 画出来的线会是 `[单位当前位置, 折线起点（旧位置）, …]` —— 视觉上就是"先折回上一个位置"。
+  // 所以命中缓存时先把折线**头部裁到离单位最近的点**（不再折回），并且单位偏离缓存起点
+  // 超过 REPATH_PX 就重算（A* 实测 0.48 ms/次，不能每帧跑）。
   function pathFor(unit, city, relief) {
     const key = `${unit.id}|${city.id}|${relief ? 'r' : 'b'}`;
-    if (cache.has(key)) return cache.get(key);
+    const hit = cache.get(key);
+    if (hit && Math.hypot(hit.x - unit.x, hit.y - unit.y) <= REPATH_PX) {
+      return trimToUnit(hit.path, unit);
+    }
     if (!relief && !masks[unit.faction]) masks[unit.faction] = buildBlockedMask(world, unit.faction);
     const path = findSupplyPath(world, unit.faction,
       { x: unit.x, y: unit.y }, { x: city.x, y: city.y },
       { ignoreControl: relief, mask: relief ? null : masks[unit.faction] });
-    cache.set(key, path);
+    if (path) {
+      cache.set(key, { path, x: unit.x, y: unit.y });
+      state.repath += 1;
+    }
     return path;
+  }
+
+  /** 丢掉折线头部"在单位身后"的点，并把诊断量记到 state（几何逻辑在 supplyPathTrim.js，有单测） */
+  function trimToUnit(path, unit) {
+    if (!path || path.length < 2) return path;
+    // 诊断①：未裁剪时"折回"有多长（= 缓存路径起点相对单位当前位置的反方向投影）
+    const rawBacktrack = backtrackPx(path, unit);
+    if (rawBacktrack > state.maxBacktrackRawPx) state.maxBacktrackRawPx = rawBacktrack;
+    state.backtrackRawPx = rawBacktrack;
+
+    // 诊断②：画线起点（最近点）与单位当前位置的距离
+    const offset = offsetPx(path, unit);
+    state.startOffsetPx = Math.max(state.startOffsetPx, offset);
+    if (offset > state.maxStartOffsetPx) state.maxStartOffsetPx = offset;
+
+    const trimmed = trimToNearest(path, unit);
+    // 诊断③：裁剪之后还剩多少折回（应接近 0）
+    const drawnBacktrack = backtrackPx(trimmed, unit);
+    state.backtrackPx = drawnBacktrack;
+    if (drawnBacktrack > state.maxBacktrackDrawnPx) state.maxBacktrackDrawnPx = drawnBacktrack;
+    return trimmed;
   }
 
   // 折线上第一个落在敌方实际控制区里的点（= 补给被切断的地方）
