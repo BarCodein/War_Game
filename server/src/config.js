@@ -76,6 +76,9 @@ export const config = {
   deriveSyncMs: number(process.env.PVP_DERIVE_SYNC_MS, 3) * 1000,
   // 控制线折线抽样步长（越小越精确、越大越省流量）
   deriveLod: number(process.env.PVP_DERIVE_LOD, 2),
+  // 行军路线下发（docs/pvp-plan.md §11.15）：默认开；`PVP_SEND_ROUTES=0` 一键关闭
+  // （客户端会自动退回"预计路线"模式，便于线上出问题时降级）
+  sendRoutes: process.env.PVP_SEND_ROUTES !== '0',
   // 可选择的对战地图（对称兵力模板，见 public/assets/pvp/）
   pvpLevels: String(process.env.PVP_LEVELS ?? 'dujiang_pvp,pingjin_pvp')
     .split(',').map((item) => item.trim()).filter(Boolean),

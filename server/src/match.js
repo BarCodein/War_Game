@@ -23,6 +23,10 @@ export const STEP_MS = STEP_SECONDS * 1000;
 const MAX_CATCH_UP_STEPS = 5;
 const MAX_FRAME_MS = 1000;
 const COMMANDS_PER_SECOND = 20;
+// 批量下令的上限（一次玩家操作最多带多少条"单位组命令"）：多选整队拖路径时约 16–32 条
+const MAX_BATCH_ORDERS = 64;
+// 单条命令最多带多少个单位 id
+const MAX_UNIT_IDS = 200;
 const MAX_STORED_EVENTS = 200;
 
 const summarizeEvent = (event) => {
@@ -37,11 +41,14 @@ const summarizeEvent = (event) => {
 };
 
 export class MatchSim {
-  constructor({ level, map, levelId = level?.id ?? 'pvp', timeLimitMs = 600_000, prepMs = values.prep.seconds * 1000, fogAuthority = 'client', now = () => Date.now() }) {
+  constructor({ level, map, levelId = level?.id ?? 'pvp', timeLimitMs = 600_000, prepMs = values.prep.seconds * 1000, fogAuthority = 'client', sendRoutes = true, now = () => Date.now() }) {
     if (!level || !map) throw new Error('[match] 需要 level 与 map');
     this.levelId = levelId;
     // 迷雾归属：'client' = 快照含全部单位、由客户端本地算迷雾（默认）；'server' = 服务器按视野过滤（防透视）
     this.fogAuthority = fogAuthority === 'server' ? 'server' : 'client';
+    // 是否向客户端下发行军路线（只发己方、且只在变化时发；PVP_SEND_ROUTES=0 可一键关闭）
+    this.sendRoutes = sendRoutes !== false;
+    this.sentRouteState = { blue: new Map(), red: new Map() };
     this.level = level.scripts ? level : parseLevel(level);   // 允许传原始 JSON 或已解析的关卡
     this.world = new World(map);
     deployForces(this.world, this.level.forces, this.level.anchors);
@@ -180,6 +187,55 @@ export class MatchSim {
     return { ok: true, units: owned.length };
   }
 
+  /**
+   * 批量下令（U1）：一次玩家操作 = 一条 socket 消息、**整批只消耗 1 次限频额度**。
+   * 为什么需要：战役的"多选拖路径"是**每个单位一条绝对路径**（保持队形），16–32 个单位就是
+   * 16–32 条命令，而限频是 20 条/秒/人 —— 逐条发会被拒掉一部分。这里逐条校验、整批计数。
+   * @param {'blue'|'red'} faction
+   * @param {{unitIds?: number[], command: object}[]} orders
+   * @returns {{ok: boolean, code?: string, applied?: number, units?: number, rejected?: {code: string, unitIds: number[]}[]}}
+   */
+  queueCommandBatch(faction, orders) {
+    if (this.phase === 'finished') return this.reject('MATCH_OVER');
+    if (!this.factions.includes(faction)) return this.reject('BAD_FACTION');
+    if (!Array.isArray(orders) || orders.length === 0) return this.reject('BAD_COMMAND');
+    if (orders.length > MAX_BATCH_ORDERS) return this.reject('BATCH_TOO_LARGE');
+    if (!this.consumeCommandBudget(faction)) return this.reject('RATE_LIMITED');
+
+    let applied = 0;
+    let units = 0;
+    const rejected = [];
+    for (const order of orders) {
+      let command;
+      try {
+        command = validateCommand(order?.command);
+      } catch {
+        rejected.push({ code: 'BAD_COMMAND', unitIds: Array.isArray(order?.unitIds) ? order.unitIds : [] });
+        this.stats.rejectedByCode.BAD_COMMAND = (this.stats.rejectedByCode.BAD_COMMAND ?? 0) + 1;
+        this.stats.rejected += 1;
+        continue;
+      }
+      const requested = Array.isArray(order?.unitIds) ? order.unitIds.slice(0, MAX_UNIT_IDS) : [];
+      const owned = this.world.units
+        .filter((unit) => unit.faction === faction && unit.state !== 'dead' && requested.includes(unit.id))
+        .map((unit) => unit.id);
+      if (owned.length === 0) {
+        rejected.push({ code: 'NO_UNITS', unitIds: requested });
+        this.stats.rejectedByCode.NO_UNITS = (this.stats.rejectedByCode.NO_UNITS ?? 0) + 1;
+        this.stats.rejected += 1;
+        continue;
+      }
+      this.world.issueCommands(owned, command);
+      applied += 1;
+      units += owned.length;
+    }
+
+    this.stats.commands[faction] += applied;
+    this.stats.batches = (this.stats.batches ?? 0) + 1;
+    if (applied === 0) return { ok: false, code: rejected[0]?.code ?? 'BAD_COMMAND', rejected };
+    return { ok: true, applied, units, rejected };
+  }
+
   /** 统一记一次拒绝（按错误码分类，便于压测/运维看出"被拒"到底是什么原因） */
   reject(code) {
     this.stats.rejected += 1;
@@ -286,7 +342,74 @@ export class MatchSim {
       result: this.result,
       unitsAlive: this.unitCounts(),
       fogAuthority: this.fogAuthority,
+      routeDeltas: this.routeDeltasFor(faction),
     });
+  }
+
+  // ---------- 行军路线下发（§11.15）----------
+
+  /**
+   * 计算"自上次发给该阵营以来变化的路线字段"。只处理**己方存活单位**，
+   * 返回 Map<unitId, patch>，patch 里只含变化的键（route / routeIndex / pendingQueue / forcedMarch）。
+   * 无变化返回 null（快照里就不带任何路线字段）。
+   */
+  routeDeltasFor(faction) {
+    if (!this.sendRoutes) return null;
+    const state = this.sentRouteState?.[faction];
+    if (!state) return null;
+    let deltas = null;
+    for (const unit of this.world.units) {
+      if (unit.faction !== faction || unit.state === 'dead') {
+        state.delete(unit.id);
+        continue;
+      }
+      const route = unit.route ?? [];
+      const queue = unit.pendingQueue ?? [];
+      const routeHash = hashPoints(route);
+      const queueHash = hashSegments(queue);
+      const forced = Boolean(unit.forcedMarch);
+      const routeIndex = unit.routeIndex ?? 0;
+      const last = state.get(unit.id);
+      const patch = {};
+      // 首次同步时"本来就没路线"的单位不必发空数组（客户端镜像默认就是空的）→ 首帧体积更小
+      if (!last && route.length === 0 && queue.length === 0 && !forced) {
+        state.set(unit.id, { routeHash, queueHash, routeIndex, forced });
+        continue;
+      }
+      if (!last || last.routeHash !== routeHash) {
+        // 路线形状变了：直接发整条（客户端存整条 + routeIndex，绘制时按战役的 slice 方式取剩余）
+        patch.route = route.map((point) => [round1(point.x), round1(point.y)]);
+      }
+      if (!last || last.routeIndex !== routeIndex) patch.routeIndex = routeIndex;
+      if (!last || last.queueHash !== queueHash) {
+        patch.pendingQueue = queue.map((segment) => segment.map((point) => [round1(point.x), round1(point.y)]));
+      }
+      if (!last || last.forced !== forced) patch.forcedMarch = forced;
+      if (Object.keys(patch).length === 0) continue;
+      state.set(unit.id, { routeHash, queueHash, routeIndex, forced });
+      deltas ??= new Map();
+      deltas.set(unit.id, patch);
+    }
+    return deltas;
+  }
+
+  /** 全量路线（首次进入 / 断线重连用）：[{ id, route, routeIndex, pendingQueue, forcedMarch }]，只含己方 */
+  routesSnapshot(faction) {
+    if (!this.sendRoutes) return [];
+    return this.world.units
+      .filter((unit) => unit.faction === faction && unit.state !== 'dead')
+      .map((unit) => ({
+        id: unit.id,
+        route: (unit.route ?? []).map((point) => [round1(point.x), round1(point.y)]),
+        routeIndex: unit.routeIndex ?? 0,
+        pendingQueue: (unit.pendingQueue ?? []).map((segment) => segment.map((point) => [round1(point.x), round1(point.y)])),
+        forcedMarch: Boolean(unit.forcedMarch),
+      }));
+  }
+
+  /** 该阵营的路线同步状态作废（重连后下一帧重发全量） */
+  resetRouteSync(faction) {
+    this.sentRouteState[faction]?.clear();
   }
 
   get state() {
@@ -335,4 +458,27 @@ export function warmupEngine({ level, map, ticks = 60 }) {
 /** 仅测试用：清空预热缓存 */
 export function resetWarmupCache() {
   warmedLevels.clear();
+}
+
+// ---------- 路线哈希（"变化才发"的判定）----------
+const round1 = (value) => Math.round(value * 10) / 10;
+
+function hashPoints(points) {
+  let hash = 2166136261;
+  for (const point of points ?? []) {
+    hash ^= Math.round(point.x * 10) | 0;
+    hash = Math.imul(hash, 16777619);
+    hash ^= Math.round(point.y * 10) | 0;
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+}
+
+function hashSegments(segments) {
+  let hash = 2166136261;
+  for (const segment of segments ?? []) {
+    hash ^= hashPoints(segment);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
 }

@@ -84,6 +84,7 @@ export function createPvpServer(overrides = {}) {
         level, map,
         timeLimitMs: config.matchTimeLimitMs,
         fogAuthority: config.fogAuthority,   // 默认 'client'：快照含全部单位，迷雾由客户端本地算
+        sendRoutes: config.sendRoutes,        // 默认 true：己方行军路线"变化才发"（PVP_SEND_ROUTES=0 关闭）
       });
       match.start(Date.now());
       return { matchId: randomUUID(), match };
@@ -191,6 +192,7 @@ export function createPvpServer(overrides = {}) {
     // 派生校正包（控制线/补给线本地算，服务器低频校正）：0 = 关闭该通道
     deriveSyncMs: config.deriveSyncMs,
     deriveLod: config.deriveLod,
+    sendRoutes: config.sendRoutes,       // 行军路线下发开关（PVP_SEND_ROUTES=0 关闭）
     // 内存与 GC 观测（判断 100ms 级抖动是不是 GC 给的）
     memory: {
       rssMb: Math.round(process.memoryUsage().rss / 1048576),
@@ -294,10 +296,19 @@ export function createPvpServer(overrides = {}) {
           }
           : null;
 
+        // 路线全量同步（§11.15）：新进入/重连的客户端拿不到"变化才发"的历史增量，
+        // 所以这里给一份全量，并把该阵营的同步状态作废 → 下一帧快照会再带一遍全量兜底。
+        const faction = player.faction;
+        if (match && room.state === 'playing' && config.sendRoutes) {
+          match.resetRouteSync(faction);
+        }
+
         ack?.({
           ok: true,
           room: roomView(room, me.id),
           match: matchInfo,
+          // 行军路线全量（只含己方）：{ id, route, routeIndex, pendingQueue, forcedMarch }
+          routes: match && room.state === 'playing' && config.sendRoutes ? match.routesSnapshot(faction) : [],
           reconnectToken: player.reconnectToken,
           // 只有"真的掉线并被播报过"才算重连；大厅→对局页的页面跳转不该显示"已重连续局"
           reconnected: wasDisconnected && wasNotified,
@@ -325,10 +336,13 @@ export function createPvpServer(overrides = {}) {
           throw new RoomError('MATCH_NOT_PLAYING', '对局未在进行中', 409);
         }
         const faction = socket.data.faction;
-        const result = room.match.queueCommand(faction, {
-          unitIds: Array.isArray(payload?.unitIds) ? payload.unitIds.slice(0, 200) : [],
-          command: payload?.command,
-        });
+        // U1：批量下令（一次玩家操作 = 一条消息，整批 1 次限频）；旧 payload 继续按单条处理
+        const result = Array.isArray(payload?.orders)
+          ? room.match.queueCommandBatch(faction, payload.orders)
+          : room.match.queueCommand(faction, {
+            unitIds: Array.isArray(payload?.unitIds) ? payload.unitIds.slice(0, 200) : [],
+            command: payload?.command,
+          });
         ack?.(result);
       } catch (error) {
         replyError(socket, ack, error);

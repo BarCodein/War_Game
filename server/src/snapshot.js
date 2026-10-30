@@ -16,13 +16,13 @@ import { isSpotted } from '../../src/simulation/systems/fog.js';
 // 体积控制：数值保留 1 位小数（位置/血量）；实测 24 单位 ≈ 4.7 KB、32 单位 ≈ 5.6 KB。
 const round1 = (value) => Math.round(value * 10) / 10;
 
-function visibleUnits(world, faction, fogAuthority = 'client') {
+function visibleUnits(world, faction, fogAuthority = 'client', routeDeltas = null) {
   const list = [];
   for (const unit of world.units) {
     if (unit.state === 'dead') continue;
     const own = unit.faction === faction;
     if (!own && fogAuthority === 'server' && !isSpotted(world, unit, faction)) continue;
-    list.push({
+    const entry = {
       id: unit.id,
       faction: unit.faction,
       type: unit.type,
@@ -33,7 +33,14 @@ function visibleUnits(world, faction, fogAuthority = 'client') {
       state: unit.state,
       group: unit.group ?? null,
       supplyStock: round1(unit.supplyStock ?? 0),
-    });
+    };
+    // 行军路线：**只给己方**，且只带"自上次发送以来变化的字段"（见 docs/pvp-plan.md §11.15）。
+    // 敌方单位永远不带路线 —— 路线是"意图"，泄露它比泄露位置更严重；渲染层也就无从画起。
+    if (own) {
+      const patch = routeDeltas?.get(unit.id);
+      if (patch) Object.assign(entry, patch);
+    }
+    list.push(entry);
   }
   return list;
 }
@@ -41,7 +48,7 @@ function visibleUnits(world, faction, fogAuthority = 'client') {
 /**
  * @param {object} world   src/simulation 的 World
  * @param {'blue'|'red'} faction  接收者的阵营
- * @param {object} meta    { tick, phase, elapsedMs, timeLeftMs, events, result, unitsAlive, casualties }
+ * @param {object} meta    { tick, phase, elapsedMs, timeLeftMs, events, result, unitsAlive, casualties, routeDeltas }
  */
 export function buildSnapshot(world, faction, meta = {}) {
   const fogAuthority = meta.fogAuthority === 'server' ? 'server' : 'client';
@@ -53,7 +60,7 @@ export function buildSnapshot(world, faction, meta = {}) {
     you: faction,
     // 迷雾归属：'client' 时这里是全部存活单位（客户端本地过滤视野），'server' 时已过滤
     fogAuthority,
-    units: visibleUnits(world, faction, fogAuthority),
+    units: visibleUnits(world, faction, fogAuthority, meta.routeDeltas),
     cities: world.cities.map((city) => ({
       id: city.id,
       x: round1(city.x),

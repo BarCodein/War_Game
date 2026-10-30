@@ -798,7 +798,12 @@ npx vitest run tests/unit/pvp-driver.test.js tests/unit/pvp-interpolate.test.js
 
 ---
 
-## 11.6 已知差异：PvP 的交互暂未对齐战役（待排期）
+## 11.6 已知差异：PvP 的交互暂未对齐战役（**已被 §11.14 / §11.15 解决，保留作历史记录**）
+
+> 状态（2026-10-30）：本节列出的缺口已基本补完 —— U1–U3 见 §11.14（输入层复用、批量命令、S 停止、
+> 预览路线），P2/P0 见 §11.15（**真实 `route`/`pendingQueue` 由服务器"变化才发"下发**、绘制改为与战役共用
+> `rendering/battleOverlay.js`、循环/键盘/i18n 回归战役）。仍未做：HUD 面板复用（P1）与音效（P3），
+> 以及暂停/变速（有意不做）。
 
 `src/simulation` 是同一套内核，但**界面交互层没有沿用**战役的那一套。原因不是"内核不同"，而是
 **客户端不再拥有世界状态**：战役里 `createOrders` 直接往本地 `world` 下命令、并读 `unit.route` 画轨迹；
@@ -1092,3 +1097,122 @@ for (const unit of world.units) {
 
 **部署提醒**：这个修复随 `develop` 上的提交一起生效；部署版要修好必须把 `develop` 推到 `main`
 （CI 重新构建静态产物 → 服务器 `git pull` 后客户端代码才更新）。
+
+---
+
+## 11.14 实现 U1–U3：命令由浏览器生成 → 批量发给服务器（2026-10-30）
+
+按 `docs/pvp-orders-ui-plan.md`（UI 方案）与需求方确认的方案 A（批量 `cmd` + 服务端 `queueCommandBatch`）实现：
+
+| 阶段 | 内容 | 代码 |
+|---|---|---|
+| **U1** | 复用战役输入层：左键从己方单位拖出轨迹 = `move` 多段路径、Shift+拖 = `appendRoute`、按住 **E** = `forced` 急行军；一次操作**打包成一条 `cmd` 消息**，服务器整批只扣 1 次限频 | `src/input/orders.js`（新增 `buildFormationOrders()` / `routeAnchorOf()`，`createOrders(..., { issue, getFaction })` 注入执行者）、`src/input/selection.js`（支持 `getFaction`）、`src/pvp/commandQueue.js`（打包/回执）、`server/src/match.js#queueCommandBatch`、`server/src/app.js`（`cmd` 兼容 `{orders}` 与旧 `{unitIds,command}`） |
+| **U2** | 右键语义对齐战役：空地 = `attackMove`、Shift+右键 = `enqueueRoute`、右键**已目视**敌军 = `lock`、E+右键 = 急行军；**S = 停止**（`hold`）、ESC = 取消选择；Space/1/2/3 只提示不生效 | `src/pvp/pvpKeyboard.js`、`src/input/orders.js#handleRightClick`、`pvp-battle.html` 的 `#orderToast` 回执提示 |
+| **U3** | 拖动中的轨迹线（急行军换色）+ 下令后的"预计路线"（本地 `planRoute` 画半透明虚线），服务器改道/超时后自动消失 | `src/pvp/routePreview.js`、`src/pvp/battle.js#drawOverlay/dashPolyline` |
+
+**队形怎么算（决定：放本地）**：`buildFormationOrders()` 把拖出的轨迹转成**每个单位一条绝对路径**
+（各自位置/锚点 + 同一组相对位移），因此队形不会全挤到一条线上；服务器只按绝对路径执行
+（`planRoute` 起点永远是单位自身位置，客户端给的只是途经点 → 无法瞬移，见 `movement.js:844`）。
+
+**实测（双人 e2e + 单测）**
+
+| 项 | 结果 |
+|---|---|
+| 框选 16 个单位拖一条折线 | `batches=1`、`orders=16`、`applied=16`、`units=16`、`rejected=0`（**没有 RATE_LIMITED**） |
+| 带宽 | 16 单位 × 16 路点 ≈ 6 KB **一条**消息（旧的逐条发要 16 条、并且会被 20 条/秒限频拒掉一部分） |
+| 预计路线 | 松手瞬间 `previewCount=16`，12 秒后 `0`（超时/偏离自动清理） |
+| 回执 | 提示条显示「已下令 16 个单位」；部分被拒时显示原因（`NO_UNITS` 等中文映射） |
+| S 停止 | 快照里单位 `state` 变为 `hold` |
+| 右键攻击前进 | 一次右键对全部选中单位 = **一条**命令（共享 target） |
+| 单测 | `tests/unit/pvp-formation-orders.test.js`（4 条：队形不塌/急行军/追加锚点/跳过阵亡）、`tests/unit/pvp-command-batch.test.js`（4 条：整批 1 次限频/部分失败/非法批次/结束态）→ 全通过 |
+| e2e | 新增 `tests/e2e/pvp-orders.spec.js`（U1+U2+U3 全流程）passed；`pvp-battle.spec.js`、`pvp-reconnect.spec.js` 回归 passed |
+| 全量单测 | **593 passed / 8 failed**（8 条仍是既有供应与配置漂移） |
+
+**顺带修的两处 UI 细节**
+
+1. 对手掉线/重连不再覆盖 `#battleStatus`（那是"已进入对局…"这类稳定状态），改为横幅 + 提示条，
+   否则页面跳转触发的 `opponent:rejoin` 会把状态刷成"对手已重连"。（`pvp-battle.spec.js` 因此稳定）
+2. `createSelection` 增加 `ids()/size()`（PvP 调试与 e2e 用；战役行为不变）。
+
+**仍未做（U4，需单独排期）**：快照里加 `route/pendingQueue` 显示**真实**行军路线（现在只有本地"预计路线"，
+服务器绕行时会消失而不是改画）、触屏长按代替右键、单位卡片面板。
+
+---
+
+## 11.15 实现 P2/P0：行军路线下发（变化才发）+ 绘制复用 + 循环/键盘/i18n 回归战役（2026-10-30）
+
+按需求方确认的方案（`docs/pvp-orders-ui-plan.md` §0 决策表）：**接受给快照加路线字段**，只发己方、只在变化时发；
+迷雾与控制线/补给线**保持现状**；HUD 与音效**不复用**（P1/P3 不做）。
+
+### 11.15.1 服务端
+
+| 位置 | 变化 |
+|---|---|
+| `server/src/snapshot.js` | `visibleUnits()` 接受 `routeDeltas`，**只对己方单位**合并 `route/routeIndex/pendingQueue/forcedMarch`（缺字段不带） |
+| `server/src/match.js` | 新增 `sentRouteState`（每阵营一份）、`routeDeltasFor(faction)`（按 4 个哈希判定变化）、`routesSnapshot(faction)`（ack 全量）、`resetRouteSync(faction)`；`MatchSim({ sendRoutes })` |
+| `server/src/config.js` | `sendRoutes`（`PVP_SEND_ROUTES=0` 一键关闭，客户端自动退回"预计路线"） |
+| `server/src/app.js` | 建局传 `sendRoutes`；`match:join` ack 增加 `routes`（全量）并 `resetRouteSync`；`/api/health` 暴露 `sendRoutes` |
+
+**"变化才发"的判定**：`routeHash`（整条路线点数组）、`routeIndex`、`queueHash`（整段）、`forcedMarch` 四元组，
+逐单位与上次发送比较；首帧"本来没路线"的单位**不发空数组**（客户端镜像默认就是空的）。
+
+| 场景 | 实测体积 |
+|---|---|
+| 16 单位下令帧（单点路径） | **+1.3 KB**（一次性） |
+| 长拖 16 点折线 | **+3–4 KB**（一次性） |
+| 过路点（只 `routeIndex`） | **104 B** |
+| 稳态（无变化） | **0 B** |
+
+### 11.15.2 客户端
+
+| 位置 | 变化 |
+|---|---|
+| `src/pvp/routeState.js`（新） | `applyRoutePatch()`（**缺字段不覆盖**）、`applyRoutesFull()`（ack 全量）、`clearRoutesOfDead()`、`countRoutes()` |
+| `src/pvp/battle.js` | 快照里合并路线；真实路线到手即删 `previewRoute`；`match:join` 应用 ack 全量；`__pvp.routeStats = { ownWithRoute, deltasApplied, previews }`；**删除落点圆圈 `orderFlash`**（Q6） |
+| `src/pvp/routePreview.js` | 保留但降级为"下令→首帧快照"的占位（真实路线到达即清空） |
+
+### 11.15.3 绘制复用（P0 第 2 项，**改动战役侧代码**）
+
+| 文件 | 改动 |
+|---|---|
+| `src/rendering/battleOverlay.js`（新） | 从 `GameScene` **逐行搬运**：`drawArrow` / `drawDashedPath` / 框选矩形 / 拖动轨迹 / 行军路线（3px + 箭头）/ 排队虚线（2px）。颜色、线宽、绘制顺序原样保留 |
+| `src/rendering/scenes/GameScene.js` | `drawOverlays()` 改为调用 `drawBattleOverlays(...)`（战役行为不变）；删除文件内私有 `drawArrow`/`drawDashedPath` 与 `FORCED_ROUTE_COLOR` 常量 |
+| `src/pvp/battle.js` | `drawOverlay()` 改为调用同一函数（`viewerFaction = 我`）；删除自写的 `dashPolyline`；框选矩形样式也随之与战役一致（`0x111111` / 1px） |
+
+### 11.15.4 循环 / 键盘 / i18n（P0 其余三项）
+
+| 文件 | 改动 | 战役侧影响 |
+|---|---|---|
+| `src/simulation/loop.js` | 新增 `createFixedStepper({ step, maxCatchUpTicks, onTick })`；`createLoop()` 变成它的薄封装 | 行为不变（`ai-engage.test.js` 8 条全过） |
+| `src/input/keyboard.js` | 签名改为 `createKeyboard(scene, selection, { controller, issue, onHint })`；无 controller 时暂停/变速只提示，S 走注入的 `issue` | `GameScene` 调用点改成 `{ controller: this.controller }`，四条键位行为不变 |
+| `src/pvp/pvpKeyboard.js` | **删除**（已由共享键盘覆盖） |
+| `src/i18n/{zh-CN,en}.js` | 新增 `pvp.*` 共 48 个 key | 纯新增，不影响战役文案 |
+| `src/i18n/apply.js`（新） | `applyStaticI18n()`：给静态 HTML 的 `data-i18n` 文案套上 `t()` | 战役页面不使用 |
+| `pvp-battle.html` | 准备提示 / 操作提示 / 返回大厅 走 `data-i18n`；启动时套一遍 | — |
+| `src/pvp/battle.js` / `commandQueue.js` | 状态、横幅、提示条、错误码全部改 `t()`（中文/英文两份） | — |
+
+### 11.15.5 测试与验收
+
+| 项 | 结果 |
+|---|---|
+| 新增单测 | `pvp-snapshot-routes`（8）、`pvp-route-state`（5）、`battle-overlay`（4）、`loop-stepper`（5）→ **22 条全过** |
+| 全量单测 | **615 passed / 8 failed**（8 条仍是既有供应与配置漂移；战役侧改动后同样通过） |
+| e2e：下令 + 路线 | `pvp-orders.spec.js` 扩展为"真实路线到达、`deltasApplied>0`、`ownWithRoute>=16`、预览归零、Shift 排队可见" → **passed** |
+| e2e 回归 | `pvp-battle`（1）+ `pvp-reconnect`（2）→ **3 passed** |
+| 截图 | 路线为**实线 + 末端箭头**（与战役一致）；Shift 排队出现**虚线**；`ownWithRoute=16`、`queued=16` |
+| 带宽 | 下令帧 +1.3–4 KB（一次）；稳态 0 B |
+| 客户端 CPU | 增量 < 0.05 ms/帧（合并 + 复用绘制） |
+
+### 11.15.6 战役侧改动清单（需求方要求每次报备）
+
+1. `src/rendering/scenes/GameScene.js`：`drawOverlays()` 改为调用共享 `battleOverlay.js`；删除私有 `drawArrow`/`drawDashedPath`/`FORCED_ROUTE_COLOR`；键盘调用点改为新签名。
+2. `src/simulation/loop.js`：新增 `createFixedStepper`，`createLoop` 改为薄封装（行为不变）。
+3. `src/input/keyboard.js`：参数化（`controller` 可选、`issue` 注入、`onHint`）。
+4. `src/i18n/zh-CN.js`、`src/i18n/en.js`：新增 `pvp.*` keys（纯新增）。
+5. `src/i18n/apply.js`：新增文件（战役不使用）。
+
+> 以上改动后，战役全量单测与 `ai-engage`/`campaign-pages` 等既有测试全部通过；战役页面未做视觉改动。
+
+### 11.15.7 回滚开关
+
+- `PVP_SEND_ROUTES=0`：服务端不发路线 → 客户端自动退回"预计路线"模式（`routePreview.js`），其余功能不变。
