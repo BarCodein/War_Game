@@ -144,6 +144,8 @@ export default {
   'home.play.desc': '前往战役选择页',
   'home.battle': '战役',
   'home.battle.desc': '选择战役，开始战斗',
+  'home.pvp': '联机对战',
+  'home.pvp.desc': '与好友 1v1 实时对战',
   'home.editor': '地图编辑器',
   'home.editor.desc': '创建并测试自定义地图',
   'home.about': '关于我们',

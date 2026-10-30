@@ -68,20 +68,24 @@ export async function fillByScript(page, selector, value) {
 }
 
 export async function registerDirect(page, username, password) {
-  // 走 HTTP 注册 + 刷新，而不是填表单点按钮：
-  // Vite 的 HMR 偶尔会在填表之后整页刷新，把输入框清空导致注册点不动（历史上反复出现的 flaky）。
-  await page.goto('/pvp.html');
+  // 账号统一在 login.html（服务端为准）：/pvp.html 未登录会直接跳登录页，
+  // 所以这里先走 HTTP 注册（拿到 HttpOnly 会话 cookie），再用整页导航回大厅。
+  await page.goto('/login.html');
   await page.waitForLoadState('load');
   await page.evaluate(async ({ user, pass }) => {
-    const response = await fetch('/api/auth/register', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ username: user, password: pass }),
-    });
-    if (!response.ok) throw new Error(`register failed: ${response.status}`);
+    const body = JSON.stringify({ username: user, password: pass });
+    const headers = { 'content-type': 'application/json' };
+    let response = await fetch('/api/auth/register', { method: 'POST', headers, body });
+    if (response.status === 409) {
+      // 已存在同名账号（重复跑测试）：直接登录
+      response = await fetch('/api/auth/login', { method: 'POST', headers, body });
+    }
+    if (!response.ok) {
+      const detail = await response.text().catch(() => '');
+      throw new Error(`register/login failed: ${response.status} ${detail}`);
+    }
   }, { user: username, pass: password });
-  await page.reload();
-  await page.waitForLoadState('load');
+  await page.goto('/pvp.html');
   await expect(page.locator('#authLoggedIn')).toBeVisible({ timeout: 20000 });
   await expect(page.locator('#meName')).toHaveText(username);
 }

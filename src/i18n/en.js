@@ -132,6 +132,8 @@ export default {
   'home.play.desc': 'Go to campaign select',
   'home.battle': 'Campaigns',
   'home.battle.desc': 'Select a campaign and begin',
+  'home.pvp': 'Online PvP',
+  'home.pvp.desc': '1v1 real-time battle with a friend',
   'home.editor': 'Map Editor',
   'home.editor.desc': 'Create and playtest custom maps',
   'home.about': 'About Us',

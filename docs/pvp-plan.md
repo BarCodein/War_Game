@@ -1455,3 +1455,30 @@ if (state.mode === 'local') {
 | 新增 `tests/e2e/pvp-rematch.spec.js` | **passed**：认输 → 双方点「返回大厅」→ 双方都回到**同一房间码**且列表 2 人 → 双方点「准备」→ **第二局开始**（快照继续上涨） |
 | 全量 PvP e2e（battle/orders/rooms/resign/reconnect/rematch） | **9 passed**（1.4 min） |
 | 全量单测 | **621 passed / 8 failed**（8 条既有供应/配置漂移；`pvp-reconnect` 5 条全过） |
+
+﻿### 11.19 合并登录页 + 首页联机入口（2026-10-30）
+
+需求方决策：① 账号以**服务端为准**、本地只缓存"谁登录了"；② **不允许离线登录**；③ 不做旧账号迁移；④ 首页入口常驻、不隐藏。
+
+**账号合并**
+
+| 位置 | 改动 |
+|---|---|
+| `src/auth.js` | 删掉本地账号表（`war-of-dots.users` 的读写与本地 `login()/register()`），改为服务端账号 + 本地会话缓存：新增 `syncSessionFromUser()` / `clearSession()` / `fetchMe()` / `loginRemote()` / `registerRemote()`；`logout()` 先 `POST /api/auth/logout` 再清缓存回登录页；`requireAuth()` 守卫逻辑不变（`auth-guard.test.js` 5 条全过） |
+| `src/entries/login.js` | 重写：提交走 `/api/auth/{login,register}`，按错误码给中文提示（`BAD_CREDENTIALS`/`USERNAME_TAKEN`/`INVALID_*`/`RATE_LIMITED`/服务不可用）；成功后写本地会话再跳 `?next=`；已有本地会话时先 `/api/auth/me` 校验，失效则清缓存留在本页 |
+| `login.html` | 文案改成"账号同时用于战役与联机对战；登录需要联机服务器可用"（**不加**旧账号迁移说明，保持简洁） |
+| `pvp.html` | **删除整块认证卡片**（本页不再登录/注册）；`/api/auth/me` 未登录 → `location.replace('/login.html?next=/pvp.html')`；服务器不可达时只在页内提示"联机服务不可用"（不踢去登录页，避免两边都登不进去）；登出 = 服务端删会话 + 清本地缓存 + 回登录页 |
+| `index.html` | 主菜单新增「⚔ 联机对战」卡片 → `/pvp.html`（`data-i18n="home.pvp"`，中英文各一条） |
+
+**成就数据（回答需求方提问，未改动）**：全部在浏览器 localStorage，**按账号**命名空间隔离，无后端。
+键 = `war-of-dots.u.<账号>.<数据名>`；成就解锁列表的数据名是 `ach-unlocked`，由 `result.html` 与 `climb.js` 写入，
+`src/achievements.js#evaluateAchievements` 读取并判定。账号名来自 `war-of-dots.session`（登录页写入的服务端用户名，小写归一化）。
+联机对局**不写**任何成就数据。
+
+**验证**
+
+| 项 | 结果 |
+|---|---|
+| 新增 `tests/e2e/pvp-login.spec.js`（3 条） | **passed**：未登录进大厅 → 跳统一登录页（带 next）→ 注册后回大厅且本地会话写入 → 战役页放行 → 首页有联机入口 → 登出后两边都失效；错误密码给出"用户名或密码不正确"；未登录访问 `index.html` 也被送到登录页 |
+| 全量 PvP e2e（battle/orders/rooms/resign/reconnect/rematch/login） | **12 passed**（1.5 min） |
+| 全量单测 | **621 passed / 8 failed**（8 条既有供应/配置漂移） |

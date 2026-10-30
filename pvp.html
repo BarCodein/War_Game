@@ -88,26 +88,12 @@
     <section class="card" id="authCard">
       <h2>账号</h2>
 
-      <div id="authLoggedOut">
-        <div class="row">
-          <input id="inputUsername" type="text" placeholder="用户名（3–20 位）" autocomplete="username" maxlength="20">
-          <input id="inputPassword" type="password" placeholder="密码（≥ 8 位）" autocomplete="current-password" maxlength="64">
-          <button id="btnLogin">登录</button>
-          <button id="btnRegister">注册</button>
-        </div>
-        <div id="authMsg"></div>
-        <p class="hint2">
-          用户名 3–20 位（中英文 / 数字 / 下划线），密码 8–64 位；口令以 scrypt 加盐存储，服务端只下发 HttpOnly 会话 Cookie。
-          同一 IP 登录失败 5 次/分钟后会被限速。
-        </p>
-      </div>
-
       <div id="authLoggedIn" hidden>
         <p class="who">已登录：<b id="meName">—</b><span id="meAccount" class="hint2"></span></p>
         <div class="row">
           <button id="btnLogout">登出</button>
         </div>
-        <p class="hint2">会话保存在 HttpOnly Cookie 中（默认 7 天）；「登出」会同时删除服务端会话记录。</p>
+        <p class="hint2">账号与战役共用（统一在登录页登录）；「登出」会同时删除服务端会话与本地缓存。</p>
       </div>
     </section>
 
@@ -245,22 +231,34 @@
       $('fWsUrl').textContent = wsUrl;
 
       // ================= 账号 =================
+      // 账号统一在 login.html 登录（服务端为准）。这里只做两件事：
+      //   1) 用 /api/auth/me 确认服务端会话；未登录 → 去统一登录页（带 next 回来）
+      //   2) 顶栏显示当前账号 + 登出（同时清服务端会话与本地缓存）
       var me = null;
       var authMsg = $('authMsg');
       function showAuthMessage(text, isError) {
+        if (!authMsg) return;
         authMsg.textContent = text || '';
         authMsg.className = isError ? 'bad-text' : 'ok-text';
       }
+      function syncLocalSession(username) {
+        try {
+          if (username) localStorage.setItem('war-of-dots.session', JSON.stringify({ username: username, loggedInAt: Date.now() }));
+          else localStorage.removeItem('war-of-dots.session');
+        } catch (error) { /* 隐私模式忽略 */ }
+      }
+      function goLogin() {
+        var next = window.location.pathname + window.location.search;
+        window.location.replace('/login.html?next=' + encodeURIComponent(next));
+      }
       function renderUser(user) {
         me = user || null;
-        var loggedIn = Boolean(me);
-        $('authLoggedOut').hidden = loggedIn;
-        $('authLoggedIn').hidden = !loggedIn;
-        if (loggedIn) {
-          $('meName').textContent = me.displayName || me.username;
-          $('meAccount').textContent = '（@' + me.username + ' · id ' + me.id +
-            (me.createdAt ? ' · 注册于 ' + fmtDate(me.createdAt) : '') + '）';
-        }
+        if (!me) { goLogin(); return; }
+        syncLocalSession(me.username);
+        $('authLoggedIn').hidden = false;
+        $('meName').textContent = me.displayName || me.username;
+        $('meAccount').textContent = '（@' + me.username + ' · id ' + me.id +
+          (me.createdAt ? ' · 注册于 ' + fmtDate(me.createdAt) : '') + '）';
         renderRoomAccess();
       }
       // 每次确认登录态后尝试自动回到上一局房间
@@ -269,59 +267,29 @@
       }
 
       function refreshMe() {
-        return fetch('/api/auth/me', { cache: 'no-store' })
+        return fetch('/api/auth/me', { cache: 'no-store', credentials: 'same-origin' })
           .then(function (res) { return res.json().catch(function () { return null; }); })
           .then(function (data) {
             renderUser(data && data.ok ? data.user : null);
             maybeAutoRejoin();
             return data;
           })
-          .catch(function () { renderUser(null); });
+          .catch(function () {
+            // 服务器不可达：不要把用户踢去登录页（那边也登录不了），就地提示
+            showAuthMessage('联机服务不可用：请确认服务器已启动', true);
+            $('authLoggedIn').hidden = false;
+            return null;
+          });
       }
-      function submitAuth(kind) {
-        var username = $('inputUsername').value.trim();
-        var password = $('inputPassword').value;
-        if (!username || !password) { showAuthMessage('用户名和密码都要填', true); return; }
-        var buttons = [$('btnLogin'), $('btnRegister')];
-        buttons.forEach(function (b) { b.disabled = true; });
-        showAuthMessage(kind === 'login' ? '登录中…' : '注册中…', false);
-
-        apiJson('/api/auth/' + kind, { method: 'POST', body: { username: username, password: password } })
-          .then(function (result) {
-            if (result.res.ok && result.data && result.data.ok) {
-              $('inputPassword').value = '';
-              renderUser(result.data.user);
-              showAuthMessage(kind === 'login' ? '登录成功，欢迎回来！' : '注册成功，已自动登录。', false);
-              log('AUTH ' + kind + ' ok · ' + result.data.user.username);
-              checkRest();
-              // 会话在 Cookie 里：重连 socket 让握手带上登录态
-              reconnectSocket();
-            } else {
-              var message = (result.data && result.data.message) || ('HTTP ' + result.res.status);
-              var code = (result.data && result.data.code) || '';
-              showAuthMessage(message + (code ? ' [' + code + ']' : ''), true);
-              log('AUTH ' + kind + ' 失败：' + message + ' ' + code);
-            }
-          })
-          .catch(function (error) { showAuthMessage('请求失败：' + error.message, true); })
-          .finally(function () { buttons.forEach(function (b) { b.disabled = false; }); });
-      }
-      $('btnLogin').addEventListener('click', function () { submitAuth('login'); });
-      $('btnRegister').addEventListener('click', function () { submitAuth('register'); });
-      $('inputPassword').addEventListener('keydown', function (event) {
-        if (event.key === 'Enter') submitAuth('login');
-      });
       $('btnLogout').addEventListener('click', function () {
-        fetch('/api/auth/logout', { method: 'POST' })
-          .then(function () {
-            renderUser(null);
+        fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin' })
+          .catch(function () { /* 服务器不可达也照常清本地 */ })
+          .finally(function () {
+            syncLocalSession(null);
+            me = null;
             resetRoomView();
-            showAuthMessage('已登出', false);
-            log('AUTH logout');
-            checkRest();
-            reconnectSocket();
-          })
-          .catch(function (error) { showAuthMessage('登出失败：' + error.message, true); });
+            window.location.replace('/login.html');
+          });
       });
 
       // ================= 房间 =================
