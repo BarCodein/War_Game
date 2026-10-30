@@ -24,6 +24,11 @@ const CMD_HZ = Number(arg('cmd-hz', 2));
 const PASSWORD = 'load-test-pass-1';
 const STRICT_SLOW = arg('strict-slow', false) === true;
 
+// 这些拒绝是协议里"预期内"的，不算压测失败：
+//   MATCH_OVER —— 对局已结束（脚本收到 match:end 前可能还有几条在飞）
+//   NO_UNITS   —— 命令里的单位在飞行途中全部阵亡（客户端用的是 ≤66ms 前的快照，属正常竞态）
+const EXPECTED_REJECTIONS = ['MATCH_OVER', 'NO_UNITS'];
+
 // 验收阈值（docs/pvp-plan.md §3.10 / §11.8）
 const THRESHOLDS = {
   tickMsAvg: 2,
@@ -256,7 +261,8 @@ async function main() {
       errorsByCode[code] = (errorsByCode[code] ?? 0) + count;
     }
   }
-  const unexpected = Object.entries(errorsByCode).filter(([code]) => code !== 'MATCH_OVER');
+  const unexpected = Object.entries(errorsByCode)
+    .filter(([code]) => !EXPECTED_REJECTIONS.includes(code));
   const unexpectedCount = unexpected.reduce((sum, [, count]) => sum + count, 0);
   const breakdown = Object.entries(errorsByCode)
     .map(([code, count]) => `${code} ${count}`)
@@ -277,7 +283,7 @@ async function main() {
     [`快照速率 ≈ ${THRESHOLDS.snapshotHzMin}–${THRESHOLDS.snapshotHzMax}Hz`, snapshotHz >= THRESHOLDS.snapshotHzMin && snapshotHz <= THRESHOLDS.snapshotHzMax, `${snapshotHz.toFixed(1)} Hz`],
     [`RTT < ${THRESHOLDS.rttMsMax}ms`, rttAvg < THRESHOLDS.rttMsMax, `${rttAvg.toFixed(0)} ms`],
     ['无掉线', disconnects === 0, `${disconnects} 次`],
-    ['命令被接受（除 MATCH_OVER）', unexpectedCount === 0 && cmdAcks > 0, `ok ${cmdAcks} · 拒绝 ${cmdErrors}（${breakdown}）`],
+    ['命令被接受（除结束/阵亡竞态）', unexpectedCount === 0 && cmdAcks > 0, `ok ${cmdAcks} · 拒绝 ${cmdErrors}（${breakdown}）`],
     overflowRejected === null
       ? [`容量上限检查（需 ${maxRooms} 房间才测）`, true, `跳过（本次 ${ROOMS} 房间）`]
       : [`第 ${maxRooms + 1} 个房间被拒（503）`, overflowRejected, overflowRejected ? '503 ROOM_LIMIT' : '未被拒绝'],

@@ -1,6 +1,7 @@
 import express from 'express';
 import { createServer as createHttpServer } from 'node:http';
 import { randomUUID } from 'node:crypto';
+import { PerformanceObserver } from 'node:perf_hooks';
 import { Server as SocketServer } from 'socket.io';
 import { values } from '../../src/config/index.js';
 import { config as defaultConfig } from './config.js';
@@ -12,6 +13,24 @@ import { RoomError, RoomRegistry, normalizeCode, roomView } from './rooms.js';
 import { loadPvpLevel } from './levels.js';
 import { MatchSim, warmupEngine } from './match.js';
 import { SNAPSHOT_CHANNEL, createMatchDriver } from './driver.js';
+
+// GC 观测（P6 容量）：1 核上偶发的 100ms 级停顿通常是 GC，而不是模拟本身。
+// 这里只做统计（不计入业务逻辑），通过 /api/health 的 gc.* 暴露，压测时可直接确认。
+const gcStats = { count: 0, pauseMs: 0, maxPauseMs: 0 };
+try {
+  const observer = new PerformanceObserver((list) => {
+    for (const entry of list.getEntries()) {
+      gcStats.count += 1;
+      gcStats.pauseMs += entry.duration;
+      if (entry.duration > gcStats.maxPauseMs) gcStats.maxPauseMs = entry.duration;
+    }
+  });
+  observer.observe({ entryTypes: ['gc'] });
+  observer.unref?.();
+} catch (error) {
+  // 某些平台不支持 gc entry：不影响服务，只是没有 gc.* 数据
+  if (!defaultConfig.quiet) console.warn('[gc] 无法开启 GC 观测:', error.message);
+}
 
 // PvP 服务端。
 //   · REST  GET  /api/health                —— 给 Nginx / 监控 / 自检页用
@@ -164,6 +183,16 @@ export function createPvpServer(overrides = {}) {
     // 运维参数：掉线重连宽限、快照频率（线上默认 30s / 15Hz；e2e 会调小）
     reconnectGraceSeconds: Math.round(config.disconnectGraceMs / 1000),
     snapshotHz: config.snapshotHz,
+    // 内存与 GC 观测（判断 100ms 级抖动是不是 GC 给的）
+    memory: {
+      rssMb: Math.round(process.memoryUsage().rss / 1048576),
+      heapUsedMb: Math.round(process.memoryUsage().heapUsed / 1048576),
+    },
+    gc: {
+      count: gcStats.count,
+      pauseMs: Math.round(gcStats.pauseMs),
+      maxPauseMs: Math.round(gcStats.maxPauseMs),
+    },
     accounts: countUsers(db),     // 注册用户数（运维可观测，不含任何敏感字段）
     socketClients: io?.engine?.clientsCount ?? 0,
     time: new Date().toISOString(),

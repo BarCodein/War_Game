@@ -11,11 +11,13 @@ Group=wargame
 WorkingDirectory=/opt/war-game-server
 Environment=NODE_ENV=production
 # 1 核 / 2 GB：给 V8 留出上限，避免和 Nginx 抢内存
-Environment=NODE_OPTIONS=--max-old-space-size=768
 Environment=PVP_PORT=3001
 Environment=PVP_MAX_ROOMS=4
 Environment=PVP_SNAPSHOT_HZ=15
-ExecStart=/usr/bin/node server/src/index.js
+# V8 参数放在 ExecStart 里（比 NODE_OPTIONS 直观）：
+#   --max-old-space-size=768  给 1 核 2G 机器留出上限，别把内存吃满
+#   --max-semi-space-size=64  新生代放大 → GC 次数明显减少，压测里 100ms 级抖动的元凶通常是 GC
+ExecStart=/usr/bin/node --max-old-space-size=768 --max-semi-space-size=64 server/src/index.js
 Restart=always
 RestartSec=3
 
