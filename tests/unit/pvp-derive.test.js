@@ -198,3 +198,79 @@ describe('校正策略', () => {
     expect(derive.state.packets).toBe(1);
   });
 });
+
+// §11.16.2 回归：降级（mode='server'）只影响"画哪条控制线"，**不能**冻结补给分配；
+// 以及"折线条数不同"不能直接判 mismatch=1（会把客户端推入不会自愈的降级）。
+describe('降级为 server 模式后，补给仍然实时派生', () => {
+  it('mode=server 时 refreshSupply 继续运行：新占领的城市会成为补给源', () => {
+    const { level, map } = loadPvpLevel('dujiang_pvp');
+    const world = new World(map);
+    deployForces(world, level.forces, level.anchors ?? {});
+    const nowRef = { value: 0 };
+    const derive = createDeriveController({
+      world,
+      getSnapshot: () => ({ phase: 'playing', fogAuthority: 'client' }),
+      now: () => nowRef.value,
+    });
+    derive.state.mode = 'server';   // 模拟已经降级
+
+    // 一个蓝方单位站在红城旁边、缺补给
+    const unit = world.units.find((item) => item.faction === 'blue');
+    const city = world.cities.find((item) => item.faction === 'red');
+    unit.x = city.x + 20;
+    unit.y = city.y + 10;
+    unit.supplyStock = 0;
+    unit.state = 'hold';
+    city.faction = 'blue';           // 刚被占领（客户端归属已更新）
+
+    for (let i = 0; i < 180; i += 1) {
+      nowRef.value += 1000 / 60;
+      derive.update(1000 / 60);
+    }
+
+    const edges = (unit.supplyEdges ?? []).map((edge) => edge.cityId);
+    expect(edges).toContain(city.id);
+    expect(derive.state.supplyEdges).toBeGreaterThan(0);
+  });
+
+  it('失去的城市不会再作为补给源（边被重新分配）', () => {
+    const { level, map } = loadPvpLevel('dujiang_pvp');
+    const world = new World(map);
+    deployForces(world, level.forces, level.anchors ?? {});
+    const nowRef = { value: 0 };
+    const derive = createDeriveController({
+      world,
+      getSnapshot: () => ({ phase: 'playing', fogAuthority: 'client' }),
+      now: () => nowRef.value,
+    });
+    derive.state.mode = 'server';
+    const unit = world.units.find((item) => item.faction === 'blue');
+    const city = world.cities.find((item) => item.faction === 'blue' && item.id !== 'c13');
+    unit.x = city.x + 20;
+    unit.y = city.y + 10;
+    unit.supplyStock = 0;
+    unit.state = 'hold';
+
+    for (let i = 0; i < 180; i += 1) {
+      nowRef.value += 1000 / 60;
+      derive.update(1000 / 60);
+    }
+    expect((unit.supplyEdges ?? []).map((edge) => edge.cityId)).toContain(city.id);
+
+    // 这座城被敌方夺走 → 下一次分配不应再指向它
+    city.faction = 'red';
+    for (let i = 0; i < 180; i += 1) {
+      nowRef.value += 1000 / 60;
+      derive.update(1000 / 60);
+    }
+    expect((unit.supplyEdges ?? []).map((edge) => edge.cityId)).not.toContain(city.id);
+  });
+
+  it('折线条数不同不再判成完全不一致（mismatch 不会因此变 1）', () => {
+    const size = { width: 1280, height: 800 };
+    const one = resamplePaths([[[100, 100], [1100, 700]]]);
+    const two = resamplePaths([[[100, 100], [600, 400]], [[600, 400], [1100, 700]]]);
+    const mismatch = comparePaths(one, two, size);
+    expect(mismatch).toBeLessThan(0.25);
+  });
+});

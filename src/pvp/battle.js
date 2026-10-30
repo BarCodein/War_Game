@@ -263,6 +263,12 @@ class BattleScene extends Phaser.Scene {
       supplyBacktrackRawMax: Math.round(this.supplyLines.state.maxBacktrackRawPx * 10) / 10,
       supplyBacktrackDrawnMax: Math.round(this.supplyLines.state.maxBacktrackDrawnPx * 10) / 10,
       supplyRepath: this.supplyLines.state.repath,
+      // 排查"选中单位却没有任何补给线"：兜底/跳过计数 + 每个单位本帧画了什么
+      supplyMissingCity: this.supplyLines.state.missingCity,
+      supplyPathFallback: this.supplyLines.state.pathFallback,
+      supplyStraightFallback: this.supplyLines.state.straightFallback,
+      supplyNoEdge: this.supplyLines.state.noEdgeSupplied,
+      supplyRows: this.supplyLines.state.debugRows,
     };
     // §11.15 路线同步诊断（e2e 用）：带路线的己方单位数 / 应用过的增量条数 / 仍在占位的预计路线数
     debug.routeStats = {

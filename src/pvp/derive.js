@@ -79,7 +79,10 @@ export function createDeriveController({ world, getSnapshot = () => null, now = 
     state.quietMs = state.lastPacketAt > 0 ? timeMs - state.lastPacketAt : 0;
     state.stale = state.quietMs > 12000;
 
-    if (state.mode === 'local') {
+    // ⚠️ 本地派生**两种模式都要跑**。
+    // `mode === 'server'`（控制线和服务端差太多而"降级"）只应该影响**画哪条控制线**，
+    // 绝不能连补给分配一起停掉：补给边一旦冻结，就会出现"占了城还画旧城的线 / 丢了城还画它的线"。
+    {
       const started = timeMs;
       state.acc += Math.min(deltaMs, 250);          // 切后台回来时别补一大堆步
       let guard = 0;
@@ -97,7 +100,7 @@ export function createDeriveController({ world, getSnapshot = () => null, now = 
       state.supplyEdges = countEdges(world);
     }
 
-    // 合成渲染折线
+    // 合成渲染折线（只有这一步区分模式）
     if (state.mode === 'server') {
       if (state.serverPaths.length) world.controlLinePaths = state.serverPaths;
     } else if (state.serverPaths.length && timeMs < state.biasUntil) {
@@ -230,7 +233,9 @@ export function blendPaths(local, server, alpha) {
 /** 偏差度量：网格采样，比较采样点相对两份折线最近段的左右侧符号 */
 export function comparePaths(local, server, size) {
   if (!local.length || !server.length) return 0;
-  if (local.length !== server.length) return 1;        // 折线条数不同 = 结构差异，视为完全不一致
+  // 注意：**不能**因为"折线条数不同"就直接判 1（完全不一致）。
+  // 前线的折线是等值线串联出来的，形状稍有变化就会多/少一条，按条数判会误触发"硬切→降级"，
+  // 然后进入不会自愈的 server 模式（补给边因此冻结）。这里对两侧的所有折线一起做侧向符号比较。
   const width = size?.width ?? 1280;
   const height = size?.height ?? 800;
   let differ = 0;

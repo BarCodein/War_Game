@@ -47,6 +47,12 @@ export function createSupplyLines(scene, world, selection) {
     backtrackRawPx: 0,         // 本帧未裁剪时的"折回"像素（缓存路径起点相对单位的反向投影）
     maxBacktrackDrawnPx: 0,    // 裁剪后折回的累计最大（修复效果）
     maxBacktrackRawPx: 0,      // 未裁剪折回的累计最大（原来的 bug 幅度）
+    // 诊断（排查"选中单位却没有任何补给线"）：本帧各类兜底/跳过计数 + 每单位明细
+    missingCity: 0,            // 补给边指向的城市在客户端世界表里都找不到
+    pathFallback: 0,           // 按控制区算不出路径 → 退回"忽略控制区"的几何路径
+    straightFallback: 0,       // 连忽略控制区都算不出 → 直线兜底
+    noEdgeSupplied: 0,         // 数值上有补给、但没有任何补给边
+    debugRows: [],
   };
 
   function draw() {
@@ -74,6 +80,11 @@ export function createSupplyLines(scene, world, selection) {
 
     let note = null; // { x, y, text }：只显示一条提示，避免多个单位时字叠在一起
     state.startOffsetPx = 0;   // 每帧重置（只统计本帧画出来的线）
+    state.missingCity = 0;
+    state.pathFallback = 0;
+    state.straightFallback = 0;
+    state.noEdgeSupplied = 0;
+    const debugRows = [];
     let lineCount = 0;
     let cutCount = 0;
     for (const unit of selected) {
@@ -83,15 +94,45 @@ export function createSupplyLines(scene, world, selection) {
       // ① 每条补给边画一条线：线宽/浓度 = 实收占比。
       // 满额部队没有缺口 → 那条边是 0 流量的"待机"边（最细最淡），玩家仍能看出路线走向。
       for (const edge of unit.supplyEdges ?? []) {
-        const city = cities.find(item => item.id === edge.cityId);
-        if (!city) continue;
-        const path = pathFor(unit, city, false);
-        if (!path) continue;
+        // 城市归属只是"该不该画成常规补给线"的判断，不应该让整条线消失：
+        // 先在己方城市里找，找不到再退回全城市表（被占领/刚易主时客户端归属可能慢一帧）。
+        const owned = cities.find(item => item.id === edge.cityId);
+        // 只画"己方城市"的补给边：若这条边指向的城市已经易主（客户端还留着上一轮的旧边），
+        // 不画常规线（等下一次补给分配纠正），否则会出现"城都丢了还在画它出发的补给线"。
+        if (!owned) { state.missingCity += 1; continue; }
+        const city = owned;
+        let path = pathFor(unit, city, false);
+        if (!path) {
+          // 被敌方控制区挡住（或终点进不去）时，退回"忽略控制区"的几何路径：
+          // 数值上这条边是存在的（单位确实在被补给），不能因为绘制层的可达性判定就整条不画。
+          path = pathFor(unit, city, true);
+          if (path) state.pathFallback += 1;
+        }
+        if (!path) {
+          path = [{ x: unit.x, y: unit.y }, { x: city.x, y: city.y }];
+          state.straightFallback += 1;
+        }
         const share = clamp01(edge.received / demand);
         const width = style.width.min + (style.width.max - style.width.min) * share;
         stroke([{ x: unit.x, y: unit.y }, ...path, { x: city.x, y: city.y }],
           width, style.color, style.alpha * (0.3 + 0.7 * share));
         lineCount += 1;
+        debugRows.push({ id: unit.id, supplied: unit.supplied === true, cityId: edge.cityId, owned: Boolean(owned), path: path.length, share });
+      }
+
+      // ①b 数值上说"有补给"、却没有任何补给边（运力刚好被别的单位抽干等极端情况）：
+      // 仍然连一条淡线到最近的己方城市，避免"选中单位后什么都没有"。
+      if (unit.supplied && (unit.supplyEdges ?? []).length === 0) {
+        const nearest = nearestCity(unit, cities);
+        if (nearest) {
+          const path = pathFor(unit, nearest, true)
+            ?? [{ x: unit.x, y: unit.y }, { x: nearest.x, y: nearest.y }];
+          stroke([{ x: unit.x, y: unit.y }, ...path, { x: nearest.x, y: nearest.y }],
+            style.width.min, style.color, style.alpha * 0.3);
+          lineCount += 1;
+          state.noEdgeSupplied += 1;
+          debugRows.push({ id: unit.id, supplied: true, cityId: nearest.id, owned: true, path: path.length, share: 0 });
+        }
       }
 
       // ② 只有**补给线断了**（supplied=false：被敌方控制区切断 / 够不着 / 没有城市）才提示。
@@ -120,6 +161,7 @@ export function createSupplyLines(scene, world, selection) {
     state.cuts = cutCount;
     state.note = note ? note.text : null;
     state.selected = selected.length;
+    state.debugRows = debugRows;
 
     if (note) {
       label.setText(note.text);

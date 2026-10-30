@@ -1216,3 +1216,120 @@ for (const unit of world.units) {
 ### 11.15.7 回滚开关
 
 - `PVP_SEND_ROUTES=0`：服务端不发路线 → 客户端自动退回"预计路线"模式（`routePreview.js`），其余功能不变。
+
+---
+
+## 11.16 修 bug：被占领的敌方基地，其补给线不渲染（2026-10-30）
+
+**现象**（需求方反馈）：把敌方基地打下来之后，**由这座基地提供的补给线不画**（单位其实在被它补给）。
+
+**根因**：补给系统与绘制层对"城市格"的处理不一致 ——
+
+| 层 | 代码 | 行为 |
+|---|---|---|
+| 代价场（决定谁供谁、供多少） | `supplyPath.js#buildSupplyField` 种子循环 | **城市格永远豁免**：`cost=0` 并直接入堆，不看敌方控制区（注释也写了"城市格永远是补给起点，被围时也算") |
+| 绘制层（管线连到哪座城） | `supplyPath.js#findSupplyPath` 的 `traversable` | 只判断 `blocked[index] === 0`，**终点格被敌方控制区标记就进不去** → 返回 `null` → `supplyLines.js` 里 `if (!path) continue` → 这条线根本不画 |
+
+刚占领的敌方基地往往仍压在敌方实际控制区里（敌方单位就在旁边、控制线平滑还没翻过来），于是：
+代价场把它当合法补给源（单位确实拿到补给边），绘制层却画不出路径 → **有补给、没线条**。
+单机战役共用同一段绘制代码，所以这个 bug 在战役里同样存在，只是 PvP 里被占领的城市更多、更容易碰到。
+
+**修复**（一处，仅影响绘制；结算逻辑不变）：`findSupplyPath` 的 `traversable` 增加"**终点格豁免**"：
+
+```js
+const traversable = (index) => Number.isFinite(steps[index])
+  && (blocked === null || blocked[index] === 0 || index === endIndex);
+```
+
+与代价场的"城市格豁免"对齐；中途格仍然受控制区阻挡（没有把规则整体关掉）。
+
+**验证**
+
+| 项 | 结果 |
+|---|---|
+| 新增单测 `tests/unit/supply-path-captured.test.js`（3 条） | 终点格被 mask 标记仍能出路径；路径终点落在城市格（≤20px）；中途封墙不会变成"无视控制区" |
+| 全量单测 | **618 passed / 8 failed**（8 条仍是既有供应与配置漂移） |
+| 影响面 | `findSupplyPath` 只被 `src/rendering/supplyLines.js` 调用 → **只影响画面**，不影响补给结算、不影响回放确定性 |
+| 战役侧 | 同一段代码，战役里被占领基地的补给线也一并修好；战役既有测试全过 |
+
+### 11.16.1 追加（同日）：渲染层不再"静默丢线" + 诊断
+
+上面的终点格豁免不是需求方遇到的那个现象（反馈"依然存在"）。进一步排查结论：
+
+1. **两次真实占领复现失败**：在真浏览器里分别打下**近处**的红城（c24，距己方 ~104px）与**敌方腹地**的红城（c16，1012,450），
+   两次都确认：客户端 `city.faction` 及时变成 `blue`（`ownCityCount` 8→9）、单位拿到指向该城的 `supplyEdges`、
+   `supplyLines.state.lines > 0`。也就是说"城市归属没更新"在这两条路径上不成立。
+2. **真正的薄弱点：渲染层有三条"静默 continue"，任何一条命中都会让"选中的单位一条线都没有"**：
+
+| 静默丢线的原因 | 什么时候发生 |
+|---|---|
+| 边指向的城市**不在己方城市表**里 | 归属慢一帧 / 刚易主的那几帧 |
+| 按控制区算路径得到 `null` | 代价场（1 s 重建一次）说"供得到"，而同一帧的 A\* 用的是**更新的**控制区掩码 → 走廊被挡（两者重建时机不同，存在最多 1 s 的不一致） |
+| `supplied === true` 但 `supplyEdges` 为空 | 运力恰好被别的单位抽干的那一轮（`claimOf` 有缺口却没分到点数） |
+
+**修法（只改绘制，不改结算）**
+
+- 城市查找：先在己方城市里找，找不到退回**全城市表**（`state.missingCity` 计数）；
+- 路径：控制区 A\* → 失败就退回**忽略控制区**的几何路径（`pathFallback`）→ 再失败就直线兜底（`straightFallback`）；
+- `supplied && 无边`：连一条**最细最淡**的线到最近的己方城市（`noEdgeSupplied`），不再什么都不画。
+
+这样"数值上有补给"的单位**一定**能看到一条线，不会再出现"选中后什么都没有"。
+
+**诊断（排查用，不占带宽）**：`__pvp.deriveStats` 新增
+`supplyMissingCity / supplyPathFallback / supplyStraightFallback / supplyNoEdge / supplyRows`，
+`supplyRows` 是本帧每个选中单位画了什么：`{ id, supplied, cityId, owned, path, share }`。
+
+**回归**：全量单测 618 passed / 8 failed（既有）；`pvp-battle` e2e 恢复通过。
+（过程中我自己引入过一个 `debugRows is not defined` 的崩溃，导致补给线整段不画，被 e2e 抓到并已修好 —— 也说明这条 e2e 是有用的。）
+
+**如果仍然复现**，请把 `JSON.stringify(__pvp.deriveStats)` 贴出来（尤其是 `supplyRows` 与 `supplyMissingCity/supplyPathFallback` 计数），
+并说明：是 PvP 还是战役、单位离那座被占城市大概多远、城市是"刚占领"还是"占领一段时间后"。
+
+### 11.16.2 真正的根因：降级到 `mode='server'` 后**补给派生被一起冻结**（2026-10-30）
+
+需求方贴的 `__pvp.deriveStats` 里有两个关键字段：
+
+```json
+"mode": "server", "mismatch": 1, "hardSwitches": 3, "packets": 25,
+"localPaths": 256, "serverPaths": 96,
+"supplyRows": [{ "id": 28, "supplied": true, "cityId": "c28", "owned": true, "path": 5 }]
+```
+
+**`mode: "server"` = 客户端派生控制器已经"降级"了**（控制线与服务器差太多 → 连续 3 次硬切 → 回退成只显示服务器控制线）。
+而当时的实现里，降级同时**停掉了本地派生**：
+
+```js
+// 旧代码（错误）
+if (state.mode === 'local') {
+  updateControlLine(world);          // 控制线
+  refreshSupply(world, fixedStep);   // 补给分配 ← 一起不跑了
+}
+```
+
+于是 `unit.supplyEdges / supplied` **冻结在降级那一刻**，之后：
+
+- 占领敌方城市 → 附近部队的补给边还指着**远处的初始城市**（不会改指新占的城）；
+- 丢掉初始城市 → 旧补给边还在，渲染层照旧画那条**从已失守城市出发**的线。
+
+这正是需求方描述的两个现象。
+
+**为什么降级之后不会自愈**：`comparePaths()` 原先在"两侧折线条数不同"时直接 `return 1`（判为完全不一致）。
+前线等值线稍有变化就会多/少一条 → 误判 → 硬切 → 降级；降级后本地控制线不再更新，`mismatch` 恒为 1 →
+永远达不到恢复阈值（< 5%）→ **单向陷阱**。
+
+**修法（3 处）**
+
+| 位置 | 改动 |
+|---|---|
+| `src/pvp/derive.js` | 本地派生（`updateControlLine` + `refreshSupply`）**两种模式都跑**；`mode === 'server'` 只决定"绘制用服务器折线还是本地折线"，不再影响补给 |
+| `src/pvp/derive.js#comparePaths` | 不再按"折线条数"判 1；对两侧**所有折线**一起做侧向符号比较（条数不同也能比较），避免误触发降级 |
+| `src/rendering/supplyLines.js` | 常规补给线**只画己方城市**的边：旧边若指向已易主的城市则不画（计入 `missingCity`），避免"城都丢了还画它出发的线" |
+
+**回归测试**（`tests/unit/pvp-derive.test.js` 新增 3 条）
+
+1. `mode='server'` 时 `refreshSupply` 仍在跑：刚占领的城市立刻成为补给源；
+2. 城市被敌方夺走后，下一次分配不再指向它；
+3. 折线条数不同时 `mismatch` 不会变成 1。
+
+**验证**：全量单测 **621 passed / 8 failed**（既有）；`pvp-battle` + `pvp-orders` e2e 通过。
+需求方诊断里 `supplyPathFallback: 1` 说明上一版的路径兜底也确实被用到了（掩码把路挡住但边存在的情形）。

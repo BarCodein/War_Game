@@ -249,7 +249,12 @@ export function findSupplyPath(world, faction, from, to, { ignoreControl = false
   const endIndex = endCell.cy * cols + endCell.cx;
   if (startIndex === endIndex) return [cellCenter(grid, startCell), cellCenter(grid, endCell)];
 
-  const traversable = (index) => Number.isFinite(steps[index]) && (blocked === null || blocked[index] === 0);
+  // 终点格（己方城市）**不受敌方实际控制区阻挡**：与 `buildSupplyField` 里"城市格永远算补给起点"
+  // 的豁免保持同一语义。否则会出现这种情况：刚被占领的敌方基地仍压在敌方控制区里 —— 代价场
+  // 因为它被豁免而照常供补给（单位确实有补给边），但绘制层的 A* 走不进这个被标记为 blocked 的
+  // 终点格，`findSupplyPath` 返回 null，于是"由被占领基地提供的补给线"根本不画。
+  const traversable = (index) => Number.isFinite(steps[index])
+    && (blocked === null || blocked[index] === 0 || index === endIndex);
   // 可采纳启发：八向距离（octile）× 每像素最小代价（最快的道路 1.25 → 0.8）
   const minCostPerPixel = 1 / Math.max(...Object.values(values.terrain.moveMultiplier));
   const heuristic = (cx, cy) => {
