@@ -538,3 +538,36 @@ pvp.html
 | `/socket.io/?EIO=4&transport=polling` | **404** | 同上 |
 
 也就是说：**静态部分已完成，PvP 还差后端**。下一步按 §3–§6 部署 Node 服务并加上两段反代即可（见下方清单）。
+
+### 11.9 线上部署完成（2026-10-30 复核，公网探测）
+
+服务器：`179.255.135.95`（Ubuntu 24.04 · 1 核 / 2 GB · Nginx 1.24.0）· 静态根 `/var/www/html/war_game/repo` · 服务端源码 `/opt/war-game-server`
+
+```text
+$ curl -s http://179.255.135.95/api/health
+{"ok":true,"service":"war-of-dots-pvp","version":"0.1.0","node":"v22.23.4","uptimeSeconds":115,
+ "rooms":0,"activeRooms":0,"matches":0,"maxRooms":4,
+ "sim":{"matches":0,"snapshotsSent":0,"frames":7049,"ticks":0,"slowTicks":0,"tickMsAvg":0,"tickMsMax":0},
+ "reconnectGraceSeconds":30,"snapshotHz":15,"accounts":2,"socketClients":2,"time":"2026-10-30T02:40:48Z"}
+
+$ curl -s -i "http://179.255.135.95/socket.io/?EIO=4&transport=polling" | head -1
+HTTP/1.1 200 OK          ← /socket.io 反代（含 Upgrade 头）生效
+
+$ curl -o /dev/null -w '%{http_code}\n' http://179.255.135.95/pvp.html
+200
+$ curl -o /dev/null -w '%{http_code}\n' http://179.255.135.95/pvp-battle.html
+200
+```
+
+| 检查项 | 结果 |
+|---|---|
+| Node 版本 | **v22.23.4**（≥ 22.12 ✓） |
+| systemd `war-game.service` | active（`/usr/bin/node server/src/index.js`） |
+| `/api/health`（公网） | 200 + `ok:true`、`maxRooms:4`、`reconnectGraceSeconds:30`、`snapshotHz:15`、`sim.*` |
+| `/socket.io/` 握手（公网） | 200（Nginx 反代 + Upgrade 生效） |
+| 静态页 `pvp.html` / `pvp-battle.html` | 200 |
+| SQLite | `/var/lib/war-game/pvp.db`（systemd `StateDirectory`） |
+| 驱动空转开销 | `frames: 7049`（约 2 分钟 60Hz 循环）、`ticks: 0`（无对局时不做模拟）✓ |
+
+> 至此 PvP 全链路已在真实服务器上跑通：浏览器 → Nginx（80）→ Node（127.0.0.1:3001）→ 权威模拟 → 分阵营快照 → 浏览器渲染。
+> 剩余可选项：线上压测（§10）、以及 docs/pvp-plan.md §11.6 的"交互对齐战役"（停止指令/路径显示，待排期）。
