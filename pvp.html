@@ -263,11 +263,17 @@
         }
         renderRoomAccess();
       }
+      // 每次确认登录态后尝试自动回到上一局房间
+      function maybeAutoRejoin() {
+        if (!autoRejoinTried && me) tryAutoRejoinRoom();
+      }
+
       function refreshMe() {
         return fetch('/api/auth/me', { cache: 'no-store' })
           .then(function (res) { return res.json().catch(function () { return null; }); })
           .then(function (data) {
             renderUser(data && data.ok ? data.user : null);
+            maybeAutoRejoin();
             return data;
           })
           .catch(function () { renderUser(null); });
@@ -432,6 +438,34 @@
             showRoomMessage((result.message || '进入房间频道失败') + (result.code ? ' [' + result.code + ']' : ''), true);
           }
         });
+      }
+
+      // 从对局页点「返回大厅」回来时：自动回到上一局的同一个房间（房间码不变），
+      // 双方直接再点「准备」即可开下一局，不需要重新输入/转发房间码。
+      var autoRejoinTried = false;
+      function tryAutoRejoinRoom() {
+        var code = '';
+        try { code = (sessionStorage.getItem('pvp:lastRoom') || '').toUpperCase(); } catch (e) { code = ''; }
+        if (autoRejoinTried || !me || roomCode || !/^[A-Z0-9]{6}$/.test(code)) return;
+        autoRejoinTried = true;
+        try { sessionStorage.removeItem('pvp:lastRoom'); } catch (e) { /* 忽略 */ }
+        // 先把"已结束"的房间重置成等待（同一房间码再开一局），再拉房间视图
+        apiJson('/api/rooms/' + code + '/rearm', { method: 'POST' })
+          .catch(function () { /* 不是成员或房间已回收：交给后面的 GET 处理 */ })
+          .then(function () { return apiJson('/api/rooms/' + code); })
+          .then(function (result) {
+            if (!result.res.ok || !result.data || !result.data.ok) return null;
+            var payload = result.data.room;
+            // 只在"还能开一局"的房间（等待/倒计时）里自动回归；已经开打的旧房间不抢
+            if (payload.state !== 'waiting' && payload.state !== 'countdown') return null;
+            var already = (payload.players || []).some(function (player) { return me && player.id === me.id; });
+            if (already) { afterJoinRoom(payload, payload.code); return null; }
+            return apiJson('/api/rooms/' + code + '/join', { method: 'POST' })
+              .then(function (joined) {
+                if (joined.res.ok && joined.data && joined.data.ok) afterJoinRoom(joined.data.room, code);
+              });
+          })
+          .catch(function () { /* 房间没了就留在大厅 */ });
       }
 
       function onCreateRoom() {

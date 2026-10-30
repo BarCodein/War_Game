@@ -77,6 +77,8 @@ test('U1/U2/U3：多选拖轨迹 → 一条批量命令，S 停止，右键攻�
 
     await expect.poll(() => pageA.evaluate(() => window.__pvp.commandQueue.stats.batches), { timeout: 10000 })
       .toBe(1);   // 一次操作 = 一条消息
+    await expect.poll(() => pageA.evaluate(() => Boolean(window.__pvp.lastOrderResult)), { timeout: 10000 })
+      .toBe(true);   // 等服务器回执（batches 计数在发送时就 +1，ack 会晚一点）
     const u1 = await pageA.evaluate(() => ({
       stats: { ...window.__pvp.commandQueue.stats },
       last: window.__pvp.lastOrderResult ?? null,
@@ -149,9 +151,11 @@ test('U1/U2/U3：多选拖轨迹 → 一条批量命令，S 停止，右键攻�
       return debug.world.units.reduce((sum, unit) => sum + (unit.pendingQueue?.length ?? 0), 0);
     }), { timeout: 15000, intervals: [400, 800, 1200] }).toBeGreaterThan(0);
 
-    // 回执提示条真的显示过（U1 的视觉反馈）
+    // 下令成功不再弹提示条（单/多单位都不弹）；只记录 debug.lastOrderAccepted 供断言
+    const accepted = await pageA.evaluate(() => window.__pvp.lastOrderAccepted ?? null);
+    expect(accepted?.units ?? 0).toBeGreaterThan(1);
     const toast = await pageA.evaluate(() => window.__pvp.lastToast ?? null);
-    expect(toast?.text ?? '').toContain('已下令');
+    expect(toast).toBeNull();
   } finally {
     await contextA.close();
     await contextB.close();

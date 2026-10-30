@@ -44,8 +44,10 @@ test.describe('PvP 断线重连', () => {
 
       // 关掉 B 的页面 = 断线
       await pageB.close();
-      await expect(pageA.locator('#connBanner')).toContainText('对手掉线', { timeout: 10000 });
-      await expect(pageA.locator('#connBanner')).toContainText(String(GRACE_SECONDS));
+      await expect(pageA.locator('#toast')).toContainText('对手掉线', { timeout: 10000 });
+      // 宽限秒数不再进 toast 文案（toast 只报"对手掉线，等待重连"），改用客户端握手的宽限值断言
+      await expect.poll(() => pageA.evaluate(() => Math.round((window.__pvp?.reconnectGraceMs ?? 0) / 1000)), { timeout: 10000 })
+        .toBe(GRACE_SECONDS);
 
       // A 的对局继续推进（快照还在涨）
       await expect.poll(() => pageA.evaluate(() => window.__pvp.snapshotCount), { timeout: 15000 })
@@ -55,7 +57,7 @@ test.describe('PvP 断线重连', () => {
       const pageB2 = await contextB.newPage();
       await pageB2.goto(battleUrl, { waitUntil: 'domcontentloaded' });
       await expect(pageB2.locator('#battleStatus')).toContainText('已进入对局', { timeout: 20000 });
-      await expect(pageA.locator('#connBanner')).toContainText('对手已重连', { timeout: 15000 });
+      await expect(pageA.locator('#toast')).toContainText('对手已重连', { timeout: 15000 });
 
       // 续局后两端都还在收快照
       const before = await pageA.evaluate(() => window.__pvp.snapshotCount);
@@ -77,9 +79,16 @@ test.describe('PvP 断线重连', () => {
       const endPayload = pageA.waitForEvent('console', { timeout: 20000 }).catch(() => null);
       await contextB.close();   // 整页关掉，不再回来
 
-      await expect(pageA.locator('#resultOverlay')).toBeVisible({ timeout: 25000 });
-      await expect(pageA.locator('#resultTitle')).toHaveText('胜利！');
-      await expect(pageA.locator('#resultDetail')).toContainText('掉线');
+      // 断线超时 → 服务端结算：客户端 result 落地并且结算浮层加上 .show（战役同款浮层）
+      await expect.poll(() => pageA.evaluate(() => window.__pvp?.result?.winner ?? null), { timeout: 25000 })
+        .not.toBeNull();
+      await expect.poll(() => pageA.evaluate(() => document.querySelector('#victoryOverlay')?.classList.contains('show') ?? false), { timeout: 10000 })
+        .toBe(true);
+      await expect(pageA.locator('#victoryTitle')).toContainText('胜利');
+      await expect(pageA.locator('#victoryDetail')).toContainText('掉线');
+      // 正常结束（掉线超时判定）也走同一个结算按钮 → 必须真的回大厅
+      await pageA.click('#restartButton');
+      await pageA.waitForURL(/\/pvp\.html/, { timeout: 15000 });
       await endPayload;
     } finally {
       await contextA.close();

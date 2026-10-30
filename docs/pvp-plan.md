@@ -1333,3 +1333,125 @@ if (state.mode === 'local') {
 
 **验证**：全量单测 **621 passed / 8 failed**（既有）；`pvp-battle` + `pvp-orders` e2e 通过。
 需求方诊断里 `supplyPathFallback: 1` 说明上一版的路径兜底也确实被用到了（掩码把路挡住但边存在的情形）。
+
+---
+
+﻿## 11.17 对局页界面与战役统一（2026-10-30）
+
+按需求方确认的方案：**复用同一套外壳**，去掉任务/暂停/倍速，主菜单改为**认输**，并显示对手状态与 RTT。
+
+### 11.17.1 共享层（新增）
+
+| 文件 | 作用 |
+|---|---|
+| `src/rendering/battleChrome.js` | 战场外壳唯一来源：`mountBattleChrome({ mode: 'campaign' \| 'pvp' })`，返回 `els`。战役 = brand/任务名/主菜单/缩放/倍速/暂停 + 左栏 + 任务浮层 + 战场通讯 + 标题行/底栏；PvP = brand/房间·阵营/缩放/对手+RTT/**认输**，结算按钮为"返回大厅" |
+| `src/rendering/prepCountdown.js` | 准备读秒（84px 暗红数字 + 提示条），战役与 PvP 共用 |
+| `src/rendering/hud.js` | 新增 `options = { elements, timeSource, onVictory, onResultButton, faction }`，所有"战役专有元素"都做了判空；PvP 传 `elements: chrome`、`timeSource: 快照剩余时间`、`controller: null` |
+
+### 11.17.2 页面
+
+- `game.html`：只剩 `#battle-root`，骨架由 `src/entries/game.js` 在创建 Phaser 前挂载。
+- `pvp-battle.html`：只剩 `#battle-root` + socket.io + `src/pvp/battle.js`（同样在外壳里挂 `#battlefield`）。
+- 认输：顶栏按钮 → `socket.emit('match:resign')` → 服务端复用 `rooms.leave()` 的 forfeit 判负 → 对手收到结算 → 自己回大厅。**无二次确认**（需求方确认）。
+
+### 11.17.3 验证（截至本轮）
+
+| 项 | 结果 |
+|---|---|
+| 战役页面（真浏览器） | `#battle-root`/`#battlefield`/canvas 均存在，时钟 `00:01`、暂停键、`03 UNITS`、任务面板、结算浮层都在 → 骨架迁移无回归 |
+| PvP 页面（真浏览器） | `hud: true`、时钟显示剩余时间 `09:53`、`房间 QVXB9F · 蓝方`、状态"已进入对局（蓝方）"、canvas 正常，无 JS 报错 |
+| 全量单测 | 621 passed / 8 failed（既有供应与配置漂移） |
+| `pvp-battle` e2e | **passed**（快照/视野/选择/下令 + 新的 `#roomLabel`/`#vgClockText` 断言） |
+| `pvp-orders` / `pvp-reconnect` | 未通过：均为断言与新界面不一致（`#toast` 文案、`lastOrderResult` 的时序、断线结算的浮层路径），下一步修 |
+
+﻿### 11.17.4 修 bug：认输后对局没有结束（2026-10-30）
+
+**现象**：点顶栏「认输」，按钮变灰但**对局不结束、不弹结算**，双方都停在战场上。
+
+**根因**（两处，都在服务端）：
+
+1. `server/src/rooms.js#leave()` 里先把 `room.state = 'finished'`，再调 `onForfeit` →
+   而 `finishRoom()` 开头是 `if (room.state === 'finished') return;` → **直接返回**，不广播 `match:end`，
+   客户端永远收不到结果。
+   → 改成**先结算再改状态**。
+2. 同一函数先 `room.players = players.filter(...)` 把退出者移除，`onForfeit` 里再按 id 找人就找不到 →
+   胜方恒定为 `blue`（认输方若是蓝方会被判成胜利）。
+   → 在移除前记下 `quittingFaction` 并作为参数传给 `onForfeit`；`app.js` 优先用它，掉线路径仍回落到查表。
+
+**顺带**：结算原因文案按时区分侧 —— `pvp.reason.forfeit`（自己认输）=「认输」，
+新增 `pvp.reason.opponentForfeit`（对手认输）=「对手认输」。
+
+**UI 小修**：单个单位下令不再弹「已下令 1 个单位」提示条（多单位仍提示）。
+
+**验证**
+
+| 项 | 结果 |
+|---|---|
+| 新增 `tests/e2e/pvp-resign.spec.js` | 认输后**双方**都出现结算浮层：认输方「失败 · 认输」，对手「胜利 · 对手认输」，按钮为「返回大厅」 |
+| 全量 PvP e2e（battle / orders / rooms / resign / reconnect） | **8 passed**（1.3 min） |
+| 单单位不弹提示 | `pvp-battle` e2e 新增断言：只选 1 个单位右键下令后 `__pvp.lastToast` 仍为 null |
+| 全量单测 | 621 passed / 8 failed（既有供应与配置漂移） |
+
+﻿### 11.17.5 UI 微调：下令成功不再弹提示条（2026-10-30）
+
+需求方要求：单/多单位**下令成功都不再弹**「已下令 N 个单位」。
+
+- `src/pvp/battle.js#reportOrder`：成功分支不再 `flashOrderToast`，只记录 `debug.lastOrderAccepted = { units, at }`（供 e2e 断言）；
+  **保留**：部分被拒（`pvp.toast.orderPartiallyRejected`，带原因）、整条被拒（错误码）、发送失败、对手掉线/重连提示。
+- `tests/e2e/pvp-orders.spec.js`：把"回执提示条真的显示过"改成"不应有提示条 + `lastOrderAccepted.units > 1`"。
+- `tests/e2e/pvp-battle.spec.js`：单单位下令同样断言 `lastToast === null`。
+
+**验证**：全量 PvP e2e **11 passed**（1.4 min，battle/orders/rooms/resign/reconnect 等）；全量单测 621 passed / 8 failed（既有漂移）。
+
+﻿### 11.17.6 修 bug：结算窗「返回大厅」点不动（2026-10-30）
+
+**现象**：认输结束或正常结束（时间到/占领全城/掉线判负）后，结算窗点「返回大厅」没有回大厅。
+
+**根因**：`#restartButton` 的点击处理器由 `hud.js` 绑定，而它的分支顺序是
+`if (options.onResultButton) … else 战役逻辑（continueAfterVictory / returnFromGame）`。
+联机建 HUD 时**没传 `onResultButton`** → 走到战役分支 → `returnFromGame()` = `window.location.reload()`
+→ 看起来像"原地刷新对局页"，实际是回了对局页而不是大厅。
+
+**修法**
+
+| 位置 | 改动 |
+|---|---|
+| `src/pvp/battle.js` | 新增 `leaveToLobby()`；`createHud` 传 `onResultButton: () => leaveToLobby()`；`showResult()` 里显式把按钮文案设为「返回大厅」（`pvp.result.backToLobby`） |
+| `src/i18n/{zh-CN,en}.js` | 新增 `pvp.result.backToLobby` |
+
+**验证（三条结束路径全覆盖）**
+
+| 结束原因 | 测试 | 结果 |
+|---|---|---|
+| 认输（forfeit） | `pvp-resign.spec.js`：点按钮 → `waitForURL(/pvp\.html/)` | passed |
+| 时间到（time-limit，正常结束） | 新增 `pvp-timeup.spec.js`（服务端 `PVP_MATCH_MINUTES=1`）：结算显示「到达时限…」→ 点按钮 → 回大厅 | passed（1.2 min） |
+| 掉线超时（disconnect-timeout） | `pvp-reconnect.spec.js`：结算 → 点按钮 → 回大厅 | passed |
+
+回归：PvP e2e 其余 8 条全过（`pvp-battle` / `pvp-orders` / `pvp-rooms` / `pvp-resign` / `pvp-reconnect`）。
+> 注意：`pvp-timeup.spec.js` 需要服务端以 `PVP_MATCH_MINUTES=1` 启动，默认配置下不要跑这条。
+
+﻿### 11.18 再开一把：结算后自动回到同一个房间（2026-10-30）
+
+需求方要求：从结算窗点「返回大厅」后，原来同一房间的人**依旧在同一个房间**（房间码不变），
+双方直接点「准备」就能开下一局，不需要重新输入/转发房间码。
+
+**实现（不新增房间码、不新建房间）**
+
+| 位置 | 改动 |
+|---|---|
+| `server/src/rooms.js` | 新增 `forfeit({ code, userId })`：认输**只判负**，不把玩家移出房间、也不删房（`leave()` 仍保持"真离开"语义）<br>新增 `rearm({ code })`：把 `finished` 的房间原地重置成 `waiting`（清 ready / countdown / beginEmitted / match），房间码与成员不变 |
+| `server/src/app.js` | `match:resign` 改走 `rooms.forfeit()`（不再 `rooms.leave()`，否则玩家被踢出房间就谈不上再开一把） |
+| `server/src/routes/rooms.js` | 新增 `POST /api/rooms/:code/rearm`（仅房间成员可调） |
+| `src/pvp/battle.js` | `leaveToLobby()` 把房间码写入 `sessionStorage['pvp:lastRoom']` |
+| `pvp.html` | 登录后若存在 `pvp:lastRoom`：先 `POST /:code/rearm`，再 `GET` 房间，然后自动进房（已是成员则直接渲染）；房间已回收/已开打则安静留在大厅 |
+
+**为什么是"按需重置"而不是结束时立刻重置**：掉线判负的一方在宽限内回来仍要能看到结算
+（`pvp-reconnect.test.js` 的既有契约），所以房间在结束后**保持 finished**，只有大厅来要它时才 rearm。
+
+**验证**
+
+| 项 | 结果 |
+|---|---|
+| 新增 `tests/e2e/pvp-rematch.spec.js` | **passed**：认输 → 双方点「返回大厅」→ 双方都回到**同一房间码**且列表 2 人 → 双方点「准备」→ **第二局开始**（快照继续上涨） |
+| 全量 PvP e2e（battle/orders/rooms/resign/reconnect/rematch） | **9 passed**（1.4 min） |
+| 全量单测 | **621 passed / 8 failed**（8 条既有供应/配置漂移；`pvp-reconnect` 5 条全过） |

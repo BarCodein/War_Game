@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { registerDirect } from './helpers.js';
 
 // P4 对局页验收（两个独立上下文 = 两个玩家）：
 //   建房 → 加入 → 双方准备 → 自动进入 pvp-battle.html →
@@ -6,14 +7,8 @@ import { expect, test } from '@playwright/test';
 const password = 'battle-e2e-pass-1';
 
 async function register(page, username) {
-  await page.goto('/pvp.html');
-  await page.waitForLoadState('load');
-  await page.fill('#inputUsername', username);
-  await expect(page.locator('#inputUsername')).toHaveValue(username);
-  await page.fill('#inputPassword', password);
-  await expect(page.locator('#inputPassword')).toHaveValue(password);
-  await page.click('#btnRegister');
-  await expect(page.locator('#authLoggedIn')).toBeVisible({ timeout: 20000 });
+  // 走 helpers 的 HTTP 注册：填表点击会被 Vite HMR 的整页刷新打断（历史 flaky 根因）
+  await registerDirect(page, username, password);
 }
 
 async function waitBattleReady(page) {
@@ -52,8 +47,8 @@ test.describe('PvP 对局页', () => {
       await waitBattleReady(pageB);
 
       // 阵营
-      await expect(pageA.locator('#hudRoom')).toContainText('蓝方');
-      await expect(pageB.locator('#hudRoom')).toContainText('红方');
+      await expect(pageA.locator('#roomLabel')).toContainText('蓝方');
+      await expect(pageB.locator('#roomLabel')).toContainText('红方');
 
       // 迷雾下放给客户端：快照含全部单位，但"可见敌军"由客户端本地迷雾判定
       const view = await pageA.evaluate(() => ({
@@ -130,8 +125,9 @@ test.describe('PvP 对局页', () => {
       // 准备阶段读秒结束后进入 playing，计时器在走
       await expect.poll(() => pageA.evaluate(() => window.__pvp.lastSnapshot?.phase), { timeout: 20000 })
         .toBe('playing');
-      await expect(pageA.locator('#prepOverlay')).toBeHidden({ timeout: 20000 });
-      await expect(pageA.locator('#hudTimer')).not.toHaveText('--:--');
+      // 准备读秒现在是共享的 Phaser 文本（战役同款），改用快照阶段 + 时钟断言
+      await expect.poll(() => pageA.evaluate(() => window.__pvp?.lastSnapshot?.phase), { timeout: 20000 }).toBe('playing');
+      await expect(pageA.locator('#vgClockText')).not.toHaveText('00:00');
 
       // 选中单位后补给线叠加层应真的画出来（与战役一致：只在选中时画）
       await expect.poll(() => pageA.evaluate(() => window.__pvp.deriveStats?.supplySelected ?? 0), {
@@ -140,6 +136,20 @@ test.describe('PvP 对局页', () => {
       await expect.poll(() => pageA.evaluate(() => window.__pvp.deriveStats?.supplyLines ?? 0), {
         timeout: 15000, intervals: [400, 800, 1200],
       }).toBeGreaterThanOrEqual(1);
+
+      // 单个单位下令 → 不再弹"已下令"提示条（多单位才提示，需求方要求）
+      const singleOrderToast = await pageA.evaluate(() => {
+        const debug = window.__pvp;
+        const unit = debug.world.units.find((item) => item.faction === debug.myFaction && debug.selection.isSelected(item.id));
+        const point = debug.projectToScreen(unit.x + 30, unit.y + 90);
+        return { point, units: debug.selection.ids().length };
+      });
+      await pageA.evaluate(() => { window.__pvp.lastToast = null; });
+      await pageA.mouse.click(singleOrderToast.point.x, singleOrderToast.point.y, { button: 'right' });
+      await pageA.waitForTimeout(1200);
+      const toastAfterSingle = await pageA.evaluate(() => window.__pvp.lastToast ?? null);
+      // 若当前只选中 1 个单位，就不应该出现"已下令"提示
+      if (singleOrderToast.units === 1) expect(toastAfterSingle).toBeNull();
     } finally {
       await contextA.close();
       await contextB.close();

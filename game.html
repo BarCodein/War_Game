@@ -6,75 +6,9 @@
   <link rel="stylesheet" href="/styles.css">
 </head>
 <body class="game-fullscreen">
-  <!-- 左上角计时器：由 src/rendering/hud.js 的 renderTimer 驱动 world.time（受暂停/加速控制） -->
-  <div class="vg-clock-panel" id="vgClockPanel">
-    <span id="vgClockText">00:00</span>
-  </div>
-  <main class="app-shell">
-    <header class="topbar">
-      <div class="brand"><span class="brand-mark">+</span><div><strong>沙盘战争</strong><small>FRONTLINE COMMAND</small></div></div>
-      <div class="mission-name"><span class="eyebrow" id="missionEyebrow">OPERATION 07</span><span id="missionLevelName">—</span></div>
-      <div class="top-actions">
-        <button class="icon-button" id="exitPlaytest" title="返回编辑器" hidden>返回编辑器</button>
-        <a class="icon-button editor-link" href="/index.html" title="主菜单">主菜单</a>
-        <div class="zoom-controls">
-          <span class="zoom-readout" id="zoomLabel">100%</span>
-          <button class="icon-button" id="zoomReset" title="缩放复位到 100%（1×）">↺</button>
-        </div>
-        <div class="speed-controls">
-          <button class="icon-button" data-speed="0.5" title="0.5×">½×</button>
-          <button class="icon-button active" data-speed="1" title="1×">1×</button>
-          <button class="icon-button" data-speed="2" title="2×">2×</button>
-        </div>
-        <button class="icon-button" id="pauseButton" title="暂停游戏">Ⅱ</button>
-      </div>
-    </header>
-    <div class="game-layout">
-      <aside class="left-panel panel">
-        <div class="panel-heading"><span>我的编队</span><em id="unitCount">00 UNITS</em></div>
-        <div id="unitList" class="unit-list"></div>
-        <div class="panel-heading tech-title"><span>城市状态</span><em>CITY</em></div>
-        <div class="status-card" id="cityCard"></div>
-      </aside>
-      <!-- 左侧任务面板（悬浮 HUD，任务条目由 hud.js 按关卡任务规则动态注入） -->
-      <aside class="vg-task-panel" aria-label="任务">
-        <div class="vg-task-title">
-          <span class="vg-task-title-text">任务</span>
-        </div>
-        <ul class="vg-task-list"></ul>
-      </aside>
-      <section class="battlefield-wrap">
-        <div class="battlefield-head">
-          <div><span class="eyebrow" id="tacticalEyebrow">TACTICAL VIEW / —</span><h1>前线态势</h1></div>
-          <div class="battlefield-tools"><span class="selection-readout" id="selectionReadout">未选择单位</span><span class="timer-readout" id="timer">00:00</span></div>
-        </div>
-        <div class="canvas-frame">
-          <div id="battlefield"></div>
-          <div class="canvas-tip">左键选择 · Shift 增减选 · 从已选单位拖动绘制轨迹 · 右键移动 / 攻击 · 按住 E + 右键 / E + 拖轨迹 = 急行军 · 滚轮缩放</div>
-          <div class="toast" id="toast"></div>
-          <!-- 任务进度与战场通讯改为战场内叠加层（原右侧栏已移除），不占用横向空间 -->
-          <div class="battle-overlay mission-overlay" id="missionPanel">
-            <div class="overlay-heading"><span>任务进度</span><em id="missionPercent">0%</em></div>
-            <div class="overlay-sub">夺取北方信标 · 控制并守住高地信标</div>
-            <div class="progress"><i id="missionProgress" style="width:0%"></i></div>
-            <div id="missionList"></div>
-          </div>
-          <div class="battle-overlay feed-overlay">
-            <div class="overlay-heading"><span>战场通讯</span></div>
-            <div id="eventLog" class="event-log"><p><time>09:41</time><span class="event-tag blue">SYS</span>通讯已接通，等待战报。</p></div>
-          </div>
-        </div>
-        <div class="battlefield-foot"><span><i class="legend-dot friendly"></i>己方</span><span><i class="legend-dot hostile"></i>敌方</span><span><i class="legend-dot city-dot"></i>城市</span><span class="coords" id="coords">GRID 00 : 00</span></div>
-      </section>
-    </div>
-  </main>
-  <div class="victory-overlay" id="victoryOverlay">
-    <div class="victory-card">
-      <h2 id="victoryTitle">胜利</h2>
-      <p id="victoryDetail"></p>
-      <button id="restartButton">重新开始</button>
-    </div>
-  </div>
+  <!-- 战场外壳（顶栏 / 画布 / 结算）由 src/rendering/battleChrome.js 挂载：
+       与联机对局页共用同一份 DOM 与 styles.css 的 class，避免两份 HTML 漂移 -->
+  <div id="battle-root"></div>
 
   <script src="/audio.js"></script>
   <script>window.BGM_SONG = 'zaitaihangshandshang';</script>

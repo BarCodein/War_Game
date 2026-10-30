@@ -568,3 +568,28 @@ body.game-fullscreen #battlefield canvas {
   background: linear-gradient(180deg, #8b7a5a 0%, #5a4a2a 100%);
   color: #f1e3c4;
 }
+
+/* ---------------- PvP 对局页（body.pvp-mode）----------------
+   与战役共用外壳，但：①没有任务面板 → 时钟贴左上角；②顶栏有对手/RTT/认输，需要收紧扣间距；
+   ③状态胶囊限制宽度，避免长文案把顶栏挤爆。 */
+body.pvp-mode .vg-clock-panel {
+  top: 58px;
+  transform: none;
+}
+body.pvp-mode .topbar { gap: 10px; }
+body.pvp-mode .topbar .top-actions { gap: 8px; }
+body.pvp-mode .topbar .status { max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+body.pvp-mode .pvp-opponent {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+  background: rgba(241, 233, 210, .06);
+  font-size: 12px;
+  letter-spacing: .06em;
+}
+body.pvp-mode .pvp-opponent-state { font-style: normal; color: #8fae86; }
+body.pvp-mode .pvp-opponent-state.bad { color: #d98a6a; }
+body.pvp-mode .icon-button.danger-button { border-color: #8c1d1d; color: #e8c9a0; }
+body.pvp-mode .icon-button.danger-button:hover { background: #8c1d1d; color: #f1e9d2; }

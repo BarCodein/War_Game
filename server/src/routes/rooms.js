@@ -57,6 +57,19 @@ export function createRoomRouter({ db, config, rooms }) {
     }
   });
 
+  // 结算窗「返回大厅」→ 大厅先调这个把已结束的房间重置成等待（房间码不变，可直接再开一局）
+  router.post('/:code/rearm', (req, res) => {
+    try {
+      const code = normalizeCode(req.params.code);
+      const player = rooms.playerOf(rooms.require(code), req.user.id);
+      if (!player) throw new RoomError('NOT_IN_ROOM', '你不在这个房间里', 409);
+      const room = rooms.rearm({ code });
+      res.json({ ok: true, room: roomView(room, req.user.id) });
+    } catch (error) {
+      fail(res, error);
+    }
+  });
+
   router.post('/:code/leave', (req, res) => {
     try {
       const result = rooms.leave({ code: normalizeCode(req.params.code), userId: req.user.id });

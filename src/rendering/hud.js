@@ -19,7 +19,14 @@ export function resultQuery({ win, campaignId, timeText, casualties }) {
 
 // HUD（DOM 实现，gdd.md §11 布局）：编队列表、城市状态、任务进度、事件日志、
 // 顶栏控制与胜利结算。文案全部走 i18n；按 performance.hudRefreshMs 节流刷新。
-export function createHud(scene, world, controller, selection, orders) {
+export function createHud(scene, world, controller, selection, orders, options = {}) {
+  // 联机复用（docs/pvp-plan.md §11.17）：
+  //   elements    —— 由 rendering/battleChrome.js 挂载后传入（缺省则按 id 从 document 查，战役行为不变）
+  //   timeSource  —— 计时来源（秒）；默认 world.time。PvP 传快照 elapsedMs，镜像 world 不会自己走时间
+  //   onVictory   —— 有胜负时交给页面处理（PvP 弹自己的结算浮层，不跳 result-video）
+  //   faction     —— 观察方阵营（默认 blue，与战役一致）
+  const viewerFaction = options.faction ?? 'blue';
+  const timeSource = options.timeSource ?? (() => world.time);
   const els = {
     pauseButton: document.querySelector('#pauseButton'),
     speedButtons: document.querySelectorAll('[data-speed]'),
@@ -53,6 +60,8 @@ export function createHud(scene, world, controller, selection, orders) {
     vgTaskList: document.querySelector('.vg-task-list'),
     vgClockText: document.querySelector('#vgClockText'),
   };
+  // 联机：元素由 rendering/battleChrome.js 挂载后注入；战役不传 → 保持按 id 查到的结果
+  Object.assign(els, options.elements ?? {});
 
   // 动态设置关卡名称（从 level JSON 读取，替代 HTML 硬编码）
   const levelName = scene.level?.name ?? '';
@@ -78,14 +87,14 @@ export function createHud(scene, world, controller, selection, orders) {
   }
 
   // 顶栏
-  els.pauseButton.addEventListener('click', () => controller.togglePause());
+  els.pauseButton?.addEventListener('click', () => controller?.togglePause?.());
   // 编队列表（事件委托，innerHTML 重建后无需重绑）
   if (els.unitList) {
     els.unitList.addEventListener('click', (e) => {
       if (e.target.closest('.unit-card')) window.playSfx?.('tap');
     });
   }
-  for (const button of els.speedButtons) {
+  for (const button of els.speedButtons ?? []) {
     button.addEventListener('click', () => controller.setSpeed(Number(button.dataset.speed)));
   }
   // 缩放复位（滚轮缩放本身由 src/rendering/cameraView.js 处理）
@@ -111,21 +120,24 @@ export function createHud(scene, world, controller, selection, orders) {
     }
     window.location.href = '/battlechoose.html';
   }
-  els.restartButton.addEventListener('click', () => {
-    if (world.winner === 'blue' && !scene.fromEditor) {
+  els.restartButton?.addEventListener('click', () => {
+    // 联机：结算按钮由页面自己接管（返回大厅），hud 不参与
+    if (options.onResultButton) { options.onResultButton(); return; }
+    if (world.winner === viewerFaction && !scene.fromEditor) {
       continueAfterVictory();
       return;
     }
     returnFromGame();
   });
-  if (scene.fromEditor) {
+  // 返回编辑器的按钮只有编辑器试玩路径才有；联机外壳里没有这个元素
+  if (scene.fromEditor && els.exitPlaytest) {
     els.exitPlaytest.hidden = false;
     els.exitPlaytest.textContent = t('hud.exitPlaytest');
     els.exitPlaytest.addEventListener('click', returnFromGame);
-  } else {
+  } else if (els.exitPlaytest) {
     els.exitPlaytest.hidden = true;
   }
-  controller.onChange(() => {
+  controller?.onChange?.(() => {
     renderTopBarUI();
     showToast(controller.paused ? t('toast.paused') : t('toast.resumed'));
   });
@@ -135,7 +147,7 @@ export function createHud(scene, world, controller, selection, orders) {
   scene.input.on('pointermove', (pointer) => {
     const cx = Math.floor(pointer.worldX / 40).toString().padStart(2, '0');
     const cy = Math.floor(pointer.worldY / 40).toString().padStart(2, '0');
-    els.coords.textContent = `GRID ${cx} : ${cy}`;
+    if (els.coords) els.coords.textContent = `GRID ${cx} : ${cy}`;
   });
 
   function update(delta) {
@@ -143,19 +155,21 @@ export function createHud(scene, world, controller, selection, orders) {
     if (status.accumulator < values.performance.hudRefreshMs) return;
     status.accumulator = 0;
     renderTopBarUI(); // 暂停/速度按钮与缩放读数（滚轮缩放是连续的，必须随节流刷新）
-    renderUnitList();
-    renderCityCard();
-    renderMission();
-    renderEvents();
+    if (els.unitList) renderUnitList();
+    if (els.cityCard) renderCityCard();
+    if (els.missionPanel || els.vgTaskList) renderMission();
+    if (els.eventLog) renderEvents();
     renderTimer();
     renderVictory();
-    checkVictoryConditionsTransition();
-    checkTimeWarnings();
+    if (!options.onVictory) {
+      checkVictoryConditionsTransition();
+      checkTimeWarnings();
+    }
   }
 
   // 编队列表
   function renderUnitList() {
-    const units = world.units.filter(unit => unit.state !== 'dead' && unit.faction === 'blue')
+    const units = world.units.filter(unit => unit.state !== 'dead' && unit.faction === viewerFaction)
       .sort((a, b) => a.id - b.id);
     els.unitList.innerHTML = units.map(unit => `
       <div class="unit-card ${selection.isSelected(unit.id) ? 'active' : ''}" data-id="${unit.id}">
@@ -177,7 +191,7 @@ export function createHud(scene, world, controller, selection, orders) {
 
   // 城市状态（我方城市 c1 + 敌方信标 c2 的占领进度）
   function renderCityCard() {
-    const blueCity = world.cities.find(city => city.faction === 'blue');
+    const blueCity = world.cities.find(city => city.faction === viewerFaction);
     if (!blueCity) { // 蓝军失去全部城市（失败结算后仍会渲染 HUD）
       els.cityCard.innerHTML = '';
       return;
@@ -185,9 +199,9 @@ export function createHud(scene, world, controller, selection, orders) {
     const redCity = world.cities.find(city => city.faction === 'red');
     // 补给读数（gdd.md §7）：按「已补给单位」与「城市运力点数」两个口径显示。
     // 运力是吞吐点数：喂一个近城单位花 1 点，远城要花 1/因子 点，所以两栏各自说明一件事。
-    const blueUnits = world.units.filter(unit => unit.state !== 'dead' && unit.faction === 'blue');
+    const blueUnits = world.units.filter(unit => unit.state !== 'dead' && unit.faction === viewerFaction);
     const supplied = blueUnits.filter(unit => unit.supplied).length;
-    const blueCities = world.cities.filter(city => city.faction === 'blue');
+    const blueCities = world.cities.filter(city => city.faction === viewerFaction);
     const load = blueCities.reduce((sum, city) => sum + (world.citySupplyLoad.get(city.id) ?? 0), 0);
     const capacity = blueCities.length * values.supply.capacityPerCity;
     // 生产已关闭时不显示倒计时（否则会显示一个永远不会归零的假倒计时）
@@ -218,7 +232,7 @@ export function createHud(scene, world, controller, selection, orders) {
     }
     els.missionPanel.style.display = '';
     if (!status.obj2Done && world.units.some(unit =>
-      unit.state !== 'dead' && unit.faction === 'blue' && unit.command !== null)) {
+      unit.state !== 'dead' && unit.faction === viewerFaction && unit.command !== null)) {
       status.obj2Done = true;
       objectiveCompleted('toast.obj2', 'event.obj2');
     }
@@ -418,15 +432,16 @@ export function createHud(scene, world, controller, selection, orders) {
 
   // 计时与顶栏
   function renderTimer() {
-    const text = formatTime(world.time);
-    els.timer.textContent = text;
+    const text = formatTime(timeSource());
+    if (els.timer) els.timer.textContent = text;
     // 左上角复古计时器（vgClockText）同步 world.time，受暂停/加速控制，与战场节奏一致
     if (els.vgClockText) els.vgClockText.textContent = text;
   }
 
   function renderTopBarUI() {
-    els.pauseButton.textContent = controller.paused ? '▶' : 'Ⅱ';
-    for (const button of els.speedButtons) {
+    if (!controller) return;   // 联机没有暂停/倍速
+    if (els.pauseButton) els.pauseButton.textContent = controller.paused ? '▶' : 'Ⅱ';
+    for (const button of els.speedButtons ?? []) {
       button.classList.toggle('active', Number(button.dataset.speed) === controller.speed);
     }
     // 缩放读数：1× 时把复位按钮置灰（地图页才有 mapCamera，编辑器试玩路径同样有）
@@ -437,6 +452,7 @@ export function createHud(scene, world, controller, selection, orders) {
   }
 
   function renderSelection() {
+    if (!els.selectionReadout) return;
     const count = selection.selected.size;
     els.selectionReadout.textContent = count > 0
       ? t('hud.selection.count', { n: count })
@@ -450,12 +466,17 @@ export function createHud(scene, world, controller, selection, orders) {
   function renderVictory() {
     if (!world.winner || status.victoryShown) return;
     status.victoryShown = true; // 先置位再去延时，保证只调度一次
+    if (options.onVictory) {
+      // 联机：由页面自己弹结算浮层（与服务端 match:end 对齐），不走 result-video 跳转
+      options.onVictory(world.winner);
+      return;
+    }
     status.resultTimer = setTimeout(revealResult, values.ui.resultHoldMs);
   }
 
   function revealResult() {
     status.resultTimer = null;
-    const win = world.winner === 'blue';
+    const win = world.winner === viewerFaction;
 
     // 正式对局：跳转胜负动画页 result-video.html（播 shengli/shibai.mp4），
     // 视频结束再由它跳到独立结算页 result.html（不弹内嵌结算窗口）。

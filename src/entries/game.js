@@ -2,9 +2,13 @@ import Phaser from 'phaser';
 import { BootScene } from '../rendering/scenes/BootScene.js';
 import { GameScene } from '../rendering/scenes/GameScene.js';
 import { BenchScene } from '../rendering/scenes/BenchScene.js';
+import { mountBattleChrome } from '../rendering/battleChrome.js';
 
 // 游戏页入口（game.html）：教学关，或编辑器试玩（?fromEditor=1，地图取自 sessionStorage）。
 // 挂到全局供教学脚本（tutorial.js）获取世界坐标等运行时信息。
+// 战场外壳（顶栏 / 画布 / 结算）与联机对局页共用同一份 DOM（src/rendering/battleChrome.js）
+mountBattleChrome({ mode: 'campaign' });
+
 window.__rtsGame = new Phaser.Game({
   type: Phaser.AUTO,
   parent: 'battlefield',

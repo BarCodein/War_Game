@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { registerDirect } from './helpers.js';
 
 // P3 房间码匹配的浏览器流程（两个独立上下文 = 两个玩家）：
 //   A 注册 → 建房拿到 6 位码 → B 注册 → 输码加入 → 两边都看到对方
@@ -7,15 +8,8 @@ import { expect, test } from '@playwright/test';
 const password = 'room-e2e-pass-1';
 
 async function register(page, username) {
-  await page.goto('/pvp.html');
-  await page.waitForLoadState('load');
-  await page.fill('#inputUsername', username);
-  await expect(page.locator('#inputUsername')).toHaveValue(username);
-  await page.fill('#inputPassword', password);
-  await expect(page.locator('#inputPassword')).toHaveValue(password);
-  await page.click('#btnRegister');
-  await expect(page.locator('#authLoggedIn')).toBeVisible({ timeout: 15000 });
-  await expect(page.locator('#meName')).toHaveText(username);
+  // 走 helpers 的 HTTP 注册：填表点击会被 Vite HMR 的整页刷新打断（历史 flaky 根因）
+  await registerDirect(page, username, password);
 }
 
 test.describe('PvP 房间码匹配', () => {

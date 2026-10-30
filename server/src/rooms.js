@@ -165,6 +165,39 @@ export class RoomRegistry {
     return room;
   }
 
+  /**
+   * 认输：只判定胜负，**不**把玩家移出房间、也**不**删房 —— 这样同一对玩家可以原房间码再开一局。
+   * 真正的"离开房间"仍然走 leave()（那会移除玩家）。
+   */
+  /** 把已结束的房间原地重置成等待状态（同一房间码再开一局）。非 finished 状态原样返回。 */
+  rearm({ code }) {
+    const room = this.rooms.get(code);
+    if (!room) return null;
+    if (room.state !== 'finished') return room;
+    room.state = 'waiting';
+    room.reason = null;
+    room.countdownEndsAt = null;
+    room.beginEmitted = false;
+    room.match = null;
+    room.matchId = null;
+    for (const player of room.players) {
+      player.ready = false;
+      player.leftNotified = false;
+    }
+    room.expiresAt = this.now() + this.config.roomTtlMs;
+    this.onStateChange?.(room);
+    return room;
+  }
+
+  forfeit({ code, userId }) {
+    const room = this.require(code);
+    const player = this.playerOf(room, userId);
+    if (!player) throw new RoomError('NOT_IN_ROOM', '你不在这个房间里', 409);
+    if (room.state !== 'playing') throw new RoomError('ROOM_NOT_PLAYING', '对局未在进行中', 409);
+    this.onForfeit?.(room, userId, 'forfeit', player.faction);
+    return room;
+  }
+
   leave({ code, userId }) {
     const room = this.require(code);
     const player = this.playerOf(room, userId);
@@ -172,14 +205,19 @@ export class RoomRegistry {
 
     const wasPlaying = room.state === 'playing';
     const wasHost = room.hostId === userId;
+    // 退出者的阵营要在 remove 之前记下来：上层要靠它判负（remove 之后查不到这个人，胜方会算错）
+    const quittingFaction = player.faction;
     room.players = room.players.filter((item) => item.id !== userId);
     player.ready = false;
 
     if (wasPlaying) {
-      // 主动退出 = 直接判负（被动掉线走 markDisconnected + 宽限，见 sweep）
+      // 主动退出（离开 / 认输）= 直接判负（被动掉线走 markDisconnected + 宽限，见 sweep）。
+      // ⚠️ 必须先让上层结算：finishRoom() 开头是 `if (room.state === 'finished') return`，
+      // 如果先把 state 改成 finished，onForfeit 里就什么都不做 → 不广播 match:end，
+      // 客户端永远收不到结果（现象：认输后对局不结束、不弹结算）。
+      this.onForfeit?.(room, userId, 'forfeit', quittingFaction);
       room.state = 'finished';
       room.reason = 'forfeit';
-      this.onForfeit?.(room, userId, 'forfeit');
       this.rooms.delete(room.code);
       this.onStateChange?.(room);
       return { room, closed: true };

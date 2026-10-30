@@ -68,11 +68,20 @@ export async function fillByScript(page, selector, value) {
 }
 
 export async function registerDirect(page, username, password) {
+  // 走 HTTP 注册 + 刷新，而不是填表单点按钮：
+  // Vite 的 HMR 偶尔会在填表之后整页刷新，把输入框清空导致注册点不动（历史上反复出现的 flaky）。
   await page.goto('/pvp.html');
   await page.waitForLoadState('load');
-  await fillByScript(page, '#inputUsername', username);
-  await fillByScript(page, '#inputPassword', password);
-  await page.click('#btnRegister');
+  await page.evaluate(async ({ user, pass }) => {
+    const response = await fetch('/api/auth/register', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ username: user, password: pass }),
+    });
+    if (!response.ok) throw new Error(`register failed: ${response.status}`);
+  }, { user: username, pass: password });
+  await page.reload();
+  await page.waitForLoadState('load');
   await expect(page.locator('#authLoggedIn')).toBeVisible({ timeout: 20000 });
   await expect(page.locator('#meName')).toHaveText(username);
 }

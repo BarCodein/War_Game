@@ -18,6 +18,9 @@ import { createKeyboard } from '../input/keyboard.js';
 import { drawBattleOverlays, drawDashedPath } from '../rendering/battleOverlay.js';
 import { applyRoutePatch, applyRoutesFull, clearRoutesOfDead, countRoutes } from './routeState.js';
 import { t } from '../i18n/index.js';
+import { mountBattleChrome } from '../rendering/battleChrome.js';
+import { createHud } from '../rendering/hud.js';
+import { createPrepCountdown } from '../rendering/prepCountdown.js';
 import { applyStaticI18n } from '../i18n/apply.js';
 import { previewForCommand, prunePreviews } from './routePreview.js';
 
@@ -40,19 +43,25 @@ const params = new URLSearchParams(location.search);
 const roomCode = (params.get('room') ?? '').toUpperCase();
 const levelId = params.get('level') ?? 'dujiang_pvp';
 
+// 界面与战役共用同一套外壳（src/rendering/battleChrome.js）：顶栏 / 时钟 / toast / 结算浮层。
+// 注意：必须在 new Phaser.Game 之前挂载，否则 #battlefield 还不存在。
+// PvP 专有：房间·阵营、对手状态、RTT、认输。
+const chrome = mountBattleChrome({ mode: 'pvp' });
 const hud = {
-  room: document.getElementById('hudRoom'),
-  timer: document.getElementById('hudTimer'),
-  cities: document.getElementById('hudCities'),
-  enemies: document.getElementById('hudEnemies'),
-  net: document.getElementById('hudNet'),
-  prep: document.getElementById('prepOverlay'),
-  prepNumber: document.getElementById('prepNumber'),
-  status: document.getElementById('battleStatus'),
-  banner: document.getElementById('connBanner'),
-  result: document.getElementById('resultOverlay'),
-  resultTitle: document.getElementById('resultTitle'),
-  resultDetail: document.getElementById('resultDetail'),
+  room: chrome.roomLabel,
+  net: chrome.pvpNet,
+  opponentChip: chrome.opponentChip,
+  opponentName: chrome.opponentName,
+  opponentState: chrome.opponentState,
+  clock: chrome.vgClockText,
+  toast: chrome.toast,
+  status: chrome.battleStatus,   // 顶栏状态胶囊（.status 与战役同款）
+  banner: null,
+  result: chrome.overlay,
+  resultTitle: chrome.overlayTitle,
+  resultDetail: chrome.overlayDetail,
+  resultButton: chrome.restartButton,
+  resign: chrome.resignButton,
 };
 
 // ---------------- 调试/测试钩子（Playwright 用；线上也无害） ----------------
@@ -74,12 +83,44 @@ const debug = {
 };
 window.__pvp = debug;
 
+/** 回大厅：结算浮层的「返回大厅」与认输后的收尾都走这里 */
+function leaveToLobby() {
+  // 记住这一局的房间码：大厅读到它就会自动回到同一个房间（再开一把不用重新输码）
+  try {
+    if (roomCode) sessionStorage.setItem('pvp:lastRoom', roomCode);
+  } catch { /* 隐私模式忽略 */ }
+  window.location.href = '/pvp.html';
+}
+
+// 认输：点击立即生效（需求方确认不做二次确认），服务器按 forfeit 结算，收到 match:end 后弹结算。
+function bindResign() {
+  hud.resign?.addEventListener('click', () => {
+    if (debug.resigned) return;
+    debug.resigned = true;
+    hud.resign.disabled = true;
+    hud.resign.textContent = t('pvp.resign.sent');
+    socket?.emit('match:resign', { roomCode });
+  });
+}
+
 const socket = window.io
   ? window.io({ transports: ['websocket', 'polling'], timeout: 8000 })
   : null;function setStatus(text, isError = false) {
+  debug.lastStatus = text ?? '';
   if (!hud.status) return;
   hud.status.textContent = text ?? '';
   hud.status.className = isError ? 'status bad' : 'status';
+}
+
+/** 顶部 toast（战役同款 #toast 样式）：1.8 秒后自动消失 */
+function flashToast(text, tone = 'ok') {
+  debug.lastToast = { text, tone, at: performance.now() };
+  if (!hud.toast) return;
+  hud.toast.textContent = text ?? '';
+  hud.toast.className = `toast ${tone}`;
+  hud.toast.classList.add('show');
+  window.clearTimeout(flashToast.timer);
+  flashToast.timer = window.setTimeout(() => hud.toast.classList.remove('show'), 1800);
 }
 
 function fmtClock(ms) {
@@ -99,7 +140,8 @@ function reportOrder(result, queue) {
   if (result.ok) {
     const rejected = result.rejected ?? [];
     if (rejected.length === 0) {
-      flashOrderToast(t('pvp.toast.orderAccepted', { units: result.units ?? 0 }), 'ok');
+      // 下令成功不再弹提示（单/多单位都不弹，需求方要求）；只有"部分被拒/整条被拒"才提示原因
+      debug.lastOrderAccepted = { units: result.units ?? 0, at: performance.now() };
     } else {
       const reasons = [...new Set(rejected.map((item) => textOf(item.code)))].join('、');
       flashOrderToast(t('pvp.toast.orderPartiallyRejected', {
@@ -115,13 +157,12 @@ function reportOrder(result, queue) {
 
 function flashOrderToast(text, tone = 'ok') {
   debug.lastToast = { text, tone, at: performance.now() };
-  const element = document.getElementById('orderToast');
+  const element = hud.toast;
   if (!element || !text) return;
   element.textContent = text;
-  element.className = `order-toast ${tone}`;
-  element.hidden = false;
+  element.className = `toast ${tone} show`;
   window.clearTimeout(flashOrderToast.timer);
-  flashOrderToast.timer = window.setTimeout(() => { element.hidden = true; }, 1800);
+  flashOrderToast.timer = window.setTimeout(() => element.classList.remove('show'), 1800);
 }
 
 // ---------------- 预计路线（U3）----------------
@@ -192,6 +233,7 @@ class BattleScene extends Phaser.Scene {
     this.derive = createDeriveController({ world, getSnapshot: () => debug.lastSnapshot });
     debug.derive = this.derive;
 
+
     this.input.mouse?.disableContextMenu();
     // 命令流水线（U1/U2/U3）：
     //   createOrders 产出「每单位一条绝对路径」→ commandQueue 打包成一条 cmd → 服务器整批执行
@@ -211,6 +253,22 @@ class BattleScene extends Phaser.Scene {
       issue,
       getFaction: () => debug.myFaction ?? 'blue',
     });
+
+    // 与战役同一套 HUD（src/rendering/hud.js）：这里只用到"左上角时钟 + 结算浮层"，
+    // controller 传 null（联机没有暂停/倍速），元素由 battleChrome 挂载后注入。
+    this.hud = createHud(this, world, null, this.selection, this.orders, {
+      elements: chrome,
+      // PvP 时钟显示**剩余时间**（10 分钟上限，与结算口径一致）
+      timeSource: () => (debug.lastSnapshot?.timeLeftMs ?? 0) / 1000,
+      // 胜负由服务端 match:end 决定（这里是兜底，避免 hud 走战役的 result-video 跳转）
+      onVictory: (winner) => showResult(debug.result ?? { winner }),
+      // 结算浮层的按钮：联机必须回大厅（不传的话 hud 会走战役分支 reload 对局页）
+      onResultButton: () => leaveToLobby(),
+    });
+    this.prepCountdown = createPrepCountdown(this);
+    debug.hud = this.hud;
+
+
     // 键盘与战役共用（src/input/keyboard.js）：不传 controller → 暂停/变速只提示，S 走 issue
     this.keyboard = createKeyboard(this, this.selection, {
       issue,
@@ -225,9 +283,14 @@ class BattleScene extends Phaser.Scene {
       const camera = this.cameras.main;
       const view = camera.worldView;
       if (!view || !view.width) return null;
+      // canvas 在页面里的实际位置/缩放（顶栏占位后不再与窗口对齐），e2e 用这个坐标点击才准
+      const canvas = this.game.canvas;
+      const rect = canvas.getBoundingClientRect();
+      const scaleX = rect.width / camera.width;
+      const scaleY = rect.height / camera.height;
       return {
-        x: (x - view.x) / view.width * camera.width,
-        y: (y - view.y) / view.height * camera.height,
+        x: rect.left + (x - view.x) / view.width * camera.width * scaleX,
+        y: rect.top + (y - view.y) / view.height * camera.height * scaleY,
       };
     };
     // 注意：这里不再覆盖 #battleStatus —— 状态文案由 socket 流程负责（"已进入对局（蓝方）"等）
@@ -277,6 +340,13 @@ class BattleScene extends Phaser.Scene {
       previews: debug.previewCount ?? 0,
     };
     updateHud();
+    // 共享 HUD（时钟/结算）与准备读秒：与战役同一段代码
+    this.hud?.update(delta);
+    this.prepCountdown?.update({
+      prepping: debug.lastSnapshot?.phase === 'prep',
+      remainingMs: debug.prepRemainingMs ?? 0,
+    });
+    debug.prepRemainingMs = Math.max(0, (debug.prepRemainingMs ?? 0) - delta);
   }
 
   /** 15Hz 快照 → 60FPS：在上一帧位置与快照位置之间线性插值（静止时精确等于快照） */
@@ -405,22 +475,18 @@ function updateHud() {
     });
   }
   if (!snapshot) return;
-  if (hud.timer) hud.timer.textContent = snapshot.phase === 'prep' ? t('pvp.hud.prep') : fmtClock(snapshot.timeLeftMs);
-  const cities = snapshot.cities ?? [];
-  const blue = cities.filter((city) => city.faction === 'blue').length;
-  const red = cities.filter((city) => city.faction === 'red').length;
-  if (hud.cities) hud.cities.textContent = t('pvp.hud.cities', { blue, red });
-  if (hud.enemies) hud.enemies.textContent = t('pvp.hud.enemies', { count: debug.visibleEnemies ?? 0 });
+  // 顶栏：时钟由 hud.js 驱动（PvP 用"剩余时间"），这里只同步 RTT 与对手状态
   if (hud.net) {
     hud.net.textContent = debug.rttMs === null ? t('pvp.hud.rttNone') : t('pvp.hud.rtt', { ms: debug.rttMs });
   }
-  if (hud.prep) {
-    const prepping = snapshot.phase === 'prep';
-    hud.prep.hidden = !prepping;
-    if (prepping && hud.prepNumber) {
-      const seconds = Math.max(1, Math.ceil((debug.prepRemainingMs ?? 0) / 1000));
-      hud.prepNumber.textContent = String(seconds);
-      debug.prepRemainingMs = Math.max(0, (debug.prepRemainingMs ?? 0) - 1000);
+  if (hud.opponentChip && debug.opponent) {
+    hud.opponentChip.hidden = false;
+    if (hud.opponentName) hud.opponentName.textContent = debug.opponent.username ?? t('pvp.opponentFallback');
+    if (hud.opponentState) {
+      hud.opponentState.textContent = debug.opponentLeft
+        ? t('pvp.opponentLeftShort')
+        : t('pvp.opponentOnline');
+      hud.opponentState.classList.toggle('bad', Boolean(debug.opponentLeft));
     }
   }
 }
@@ -428,18 +494,23 @@ function updateHud() {
 function showResult(result) {
   debug.result = result;
   if (!hud.result) return;
-  hud.result.hidden = false;
+  hud.result.classList.add('show');
+  // 按钮文案：认输/正常结束都回大厅
+  if (hud.resultButton) hud.resultButton.textContent = t('pvp.result.backToLobby');
   const title = result?.winner === 'draw'
     ? t('pvp.result.draw')
     : (result?.winner === debug.myFaction ? t('pvp.result.win') : t('pvp.result.lose'));
   if (hud.resultTitle) hud.resultTitle.textContent = title;
-  const reasonText = {
-    'captured-all-cities': t('pvp.reason.capturedAllCities'),
-    'time-limit': t('pvp.reason.timeLimit'),
-    forfeit: t('pvp.reason.forfeit'),
-    'disconnect-timeout': t('pvp.reason.disconnectTimeout'),
-    aborted: t('pvp.reason.aborted'),
-  }[result?.reason] ?? (result?.reason ?? '');
+  const winner = result?.winner;
+  const reasonText = result?.reason === 'forfeit'
+    // 认输：自己认输显示"认输"，对手认输显示"对手认输"
+    ? (winner === debug.myFaction ? t('pvp.reason.opponentForfeit') : t('pvp.reason.forfeit'))
+    : ({
+      'captured-all-cities': t('pvp.reason.capturedAllCities'),
+      'time-limit': t('pvp.reason.timeLimit'),
+      'disconnect-timeout': t('pvp.reason.disconnectTimeout'),
+      aborted: t('pvp.reason.aborted'),
+    }[result?.reason] ?? (result?.reason ?? ''));
   if (hud.resultDetail) {
     hud.resultDetail.textContent = `${reasonText} · 用时 ${fmtClock(result?.atMs ?? 0)}`
       + (result?.casualties ? ` · 伤亡 蓝 ${result.casualties.blue} / 红 ${result.casualties.red}` : '');
@@ -459,10 +530,8 @@ const saveToken = (token) => {
 };
 
 function showBanner(text, tone = 'warn') {
-  if (!hud.banner) return;
-  hud.banner.hidden = !text;
-  hud.banner.textContent = text ?? '';
-  hud.banner.className = `banner ${tone}`;
+  if (!text) return;
+  flashToast(text, tone);
 }
 
 // ---------------- 网络 ----------------
@@ -534,6 +603,14 @@ function bindSocket() {
     showResult(payload);
   });
   socket.on('match:state', (state) => {
+    const players = state?.players ?? [];
+    const me = players.find((player) => player.id === debug.myUserId);
+    const opponent = players.find((player) => player.id !== debug.myUserId);
+    if (me?.faction) debug.myFaction = me.faction;
+    if (opponent) {
+      debug.opponent = { username: opponent.username ?? opponent.name ?? '—' };
+      debug.opponentConnected = opponent.connected !== false;
+    }
     if (state?.closed && state.result) showResult(state.result);
   });
   // P5：对手掉线 / 回来（广播给整个房间频道，所以要先排除"说的就是我"）
@@ -571,6 +648,7 @@ bindSocket();
 
 async function boot() {
   applyStaticI18n();   // 静态文案（准备提示 / 操作提示 / 返回大厅）走 i18n
+  bindResign();        // 顶栏「认输」：点击立即生效
   if (!roomCode) {
     setStatus(t('pvp.status.badRoom'), true);
     return;
@@ -587,7 +665,7 @@ async function boot() {
   // eslint-disable-next-line no-new
   new Phaser.Game({
     type: Phaser.AUTO,
-    parent: 'battleCanvas',
+    parent: 'battlefield',
     backgroundColor: '#0b0a08',
     scale: {
       mode: Phaser.Scale.RESIZE,

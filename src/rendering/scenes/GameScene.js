@@ -11,6 +11,7 @@ import { createControlLineRenderer } from '../controlLineRenderer.js';
 import { createSupplyLines } from '../supplyLines.js';
 import { createMapCamera } from '../cameraView.js';
 import { createHud } from '../hud.js';
+import { createPrepCountdown } from '../prepCountdown.js';
 import { createSelection } from '../../input/selection.js';
 import { createOrders } from '../../input/orders.js';
 import { createKeyboard } from '../../input/keyboard.js';
@@ -153,28 +154,16 @@ export class GameScene extends Phaser.Scene {
   }
 
   // 开局准备阶段的画面提示：大号倒计时数字 + 一行说明（超出准备阶段就隐藏）
+  // 准备读秒与联机共用 rendering/prepCountdown.js（同一套字号/配色）
   createPrepCountdown() {
-    const font = { fontFamily: '"PingFang SC", "Microsoft YaHei", sans-serif', fontStyle: '600' };
-    const centerX = this.scale.width / 2;
-    const centerY = this.scale.height / 2;
-    this.prepNumber = this.add.text(centerX, centerY - 40, '', {
-      ...font, fontSize: '84px', color: '#8c1d1d',
-      shadow: { offsetX: 0, offsetY: 2, color: '#f1e9d2', blur: 0, fill: true },
-    }).setOrigin(0.5);
-    this.prepHint = this.add.text(centerX, centerY + 34, t('prep.hint'), {
-      ...font, fontSize: '15px', color: '#2c2c2c', align: 'center',
-      backgroundColor: 'rgba(241,233,210,0.82)', padding: { x: 10, y: 5 },
-    }).setOrigin(0.5);
-    this.prepOverlay = this.add.container(0, 0, [this.prepNumber, this.prepHint]).setDepth(40);
+    this.prepCountdown = createPrepCountdown(this);
   }
 
   syncPrepCountdown() {
-    if (!this.prepOverlay) return;
-    const prepping = this.controller.isPrepping();
-    if (this.prepOverlay.visible !== prepping) this.prepOverlay.setVisible(prepping);
-    if (!prepping) return;
-    const seconds = String(Math.max(1, Math.ceil(this.controller.prepRemaining)));
-    if (this.prepNumber.text !== seconds) this.prepNumber.setText(seconds);
+    this.prepCountdown?.update({
+      prepping: this.controller.isPrepping(),
+      remainingMs: this.controller.prepRemaining * 1000,
+    });
   }
 
   // 框选矩形、拖动轨迹、行军路线与排队路线（与联机共用 rendering/battleOverlay.js）

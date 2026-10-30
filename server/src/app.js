@@ -94,9 +94,12 @@ export function createPvpServer(overrides = {}) {
       // 房间刚进入 playing（双方 ready + 倒计时结束）→ 交给 60Hz 驱动
       if (room.state === 'playing' && room.match) driver?.attach(room);
     },
-    onForfeit: (room, userId, reason = 'forfeit') => {
+    onForfeit: (room, userId, reason = 'forfeit', quitterFaction = null) => {
+      // 认输/离开时退出者已从 players 移除，所以阵营优先用调用方传进来的；
+      // 掉线宽限那条路径玩家还在列表里，回落到按 id 查。
       const quitter = room.players.find((player) => player.id === userId);
-      const winner = quitter?.faction === 'blue' ? 'red' : 'blue';
+      const loser = quitterFaction ?? quitter?.faction ?? null;
+      const winner = loser === 'blue' ? 'red' : 'blue';
       finishRoom(room, winner, reason);
     },
   });
@@ -147,6 +150,11 @@ export function createPvpServer(overrides = {}) {
     });
   }
 
+  /**
+   * 一局结束后房间保持 finished（这样掉线判负的一方在宽限内回来仍能看到结算），
+   * 只有当某一方从结算窗点「返回大厅」、大厅来要这个房间时才**按需**把它重置成 waiting：
+   * 房间码不变、双方仍是成员、准备清空 —— 于是同一对玩家可以直接再开一局。
+   */
   function emitState(room) {    if (!room) return;
     if (room.state === 'finished') {
       io.to(roomChannel(room.code)).emit('match:state', {
@@ -371,6 +379,25 @@ export function createPvpServer(overrides = {}) {
         driver.detach(code);   // 对局已结束/关闭：停止推进
         ack?.({ ok: true, closed: result.closed });
         if (result.room.players.length) emitState(result.room);
+      } catch (error) {
+        replyError(socket, ack, error);
+      }
+    });
+
+    // 认输（对局页右上角按钮）：点击立即生效，复用 rooms.leave 的 forfeit 判负路径。
+    socket.on('match:resign', (payload, ack) => {
+      const code = socket.data.roomCode;
+      const userId = socket.data.user?.id;
+      if (!code || !userId) {
+        ack?.({ ok: false, code: 'NOT_IN_ROOM' });
+        return;
+      }
+      try {
+        // 认输：只结算，不把玩家移出房间（房间留着，双方可以直接再开一局）
+        const room = rooms.forfeit({ code, userId });
+        driver.detach(code);
+        ack?.({ ok: true, closed: true });
+        if (room?.players?.length) emitState(room);
       } catch (error) {
         replyError(socket, ack, error);
       }

@@ -1,105 +1,15 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>沙盘战争 · PvP 对局</title>
-  <!--
-    ================================================================
-    PvP 对局页（P4）：画布只负责渲染服务器快照；HUD 用 DOM（便于测试与读数值）。
-      打开方式：pvp-battle.html?room=<6位码>&level=<关卡id>
-      数据流：socket 'tick' 快照（按阵营过滤）→ 镜像 world → Phaser 渲染（15Hz→60FPS 插值）
-      操作：左键点选/框选己方部队；右键移动；Shift+右键 攻击前进（命令经 socket 'cmd' 上行）
-    ================================================================
-  -->
-  <style>
-    :root { --cream: #f1e9d2; --brass: #d4a843; --ok: #7dd84a; --bad: #ff8b80; }
-    * { box-sizing: border-box; }
-    html, body { margin: 0; height: 100%; overflow: hidden; background: #0b0a08; }
-    #battleCanvas { position: absolute; inset: 0; }
-    #hud { position: absolute; inset: 0; pointer-events: none; font-family: "PingFang SC", "Microsoft YaHei", system-ui, sans-serif; color: var(--cream); }
-    #hudTop {
-      display: flex; gap: 18px; align-items: center; padding: 10px 16px;
-      background: linear-gradient(180deg, rgba(20,10,4,.92), rgba(20,10,4,.55) 70%, transparent);
-      font-size: 14px; letter-spacing: 1px;
-    }
-    #hudTop b { color: var(--brass); font-weight: 600; }
-    #battleStatus { margin-left: auto; font-size: 12px; color: #c9b79a; }
-    #battleStatus.bad { color: var(--bad); }
-    .status { font-size: 13px; letter-spacing: .5px; }
-    #prepOverlay {
-      position: absolute; left: 50%; top: 46%; transform: translate(-50%, -50%);
-      text-align: center; pointer-events: none;
-    }
-    #connBanner {
-      position: absolute; left: 50%; top: 58px; transform: translateX(-50%);
-      padding: 8px 16px; border-radius: 10px; font-size: 14px; letter-spacing: .5px;
-      background: rgba(24,12,6,.92); border: 1px solid rgba(212,168,67,.6); color: #ffe9b8;
-      max-width: 80vw; text-align: center;
-    }
-    #connBanner.ok { border-color: rgba(125,216,74,.7); color: #d8ffc8; }
-    #connBanner.bad { border-color: rgba(255,139,128,.8); color: #ffd2cc; }
-    #connBanner.warn { border-color: rgba(212,168,67,.7); }
-    /* 下令回执（U1/U2）：短提示，1.8s 自动消失 */
-    #orderToast {
-      position: absolute; left: 50%; bottom: 92px; transform: translateX(-50%);
-      padding: 7px 14px; border-radius: 9px; font-size: 13px; letter-spacing: .4px;
-      background: rgba(24,12,6,.9); border: 1px solid rgba(212,168,67,.55); color: #ffe9b8;
-      max-width: 70vw; text-align: center; pointer-events: none;
-    }
-    #orderToast.ok { border-color: rgba(125,216,74,.7); color: #d8ffc8; }
-    #orderToast.warn { border-color: rgba(212,168,67,.8); color: #ffe9b8; }
-    #orderToast.bad { border-color: rgba(255,139,128,.8); color: #ffd2cc; }
-    #prepNumber { font-size: 96px; font-weight: 700; color: #ffe9b8; text-shadow: 0 4px 12px rgba(0,0,0,.7); }
-    #prepHint { margin-top: 6px; padding: 6px 14px; border-radius: 8px; background: rgba(241,233,210,.82); color: #241a12; font-size: 14px; }
-    #resultOverlay {
-      position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
-      min-width: 320px; padding: 26px 30px; text-align: center; pointer-events: auto;
-      background: rgba(24,12,6,.94); border: 1px solid rgba(212,168,67,.6); border-radius: 14px;
-      box-shadow: 0 12px 40px rgba(0,0,0,.6);
-    }
-    #resultOverlay h2 { margin: 0 0 10px; font-size: 26px; letter-spacing: 4px; color: #ffe9b8; }
-    #resultDetail { margin: 0 0 18px; font-size: 13px; color: #c9b79a; line-height: 1.8; }
-    #resultOverlay a { color: var(--cream); text-decoration: none; padding: 8px 18px; border-radius: 8px;
-      background: linear-gradient(180deg, #6d3a12, #4a2818); border: 1px solid var(--brass); font-size: 13px; }
-    #hintBar {
-      position: absolute; left: 16px; bottom: 14px; font-size: 12px; color: #a99a80;
-      background: rgba(0,0,0,.35); padding: 6px 10px; border-radius: 8px;
-    }
-  </style>
+  <title>沙盘战争 · 联机对局</title>
+  <link rel="stylesheet" href="/styles.css">
+  <!-- 联机对局页与单机战役共用同一套战场外壳（src/rendering/battleChrome.js + styles.css）：
+       顶栏 / 左上角时钟 / 画布 / toast / 结算浮层都由它挂载，这里只留脚本入口。 -->
 </head>
-<body>
-  <div id="battleCanvas"></div>
-
-  <div id="hud">
-    <div id="hudTop">
-      <span id="hudRoom">房间 —</span>
-      <span>⏱ <b id="hudTimer">--:--</b></span>
-      <span>🏳 <b id="hudCities">城市 0 : 0</b></span>
-      <span>👁 <b id="hudEnemies">可见敌军 0</b></span>
-      <span id="hudNet">RTT —</span>
-      <span id="battleStatus" class="status">初始化…</span>
-    </div>
-
-    <div id="prepOverlay" hidden>
-      <div id="prepNumber">5</div>
-      <div id="prepHint" data-i18n="pvp.prepHint">准备阶段：可以先给部队下令</div>
-    </div>
-
-    <!-- P5：断线 / 对手掉线 / 重连 的横幅提示 -->
-    <div id="connBanner" class="banner" hidden></div>
-
-    <!-- U1/U2：下令回执（已下令 N 个单位 / 被拒原因） -->
-    <div id="orderToast" class="order-toast" hidden></div>
-
-    <div id="resultOverlay" hidden>
-      <h2 id="resultTitle">—</h2>
-      <p id="resultDetail"></p>
-      <a href="/pvp.html" data-i18n="pvp.backToLobby">返回大厅</a>
-    </div>
-
-    <div id="hintBar" data-i18n="pvp.hintBar">左键点选 / 空地拖拽框选 · 从己方单位拖出路径 = 移动</div>
-  </div>
+<body class="game-fullscreen">
+  <div id="battle-root"></div>
 
   <script src="/socket.io/socket.io.js"></script>
   <script type="module" src="/src/pvp/battle.js"></script>
