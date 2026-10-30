@@ -43,9 +43,26 @@ if [[ "${1:-}" == "--check-only" ]]; then
   exit 0
 fi
 
-say "拉取代码（跳过 LFS 大文件）"
+# 有更新才装依赖/重启：重启会打断内存里的对局，所以"没变就不动"很重要
+# （这样即使挂成定时任务，也不会每 5 分钟把正在打的对局重启掉一次）
+FORCE=0
+[[ "${1:-}" == "--force" ]] && FORCE=1
+
 cd "$APP_DIR"
+HEAD_BEFORE="$(sudo -u "$RUN_USER" git rev-parse HEAD)"
+BRANCH="$(sudo -u "$RUN_USER" git rev-parse --abbrev-ref HEAD)"
+echo "    当前提交 $HEAD_BEFORE（$BRANCH）"
+
+say "拉取代码（跳过 LFS 大文件）"
 sudo -u "$RUN_USER" env GIT_LFS_SKIP_SMUDGE=1 git pull --ff-only
+HEAD_AFTER="$(sudo -u "$RUN_USER" git rev-parse HEAD)"
+echo "    拉取后 $HEAD_AFTER"
+
+if [[ "$HEAD_BEFORE" == "$HEAD_AFTER" && "$FORCE" == "0" ]]; then
+  say "代码没有变化：跳过依赖安装与重启（要强制重启用 --force）"
+  health
+  exit 0
+fi
 
 say "安装运行时依赖"
 sudo -u "$RUN_USER" npm ci --omit=dev

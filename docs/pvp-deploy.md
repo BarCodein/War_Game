@@ -318,6 +318,48 @@ systemctl status war-game --no-pager
 > 三次服务器测量的平均 tick 都在 0.27–0.33 ms，说明 1 核跑 4 个 40 单位对局绰绰有余；
 > 偶发的 100ms 级尖峰先用 `/api/health` 的 `gc.*`、`memory.*` 判断是不是 GC（见 §11.9）。
 
+### 10.3 谁在自动更新？（两类仓库、两条链路）
+
+服务器上有**两个互不相干的检出**，更新方式不同：
+
+| 目录 | 内容 | 谁负责更新 | 现在会不会自动拉 |
+|---|---|---|---|
+| `/var/www/html/war_game/repo` | CI 构建产物（`dist`） | 你原来的"自动拉取脚本" 或 `deploy/update-static.sh` | **取决于你那个脚本**（见下方自检命令） |
+| `/opt/war-game-server` | 源码（`server/`、`src/`、关卡 JSON） | `deploy/update.sh`（手动）——**默认没有定时任务** | **不会** |
+
+也就是：**静态页面可能自动更新，但 Node 服务不会**。后端代码变了以后，必须执行一次：
+
+```bash
+sudo /opt/war-game-server/deploy/update.sh
+```
+
+自检"到底有没有定时任务在跑"：
+
+```bash
+crontab -l                      # 当前用户的 cron
+sudo crontab -l                 # root 的 cron
+ls -l /etc/cron.d/              # 系统级 cron（看有没有 war-game 之类）
+systemctl list-timers --all | grep -i -E 'war|game'   # systemd timer
+```
+
+> `update.sh` 现在会**先比对 HEAD**：代码没变就只做健康检查、不装依赖也不重启
+> （重启会打断内存里的对局）。要强制重启用 `--force`。
+> 因此把它挂成定时任务是安全的 —— 没有新提交时它什么都不做。
+
+如果要"后端也自动更新"，两种思路：
+
+1. **定时 + 只在有更新时重启**（推荐，风险最低）：
+   ```bash
+   # 每 10 分钟检查一次；没有新提交就什么都不做
+   echo '*/10 * * * * root /opt/war-game-server/deploy/update.sh >> /var/log/war-game-update.log 2>&1' \
+     | sudo tee /etc/cron.d/war-game-update
+   sudo chmod 644 /etc/cron.d/war-game-update
+   ```
+   注意：一旦有新提交，定时任务会**立刻重启服务**，正在进行的对局会中断（房间在内存里）。
+   若你希望"只在凌晨更新"，把 `*/10` 换成 `30 4 * * *`。
+2. **只在部署窗口手动执行**（最稳）：睡觉前/演示前跑一次 `update.sh`。
+
+
 ### 10.2 日常更新（P6 交付）
 
 ```bash
