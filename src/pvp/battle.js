@@ -8,6 +8,7 @@ import { UNIT_TEXTURES, createUnitRenderer } from '../rendering/unitRenderer.js'
 import { createControlLineRenderer } from '../rendering/controlLineRenderer.js';
 import { createSupplyLines } from '../rendering/supplyLines.js';
 import { createMapCamera } from '../rendering/cameraView.js';
+import { values } from '../config/index.js';
 import { createSelection } from '../input/selection.js';
 import { createOrders } from '../input/orders.js';
 import { alphaFor, interpolatePosition } from './interpolate.js';
@@ -238,7 +239,13 @@ class BattleScene extends Phaser.Scene {
     const viewerFaction = this.viewerFaction;
     this.fogRenderer = createFogRenderer(this, world, { faction: viewerFaction });
     this.unitRenderer = createUnitRenderer(this, world, this.selection, { faction: viewerFaction });
-    this.mapCamera = createMapCamera(this, world);
+    // 相机（§11.26）：cover 模式 = 按"填满视口"自动缩放，不拉伸地图；放不下的部分靠平移（中键拖 / 边缘推屏）。
+    // 战役仍用默认的 1:1 contain，不受影响。
+    this.mapCamera = createMapCamera(this, world, {
+      ...values.camera,
+      cover: true,
+      edgePan: { margin: 28, speed: 1100 },
+    });
     this.overlay = this.add.graphics().setDepth(30);
 
     // 控制线 / 补给线：与战役同款渲染器（控制线常显，补给线只在选中单位时画）。
@@ -250,6 +257,21 @@ class BattleScene extends Phaser.Scene {
 
 
     this.input.mouse?.disableContextMenu();
+    // 中键拖拽平移（左键画路线、右键下令，都不能拿来平移）；拖拽期间暂停边缘推屏
+    this.panning = null;
+    this.input.on('pointerdown', (pointer) => {
+      if (!pointer.middleButtonDown()) return;
+      this.panning = { x: pointer.x, y: pointer.y };
+      pointer.event?.preventDefault?.();
+    });
+    this.input.on('pointermove', (pointer) => {
+      if (!this.panning) return;
+      this.mapCamera.panByScreen(pointer.x - this.panning.x, pointer.y - this.panning.y);
+      this.panning = { x: pointer.x, y: pointer.y };
+    });
+    this.input.on('pointerup', (pointer) => {
+      if (pointer.button === 1 || !pointer.middleButtonDown?.()) this.panning = null;
+    });
     // 命令流水线（U1/U2/U3）：
     //   createOrders 产出「每单位一条绝对路径」→ commandQueue 打包成一条 cmd → 服务器整批执行
     //   同时用 planRoute 在本地算一条"预计路线"给渲染层画虚线（服务器快照一到就按偏离判断丢弃）
@@ -292,7 +314,10 @@ class BattleScene extends Phaser.Scene {
     });
     debug.orders = this.orders;
 
-    this.scale.on('resize', () => this.cameras.main.setSize(this.scale.width, this.scale.height));
+    this.scale.on('resize', () => {
+      this.cameras.main.setSize(this.scale.width, this.scale.height);
+      this.mapCamera.setViewport(this.scale.width, this.scale.height);   // 保持视口中心、重算填满缩放
+    });
     debug.scene = this;
     // 回归用：读某个单位精灵当前的显示角度（rad）——用于验证"敌方单位前进时会转向"
     debug.facingOf = (id) => this.unitRenderer?.debug?.angleOf(id) ?? null;
@@ -322,7 +347,7 @@ class BattleScene extends Phaser.Scene {
   }
 
   update(time, delta) {
-    this.mapCamera.update(delta / 1000);
+    this.mapCamera.update(delta / 1000, this.panning ? null : this.input.activePointer);
     this.interpolate(performance.now());
     // 派生：控制线 10Hz / 补给分配 2Hz（本地算，服务器每 3s 校正一次）
     this.derive.update(delta);
@@ -494,6 +519,21 @@ function applySnapshot(snapshot) {
 }
 
 // ---------------- HUD ----------------
+/** 首次进入对局时把镜头对准"己方部队重心"（观战者 = 全场重心） */
+let cameraCentered = false;
+function centerCameraOnArmy() {
+  const scene = debug.scene;
+  const world = debug.world;
+  if (cameraCentered || !scene?.mapCamera || !world) return;
+  const faction = debug.myFaction;
+  const units = world.units.filter((unit) => unit.state !== 'dead'
+    && (debug.spectator || !faction || unit.faction === faction));
+  if (!units.length) return;
+  const sum = units.reduce((acc, unit) => ({ x: acc.x + unit.x, y: acc.y + unit.y }), { x: 0, y: 0 });
+  scene.mapCamera.centerOn({ x: sum.x / units.length, y: sum.y / units.length });
+  cameraCentered = true;
+}
+
 function updateHud() {
   const snapshot = debug.lastSnapshot;
   if (debug.spectator && hud.room) {
@@ -592,6 +632,7 @@ function onConnect() {
     // 身份在 join ack 才确定（bindResign 早于 ack 执行），所以这里再同步一次按钮可见性
     if (hud.resign) hud.resign.hidden = debug.spectator;
     debug.teammates = response.teammates ?? [];
+    centerCameraOnArmy();
     debug.resigned = response.room?.you?.resigned === true;
     debug.myUserId = response.room?.you?.id ?? null;
     debug.matchId = response.match?.matchId ?? null;

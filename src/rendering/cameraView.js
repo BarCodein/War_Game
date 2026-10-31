@@ -8,8 +8,18 @@ import { values } from '../config/index.js';
 // 因此"让 world 点停在 screen 处"就是反解 scroll。数学部分全是纯函数，便于单测
 // （tests/unit/cameraView.test.js），Phaser 接线在 createMapCamera 里。
 
-export function clampZoom(zoom, cfg = values.camera) {
-  return Math.min(cfg.zoomMax, Math.max(cfg.zoomMin, zoom));
+export function clampZoom(zoom, cfg = values.camera, minZoom = cfg.zoomMin) {
+  return Math.min(cfg.zoomMax, Math.max(minZoom, zoom));
+}
+
+/**
+ * "填满视口"的最小缩放：max(宽比, 高比)。
+ * 不拉伸地图 —— 取较大的那个比例保证两个方向都铺满，代价是较短的方向会被裁掉一部分，
+ * 靠平移弥补（PvP 用 cover；战役仍是 1:1 的 contain）。
+ */
+export function coverZoomFor(viewport, mapSize) {
+  if (!mapSize?.width || !mapSize?.height) return 1;
+  return Math.max(viewport.width / mapSize.width, viewport.height / mapSize.height);
 }
 
 // 相机像素 → 世界坐标
@@ -58,7 +68,9 @@ export function createMapCamera(scene, world, cfg = values.camera) {
   const viewport = { width: scene.scale.width, height: scene.scale.height };
   const mapSize = { width: world.size.width, height: world.size.height };
 
-  let zoom = clampZoom(cfg.zoomMin, cfg);
+  const cover = cfg.cover === true;
+  const minZoom = () => (cover ? Math.max(cfg.zoomMin, coverZoomFor(viewport, mapSize)) : cfg.zoomMin);
+  let zoom = clampZoom(cfg.zoomMin, cfg, minZoom());
   let targetZoom = zoom;
   // 缩放过程中保持不动的世界点，以及它在屏幕上的位置（默认取视口中心 = 地图中心）
   let focus = { x: viewport.width / 2, y: viewport.height / 2 };
@@ -76,14 +88,44 @@ export function createMapCamera(scene, world, cfg = values.camera) {
     const scroll = { x: camera.scrollX, y: camera.scrollY };
     screen = { x: pointer.x, y: pointer.y };
     focus = worldAt(screen, scroll, zoom, viewport);
-    const next = clampZoom(deltaY < 0 ? targetZoom * cfg.zoomStep : targetZoom / cfg.zoomStep, cfg);
+    const next = clampZoom(deltaY < 0 ? targetZoom * cfg.zoomStep : targetZoom / cfg.zoomStep, cfg, minZoom());
     if (next !== targetZoom) targetZoom = next;
   });
 
   apply();
 
+  // 平移：屏幕像素位移 → 世界位移（方向与"抓住地图拖动"一致）
+  function panByScreen(dxScreen, dyScreen) {
+    const scroll = { x: camera.scrollX - dxScreen / zoom, y: camera.scrollY - dyScreen / zoom };
+    const next = clampScroll(scroll, zoom, viewport, mapSize);
+    camera.setScroll(next.x, next.y);
+  }
+
+  // 把某个世界点摆到视野正中
+  function centerOn(point) {
+    if (!point) return;
+    screen = { x: viewport.width / 2, y: viewport.height / 2 };
+    focus = { x: point.x, y: point.y };
+    const scroll = clampScroll(scrollForPoint(focus, screen, zoom, viewport), zoom, viewport, mapSize);
+    camera.setScroll(scroll.x, scroll.y);
+  }
+
+  const edgePan = cfg.edgePan ?? null;
+
   return {
-    update(dt) {
+    /** @param {number} dt 秒；@param {{x:number,y:number}|null} pointer 屏幕坐标（可选，传了才做边缘推屏） */
+    update(dt, pointer = null) {
+      if (edgePan && pointer) {
+        const margin = edgePan.margin ?? 28;
+        const speed = (edgePan.speed ?? 1000) / Math.max(zoom, 0.0001) * Math.max(0, dt);
+        let dx = 0;
+        let dy = 0;
+        if (pointer.x < margin) dx = -(margin - pointer.x) / margin * speed;
+        else if (pointer.x > viewport.width - margin) dx = (pointer.x - (viewport.width - margin)) / margin * speed;
+        if (pointer.y < margin) dy = -(margin - pointer.y) / margin * speed;
+        else if (pointer.y > viewport.height - margin) dy = (pointer.y - (viewport.height - margin)) / margin * speed;
+        if (dx || dy) panByScreen(-dx, -dy);
+      }
       if (zoom === targetZoom) return;
       // 按 60fps 标定的系数换算成与帧率无关的逼近速度
       const k = 1 - Math.pow(1 - cfg.zoomSmoothing, Math.max(0, dt) * 60);
@@ -92,12 +134,29 @@ export function createMapCamera(scene, world, cfg = values.camera) {
       apply();
     },
     reset() {
-      // 以"当前视野中心"为焦点回到 1×，避免复位时视野乱跳
+      // 以"当前视野中心"为焦点回到最小缩放（战役 1×；PvP = 填满视口的 cover 值）
       const scroll = { x: camera.scrollX, y: camera.scrollY };
       screen = { x: viewport.width / 2, y: viewport.height / 2 };
       focus = worldAt(screen, scroll, zoom, viewport);
-      targetZoom = clampZoom(cfg.zoomMin, cfg);
+      targetZoom = clampZoom(minZoom(), cfg, minZoom());
       if (zoom === targetZoom) apply();
+    },
+    panByScreen,
+    centerOn,
+    /** 视口尺寸变化后调用：重算 cover 下限，并保持"当前视野中心"不跳 */
+    setViewport(width, height) {
+      const center = worldAt({ x: viewport.width / 2, y: viewport.height / 2 },
+        { x: camera.scrollX, y: camera.scrollY }, zoom, viewport);
+      viewport.width = width;
+      viewport.height = height;
+      const floor = minZoom();
+      if (zoom < floor) { zoom = floor; targetZoom = Math.max(targetZoom, floor); }
+      screen = { x: width / 2, y: height / 2 };
+      focus = center;
+      apply();
+    },
+    get minZoom() {
+      return minZoom();
     },
     get zoom() {
       return zoom;
@@ -106,7 +165,7 @@ export function createMapCamera(scene, world, cfg = values.camera) {
       return zoom * 100;
     },
     get isZoomed() {
-      return Math.abs(zoom - cfg.zoomMin) > 0.001;
+      return Math.abs(zoom - minZoom()) > 0.001;
     },
   };
 }

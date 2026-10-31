@@ -439,6 +439,11 @@ export function createHud(scene, world, controller, selection, orders, options =
   }
 
   function renderTopBarUI() {
+    // 缩放读数与暂停/倍速无关：联机没有 controller 也要更新（cover 模式下开局可能是 150% 等）
+    if (els.zoomLabel && scene.mapCamera) {
+      els.zoomLabel.textContent = `${Math.round(scene.mapCamera.zoomPercent)}%`;
+      if (els.zoomReset) els.zoomReset.disabled = !scene.mapCamera.isZoomed;
+    }
     if (!controller) return;   // 联机没有暂停/倍速
     if (els.pauseButton) els.pauseButton.textContent = controller.paused ? '▶' : 'Ⅱ';
     for (const button of els.speedButtons ?? []) {

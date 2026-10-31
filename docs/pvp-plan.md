@@ -1716,3 +1716,39 @@ gdd.md §12 的镜像口径本来就是 `radius 100 / 3 hp/s`（`gdd-mirror.test
 
 **验证**：全量 PvP e2e（8 spec）**12 passed**；真浏览器截图无 JS 报错、登录态/大厅/身份按钮正常。
 截图：`docs/pvp-lobby.png`。
+
+﻿### 11.26 PvP 相机改为"自动缩放填满 + 平移"（2026-10-31）
+
+**Bug**：PvP 里地图没有填满画面（1920×1080 下地图 1280×800 以 1:1 画在中间，四周大面积露底）。
+
+**根因**：地图是 1280×800，而 PvP 画布是 `Phaser.Scale.RESIZE`（= 窗口像素）；相机 `zoomMin = 1`
+且 `clampScroll` 在"地图比视口小"时直接居中 → 视口比地图大时四周就是空白。
+
+**修法**（`src/rendering/cameraView.js`，只对 PvP 生效，战役仍是 1:1 contain）
+
+| 位置 | 改动 |
+|---|---|
+| 新增 `coverZoomFor(viewport, mapSize)` | `max(视口宽/地图宽, 视口高/地图高)`：取较大比例 → **不拉伸**、两方向都铺满，短边被裁掉的部分靠平移弥补 |
+| `createMapCamera(scene, world, { cover: true, edgePan })` | `cover` 时缩放下限 = `max(cfg.zoomMin, coverZoomFor(...))`（"锁定填满"）；滚轮与复位都用这个下限 |
+| 新增 `panByScreen(dx,dy)` / `centerOn(point)` / `setViewport(w,h)` | 中键拖拽平移；开局对准己方部队重心；窗口尺寸变化时保持"当前视野中心"并重算下限 |
+| 边缘推屏 | `update(dt, pointer)`：指针进入 28px 边缘带时按 `speed=1100` 推屏（拖拽期间暂停） |
+| `src/pvp/battle.js` | 相机传 `{ cover:true, edgePan:{margin:28,speed:1100} }`；中键按下→拖拽平移（左键画路线、右键下令，互不冲突）；`resize` 时调 `setViewport`；首次 `match:join` 拿到阵营后 `centerOn(己方重心)`（观战者=全场重心） |
+| `src/rendering/hud.js` | 缩放读数在"没有 controller"的联机页也要更新（原来提前 return，导致 cover 下仍显示 100%） |
+
+**实测**（真浏览器三档窗口，读 `cam.worldView × zoom` 是否盖住画布）
+
+| 窗口 | 缩放 | 世界可视区 | 结论 |
+|---|---|---|---|
+| 1280×800 | 100% | 1280×764 | 宽满、纵向裁 36px，可上下平移 |
+| 1920×1080 | **150%** | 1280×696 | 宽满、纵向裁 104px（截图无黑边） |
+| 1024×768 | 100% | 1024×732 | 视口小于地图，双向都可平移 |
+
+其它实测：缩放读数显示 `150%`；中键拖 200px → `scrollY -174 → -107`（= 200/1.5 的世界位移，方向正确，水平方向因"整宽已显示"被边界夹住）。
+
+**测试**
+
+| 项 | 结果 |
+|---|---|
+| 新增 `tests/unit/camera-cover.test.js`（7 条） | **passed**：cover 比例、同比例=1、小窗口<1、任意尺寸都覆盖视口、下限抬升、平移夹边界、对准点精确 |
+| 全量单测 | **658 passed / 8 failed**（8 条既有供应/配置漂移） |
+| 全量 PvP e2e（8 spec） | **12 passed** |
