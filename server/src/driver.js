@@ -8,6 +8,8 @@
 //     这样每个玩家只收到"自己能看到的那一份"，不必做逐 socket 的过滤
 //   · 每局结束只结算一次（发 match:end + 从 active 表移除并通知房间管理器）
 export const SNAPSHOT_CHANNEL = (code, faction) => `room:${code}:${faction}`;
+// 观战频道（§11.21）：全量快照（双方单位 + 双方路线），频率减半
+export const SPECTATOR_CHANNEL = (code) => `room:${code}:spec`;
 
 import { buildDerive, deriveBytes, deriveHash } from './derive.js';
 
@@ -47,13 +49,22 @@ export function createMatchDriver({ io, config, roomChannel, onMatchEnd = null, 
     io.to(roomChannel(entry.room.code)).emit('world:derive', payload);
   }
 
-  function emitSnapshots(room) {
+  function emitSnapshots(room, entry = null) {
     const match = room.match;
     if (!match) return;
     for (const faction of ['blue', 'red']) {
       io.to(SNAPSHOT_CHANNEL(room.code, faction)).emit('tick', match.snapshotFor(faction));
     }
     totals.snapshots += 2;   // 两个阵营各一份
+    // 观战：只有在场有观战者才发；频率 = snapshotHz / 2（默认 7.5Hz），省一半带宽
+    if ((room.players ?? []).some((player) => player.role === 'spectator')) {
+      if (entry) entry.specFrame = (entry.specFrame ?? 0) + 1;
+      const every = Math.max(1, Math.round((config.snapshotHz ?? 15) / (config.spectatorSnapshotHz ?? 7.5)));
+      if (!entry || entry.specFrame % every === 0) {
+        io.to(SPECTATOR_CHANNEL(room.code)).emit('tick', match.snapshotFor(null));
+        totals.snapshots += 1;
+      }
+    }
   }
 
   function finish({ room }) {
@@ -67,7 +78,7 @@ export function createMatchDriver({ io, config, roomChannel, onMatchEnd = null, 
       casualties: { blue: 0, red: 0 },
     };
     // 最后一帧快照（含 result），让客户端能立刻画出终局状态
-    emitSnapshots(room);
+    emitSnapshots(room, null);
     io.to(roomChannel(room.code)).emit('match:end', { ...result, matchId: room.matchId });
     active.delete(room.code);
     onMatchEnd?.(room, result);
@@ -86,7 +97,7 @@ export function createMatchDriver({ io, config, roomChannel, onMatchEnd = null, 
 
       if (nowMs - entry.lastSnapshotAt >= snapshotMs) {
         entry.lastSnapshotAt = nowMs;
-        emitSnapshots(room);
+        emitSnapshots(room, entry);
       }
 
       // 派生包（控制线/补给边）：低频校正，内容没变不发

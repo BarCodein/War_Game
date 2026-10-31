@@ -105,6 +105,7 @@ export function createFogRenderer(scene, world, options = {}) {
   // 视野源：与 fog.js 的 paintVision 同源同半径（观察者阵营 = 玩家阵营）。
   function visionSources() {
     const viewerFaction = resolveViewer();
+    if (!viewerFaction) return;   // 观战（§11.21）：全局视野，不画迷雾
     const list = [];
     for (const unit of world.units) {
       if (unit.state === 'dead' || unit.faction !== viewerFaction) continue;
@@ -132,6 +133,12 @@ export function createFogRenderer(scene, world, options = {}) {
   }
 
   function sync() {
+    // 观战（§11.21）：没有观察方阵营 → 不画迷雾
+    if (!resolveViewer()) {
+      if (image) image.setVisible(false);
+      lastSignature = null;
+      return;
+    }
     const sources = visionSources();
     const sig = signature(sources);
     if (sig === lastSignature) return;

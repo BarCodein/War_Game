@@ -72,13 +72,21 @@ export class RoomRegistry {
         changed = true;
         continue;
       }
-      // P5：对局中有人掉线超过宽限（默认 30s）→ 判他负
+      // P5 + 多人同阵营：只有**某个阵营的参战玩家全部**掉线/投降，才判该阵营负。
+      // 一个人掉线时队友还能继续打（需求方确认的规则）。
       if (room.state === 'playing') {
-        const absent = room.players.find((player) => player.connected === false
-          && player.disconnectedAt !== null
-          && nowMs - player.disconnectedAt >= this.config.disconnectGraceMs);
-        if (absent) {
-          this.onForfeit?.(room, absent.id, 'disconnect-timeout');
+        for (const faction of ['blue', 'red']) {
+          const side = room.players.filter((player) => player.role === faction);
+          if (side.length === 0) continue;
+          const allOut = side.every((player) => player.resigned || (
+            player.connected === false
+            && player.disconnectedAt !== null
+            && nowMs - player.disconnectedAt >= this.config.disconnectGraceMs
+          ));
+          if (allOut) {
+            this.onForfeit?.(room, side[0].id, 'disconnect-timeout', faction);
+            break;
+          }
         }
       }
     }
@@ -138,26 +146,27 @@ export class RoomRegistry {
       matchId: null,
       match: null,
       players: [this.newPlayer(user, 'blue')],
+      limits: {
+        maxPerSide: this.config.maxPerSide ?? 4,
+        maxSpectators: this.config.maxSpectators ?? 8,
+      },
     };
     this.rooms.set(code, room);
     this.onStateChange?.(room);
     return room;
   }
 
-  join({ code, user }) {
+  join({ code, user, role = null }) {
     const room = this.require(code);
-    if (room.state === 'playing' || room.state === 'finished') {
+    // 观战者只能在**等待环节**进入：开打后 join 一律拒绝（房间里的观战者可以继续看）
+    if (room.state !== 'waiting') {
       throw new RoomError('ROOM_STARTED', '该房间已经开始对局', 409);
     }
     if (this.playerOf(room, user.id)) {
       throw new RoomError('ALREADY_JOINED', '你已在这个房间里', 409);
     }
-    if (room.players.length >= 2) {
-      throw new RoomError('ROOM_FULL', '房间已满（2 人）', 409);
-    }
-    const taken = room.players.map((player) => player.faction);
-    const faction = ['blue', 'red'].find((item) => !taken.includes(item)) ?? 'red';
-    room.players.push(this.newPlayer(user, faction));
+    const resolved = this.resolveJoinRole(room, role);
+    room.players.push(this.newPlayer(user, resolved));
     // 有人进来 → 之前的 ready 作废（避免"准备状态和实际阵容不一致"）
     for (const player of room.players) player.ready = false;
     room.expiresAt = this.now() + this.config.roomTtlMs;
@@ -170,6 +179,90 @@ export class RoomRegistry {
    * 真正的"离开房间"仍然走 leave()（那会移除玩家）。
    */
   /** 把已结束的房间原地重置成等待状态（同一房间码再开一局）。非 finished 状态原样返回。 */
+  /** 加入时决定身份：指定则校验容量，未指定则自动补位（蓝→红→观战） */
+  resolveJoinRole(room, requested) {
+    const maxPerSide = this.config.maxPerSide ?? 4;
+    const maxSpectators = this.config.maxSpectators ?? 8;
+    const count = (role) => room.players.filter((player) => player.role === role).length;
+    if (requested === 'spectator') {
+      if (count('spectator') >= maxSpectators) {
+        throw new RoomError('SPECTATOR_FULL', `观战席已满（${maxSpectators} 人）`, 409);
+      }
+      return 'spectator';
+    }
+    if (requested === 'blue' || requested === 'red') {
+      if (count(requested) >= maxPerSide) {
+        throw new RoomError('SIDE_FULL', `该阵营已满（${maxPerSide} 人）`, 409);
+      }
+      return requested;
+    }
+    // 自动补位：优先把人少的阵营补平（第 1 人蓝、第 2 人红、第 3 人蓝…）
+    const blue = count('blue');
+    const red = count('red');
+    if (blue <= red && blue < maxPerSide) return 'blue';
+    if (red < blue && red < maxPerSide) return 'red';
+    if (blue < maxPerSide) return 'blue';
+    if (red < maxPerSide) return 'red';
+    if (count('spectator') < maxSpectators) return 'spectator';
+    throw new RoomError('ROOM_FULL', '房间已满', 409);
+  }
+
+  /** 等待阶段切换身份（蓝/红/观战）；开打后锁定 */
+  setRole({ code, userId, role }) {
+    const room = this.require(code);
+    if (room.state !== 'waiting') throw new RoomError('ROOM_STARTED', '对局已开始，身份锁定', 409);
+    const player = this.playerOf(room, userId);
+    if (!player) throw new RoomError('NOT_IN_ROOM', '你不在这个房间里', 409);
+    const next = role === 'spectator' ? 'spectator' : role;
+    if (next !== 'blue' && next !== 'red' && next !== 'spectator') {
+      throw new RoomError('BAD_ROLE', '未知身份', 400);
+    }
+    if (next === player.role) return room;
+    // 容量校验（排除自己）
+    const others = room.players.filter((item) => item.id !== userId);
+    const max = next === 'spectator' ? (this.config.maxSpectators ?? 8) : (this.config.maxPerSide ?? 4);
+    if (others.filter((item) => item.role === next).length >= max) {
+      throw new RoomError(next === 'spectator' ? 'SPECTATOR_FULL' : 'SIDE_FULL', '该位置已满', 409);
+    }
+    player.role = next;
+    player.faction = next === 'spectator' ? null : next;
+    player.ready = false;          // 换身份要重新准备
+    room.state = 'waiting';
+    room.countdownEndsAt = null;
+    this.onStateChange?.(room);
+    return room;
+  }
+
+  /** 该房间是否满足开局条件：双方各 ≥1 名参战玩家，且所有参战玩家已准备（观战者不参与） */
+  canStart(room) {
+    const players = room.players.filter((player) => player.role !== 'spectator');
+    const blue = players.filter((player) => player.role === 'blue').length;
+    const red = players.filter((player) => player.role === 'red').length;
+    return blue >= 1 && red >= 1 && players.every((player) => player.ready);
+  }
+
+  /**
+   * 登记"本人投降"：只标记，不结算、不踢人。
+   * 该阵营**所有参战玩家**都投降时，上层（app.js）才判定该阵营失败。
+   */
+  resign({ code, userId }) {
+    const room = this.require(code);
+    const player = this.playerOf(room, userId);
+    if (!player) throw new RoomError('NOT_IN_ROOM', '你不在这个房间里', 409);
+    if (player.role === 'spectator') throw new RoomError('NOT_A_PLAYER', '观战者不能投降', 409);
+    if (room.state !== 'playing') throw new RoomError('ROOM_NOT_PLAYING', '对局未在进行中', 409);
+    player.resigned = true;
+    const side = room.players.filter((item) => item.role === player.role);
+    const resigned = side.filter((item) => item.resigned).length;
+    return {
+      room,
+      faction: player.faction,
+      resigned,
+      total: side.length,
+      allResigned: resigned >= side.length,
+    };
+  }
+
   rearm({ code }) {
     const room = this.rooms.get(code);
     if (!room) return null;
@@ -182,6 +275,7 @@ export class RoomRegistry {
     room.matchId = null;
     for (const player of room.players) {
       player.ready = false;
+      player.resigned = false;
       player.leftNotified = false;
     }
     room.expiresAt = this.now() + this.config.roomTtlMs;
@@ -247,9 +341,10 @@ export class RoomRegistry {
     }
     const player = this.playerOf(room, userId);
     if (!player) throw new RoomError('NOT_IN_ROOM', '你不在这个房间里', 409);
+    if (player.role === 'spectator') throw new RoomError('NOT_A_PLAYER', '观战者不需要准备', 409);
     player.ready = Boolean(ready);
 
-    const bothReady = room.players.length === 2 && room.players.every((item) => item.ready);
+    const bothReady = this.canStart(room);
     if (bothReady) {
       room.state = 'countdown';
       room.countdownEndsAt = this.now() + this.config.roomCountdownMs;
@@ -302,12 +397,17 @@ export class RoomRegistry {
     return nowMs - (player.disconnectedAt ?? 0) < this.config.disconnectGraceMs;
   }
 
-  newPlayer(user, faction) {
+  newPlayer(user, role = 'blue') {
+    // role：'blue' | 'red' | 'spectator'；faction 是它的派生（观战者为 null），
+    // 指令校验/快照频道等既有逻辑继续用 faction，不必全仓库改名。
+    const resolved = role === 'spectator' ? 'spectator' : role;
     return {
       id: user.id,
       username: user.username,
       displayName: user.displayName ?? user.username,
-      faction,
+      role: resolved,
+      faction: resolved === 'spectator' ? null : resolved,
+      resigned: false,
       ready: false,
       connected: true,          // P5：socket 是否在线（掉线后 30s 内可重连）
       disconnectedAt: null,
@@ -338,16 +438,27 @@ export function roomView(room, viewerId = null) {
     id: player.id,
     username: player.username,
     displayName: player.displayName,
+    role: player.role ?? player.faction,
     faction: player.faction,
     ready: player.ready,
+    resigned: player.resigned === true,
     connected: player.connected !== false,
   }));
+  view.counts = {
+    blue: room.players.filter((player) => player.role === 'blue').length,
+    red: room.players.filter((player) => player.role === 'red').length,
+    spectator: room.players.filter((player) => player.role === 'spectator').length,
+  };
+  view.limits = room.limits ?? { maxPerSide: 4, maxSpectators: 8 };
   if (viewerId !== null) {
     const mine = room.players.find((player) => player.id === viewerId) ?? null;
     view.you = mine
       ? {
         id: mine.id,
+        role: mine.role ?? mine.faction,
         faction: mine.faction,
+        spectator: mine.role === 'spectator',
+        resigned: mine.resigned === true,
         ready: mine.ready,
         connected: mine.connected !== false,
         reconnectToken: mine.reconnectToken ?? null,   // 只给本人（重连凭证）

@@ -34,9 +34,20 @@ function visibleUnits(world, faction, fogAuthority = 'client', routeDeltas = nul
       group: unit.group ?? null,
       supplyStock: round1(unit.supplyStock ?? 0),
     };
-    // 行军路线：**只给己方**，且只带"自上次发送以来变化的字段"（见 docs/pvp-plan.md §11.15）。
-    // 敌方单位永远不带路线 —— 路线是"意图"，泄露它比泄露位置更严重；渲染层也就无从画起。
-    if (own) {
+    if (faction === null) {
+      // 观战（faction === null）：全局视野，双方单位都带**完整路线**（需求方确认可看敌方路线）
+      entry.route = (unit.route ?? []).map((point) => ({ x: round1(point.x), y: round1(point.y) }));
+      entry.routeIndex = unit.routeIndex ?? 0;
+      if (unit.pendingQueue?.length) {
+        entry.pendingQueue = unit.pendingQueue.map((queue) => ({
+          target: queue.target ? { x: round1(queue.target.x), y: round1(queue.target.y) } : null,
+          forced: queue.forced === true,
+          path: (queue.path ?? []).map((point) => ({ x: round1(point.x), y: round1(point.y) })),
+        }));
+      }
+      if (unit.forcedMarch) entry.forcedMarch = true;
+    } else if (own) {
+      // 行军路线：**只给己方**，且只带"自上次发送以来变化的字段"（见 docs/pvp-plan.md §11.15）。
       const patch = routeDeltas?.get(unit.id);
       if (patch) Object.assign(entry, patch);
     }
@@ -47,7 +58,7 @@ function visibleUnits(world, faction, fogAuthority = 'client', routeDeltas = nul
 
 /**
  * @param {object} world   src/simulation 的 World
- * @param {'blue'|'red'} faction  接收者的阵营
+ * @param {'blue'|'red'|null} faction  接收者的阵营；null = 观战（全局视野、双方路线都带）
  * @param {object} meta    { tick, phase, elapsedMs, timeLeftMs, events, result, unitsAlive, casualties, routeDeltas }
  */
 export function buildSnapshot(world, faction, meta = {}) {

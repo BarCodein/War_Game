@@ -593,3 +593,10 @@ body.pvp-mode .pvp-opponent-state { font-style: normal; color: #8fae86; }
 body.pvp-mode .pvp-opponent-state.bad { color: #d98a6a; }
 body.pvp-mode .icon-button.danger-button { border-color: #8c1d1d; color: #e8c9a0; }
 body.pvp-mode .icon-button.danger-button:hover { background: #8c1d1d; color: #f1e9d2; }
+/* 身份选择（§11.21）：三个小按钮 + 当前身份高亮 */
+.role-btn { font-size: 12px; padding: 4px 8px; border: 1px solid var(--line); background: rgba(241,233,210,.06); color: inherit; cursor: pointer; }
+.role-btn em { font-style: normal; opacity: .7; margin-left: 2px; }
+.role-btn.active { border-color: #8c1d1d; background: rgba(140,29,29,.18); }
+.role-btn:disabled { opacity: .45; cursor: default; }
+
+body.pvp-mode .role-btn { font-size: 12px; }

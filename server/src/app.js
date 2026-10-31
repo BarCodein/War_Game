@@ -12,7 +12,7 @@ import { createRoomRouter } from './routes/rooms.js';
 import { RoomError, RoomRegistry, normalizeCode, roomView } from './rooms.js';
 import { loadPvpLevel } from './levels.js';
 import { MatchSim, warmupEngine } from './match.js';
-import { SNAPSHOT_CHANNEL, createMatchDriver } from './driver.js';
+import { SNAPSHOT_CHANNEL, SPECTATOR_CHANNEL, createMatchDriver } from './driver.js';
 
 // GC 观测（P6 容量）：1 核上偶发的 100ms 级停顿通常是 GC，而不是模拟本身。
 // 这里只做统计（不计入业务逻辑），通过 /api/health 的 gc.* 暴露，压测时可直接确认。
@@ -283,10 +283,13 @@ export function createPvpServer(overrides = {}) {
           rooms.ensureConnected({ code, userId: me.id });
         }
 
+        const isSpectator = player.role === 'spectator' || player.faction === null;
         socket.join(roomChannel(code));
-        socket.join(SNAPSHOT_CHANNEL(code, player.faction));   // 只收自己阵营的快照
+        // 参战者只收自己阵营的快照；观战者收 spec 频道（全量 + 双方路线，降频）
+        socket.join(isSpectator ? SPECTATOR_CHANNEL(code) : SNAPSHOT_CHANNEL(code, player.faction));
         socket.data.roomCode = code;
-        socket.data.faction = player.faction;
+        socket.data.faction = isSpectator ? null : player.faction;
+        socket.data.spectator = isSpectator;
 
         // 对局信息（战斗页 bootstrap / 断线重连都用它）
         const match = room.match;
@@ -306,8 +309,8 @@ export function createPvpServer(overrides = {}) {
 
         // 路线全量同步（§11.15）：新进入/重连的客户端拿不到"变化才发"的历史增量，
         // 所以这里给一份全量，并把该阵营的同步状态作废 → 下一帧快照会再带一遍全量兜底。
-        const faction = player.faction;
-        if (match && room.state === 'playing' && config.sendRoutes) {
+        const faction = isSpectator ? null : player.faction;
+        if (match && room.state === 'playing' && config.sendRoutes && faction) {
           match.resetRouteSync(faction);
         }
 
@@ -316,7 +319,22 @@ export function createPvpServer(overrides = {}) {
           room: roomView(room, me.id),
           match: matchInfo,
           // 行军路线全量（只含己方）：{ id, route, routeIndex, pendingQueue, forcedMarch }
-          routes: match && room.state === 'playing' && config.sendRoutes ? match.routesSnapshot(faction) : [],
+          routes: faction && match && room.state === 'playing' && config.sendRoutes
+            ? match.routesSnapshot(faction)
+            : [],
+          // 身份（§11.21）：观战 = 全局视野 + 不能下令
+          role: player.role ?? player.faction,
+          spectator: isSpectator,
+          teammates: room.players
+            .filter((item) => item.id !== me.id)
+            .map((item) => ({
+              id: item.id,
+              username: item.username,
+              displayName: item.displayName,
+              role: item.role ?? item.faction,
+              resigned: item.resigned === true,
+              connected: item.connected !== false,
+            })),
           reconnectToken: player.reconnectToken,
           // 只有"真的掉线并被播报过"才算重连；大厅→对局页的页面跳转不该显示"已重连续局"
           reconnected: wasDisconnected && wasNotified,
@@ -344,6 +362,13 @@ export function createPvpServer(overrides = {}) {
           throw new RoomError('MATCH_NOT_PLAYING', '对局未在进行中', 409);
         }
         const faction = socket.data.faction;
+        // §11.21：观战者没有阵营；已投降的玩家立即失去指挥权
+        if (!faction) throw new RoomError('SPECTATOR_CANNOT_COMMAND', '观战者不能下令', 403);
+        {
+          const current = rooms.get(code);
+          const me = current ? rooms.playerOf(current, socket.data.user?.id) : null;
+          if (me?.resigned) throw new RoomError('RESIGNED', '你已投降，无法继续下令', 403);
+        }
         // U1：批量下令（一次玩家操作 = 一条消息，整批 1 次限频）；旧 payload 继续按单条处理
         const result = Array.isArray(payload?.orders)
           ? room.match.queueCommandBatch(faction, payload.orders)
@@ -384,6 +409,19 @@ export function createPvpServer(overrides = {}) {
       }
     });
 
+    // 选身份（§11.21）：蓝/红/观战，只在等待阶段可用（开打后锁定）
+    socket.on('room:setRole', (payload, ack) => {
+      try {
+        const me = requireAuth();
+        const code = normalizeCode(payload?.roomCode);
+        const room = rooms.setRole({ code, userId: me.id, role: payload?.role });
+        ack?.({ ok: true, room: roomView(room, me.id) });
+        emitState(room);
+      } catch (error) {
+        replyError(socket, ack, error);
+      }
+    });
+
     // 认输（对局页右上角按钮）：点击立即生效，复用 rooms.leave 的 forfeit 判负路径。
     socket.on('match:resign', (payload, ack) => {
       const code = socket.data.roomCode;
@@ -393,10 +431,20 @@ export function createPvpServer(overrides = {}) {
         return;
       }
       try {
-        // 认输：只结算，不把玩家移出房间（房间留着，双方可以直接再开一局）
-        const room = rooms.forfeit({ code, userId });
-        driver.detach(code);
-        ack?.({ ok: true, closed: true });
+        // 认输（§11.21 全队投降）：先登记本人投降，广播统计；该阵营**所有参战玩家**都投降才结算。
+        const info = rooms.resign({ code, userId });
+        const room = info.room;
+        io.to(roomChannel(code)).emit('match:resignState', {
+          faction: info.faction,
+          resigned: info.resigned,
+          total: info.total,
+          allResigned: info.allResigned,
+        });
+        if (info.allResigned) {
+          const winner = info.faction === 'blue' ? 'red' : 'blue';
+          finishRoom(room, winner, 'forfeit');
+        }
+        ack?.({ ok: true, resigned: info.resigned, total: info.total, allResigned: info.allResigned });
         if (room?.players?.length) emitState(room);
       } catch (error) {
         replyError(socket, ack, error);
@@ -424,11 +472,14 @@ export function createPvpServer(overrides = {}) {
             const player = current ? rooms.playerOf(current, userId) : null;
             if (!current || current.state !== 'playing' || !player || player.connected !== false) return;
             player.leftNotified = true;
-            io.to(roomChannel(code)).emit('opponent:left', {
+            const leftPayload = {
               userId,
               username: player.username,
               graceSeconds: Math.round(config.disconnectGraceMs / 1000),
-            });
+            };
+            // 房间频道广播：客户端自己按 userId 过滤（自己掉线时看不到）
+            io.to(roomChannel(code)).emit('opponent:left', leftPayload);
+            io.to(roomChannel(code)).emit('player:left', leftPayload);
             emitState(current);
           }, config.disconnectNoticeMs);
           noticeTimer.unref?.();

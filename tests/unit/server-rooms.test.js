@@ -128,11 +128,14 @@ describe('房间：REST', () => {
     expect(badLevel.json.code).toBe('BAD_LEVEL');
   });
 
-  it('加入：客人是 red；重复加入 / 第三人 / 同账号 各自有明确错误码', async () => {
-    const { baseUrl } = await startServer();
+  it('加入：阵营自动平衡；重复加入 / 阵营满员 各自有明确错误码', async () => {
+    // §11.21：每方最多 maxPerSide 人（默认 4），所以"第三人"不再是 ROOM_FULL，
+    // 而是被平衡到人少的一方；只有某一方满员（且显式指定该方）才报 SIDE_FULL。
+    const { baseUrl } = await startServer({ maxPerSide: 2 });
     const alice = await registerUser(baseUrl);
     const bob = await registerUser(baseUrl);
     const carol = await registerUser(baseUrl);
+    const dave = await registerUser(baseUrl);
     const code = (await api(baseUrl, '/api/rooms', { method: 'POST', cookie: alice.cookie })).json.room.code;
 
     const joined = await api(baseUrl, `/api/rooms/${code}/join`, { method: 'POST', cookie: bob.cookie });
@@ -145,9 +148,18 @@ describe('房间：REST', () => {
     expect(again.status).toBe(409);
     expect(again.json.code).toBe('ALREADY_JOINED');
 
-    const full = await api(baseUrl, `/api/rooms/${code}/join`, { method: 'POST', cookie: carol.cookie });
-    expect(full.status).toBe(409);
-    expect(full.json.code).toBe('ROOM_FULL');
+    // 第三人自动补到蓝方（蓝 1 < 红 1 时优先蓝）
+    const third = await api(baseUrl, `/api/rooms/${code}/join`, { method: 'POST', cookie: carol.cookie });
+    expect(third.status).toBe(200);
+    expect(third.json.room.you.faction).toBe('blue');
+    expect(third.json.room.counts).toMatchObject({ blue: 2, red: 1, spectator: 0 });
+
+    // 蓝方已满 2 人：显式再要 blue → SIDE_FULL
+    const sideFull = await api(baseUrl, `/api/rooms/${code}/join`, {
+      method: 'POST', cookie: dave.cookie, body: { role: 'blue' },
+    });
+    expect(sideFull.status).toBe(409);
+    expect(sideFull.json.code).toBe('SIDE_FULL');
   });
 
   it('房间数量上限：超过 maxRooms 建房返回 503', async () => {

@@ -63,6 +63,10 @@ export const config = {
   roomCountdownMs: number(process.env.PVP_ROOM_COUNTDOWN_SECONDS, 3) * 1000,
   // 对局时长上限（到点按城市数 → 总血量判胜）
   matchTimeLimitMs: number(process.env.PVP_MATCH_MINUTES, 10) * 60 * 1000,
+  // 多人同阵营（§11.21）：每方最多几名参战玩家、观战席上限、观战快照频率
+  maxPerSide: number(process.env.PVP_MAX_PER_SIDE, 4),
+  maxSpectators: number(process.env.PVP_MAX_SPECTATORS, 8),
+  spectatorSnapshotHz: number(process.env.PVP_SPECTATOR_HZ, 7.5),
   // 房间里一个人都不剩时的宽限（P5 用它做 30s 重连窗口；从大厅跳到对局页也有 1s 左右空档）
   disconnectGraceMs: number(process.env.PVP_RECONNECT_SECONDS, 30) * 1000,
   // 掉线播报的"静默期"：短暂闪断（例如大厅→对局页的页面跳转）不打扰对手

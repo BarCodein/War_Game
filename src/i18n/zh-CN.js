@@ -165,6 +165,12 @@ export default {
   'battlechoose.card.status.available': 'AVAILABLE',
   'battlechoose.card.status.completed': 'COMPLETED',
   // PvP 对局页（docs/pvp-plan.md §11.15）
+  'pvp.role.spectator': '观战',
+  'pvp.role.red': '红方',
+  'pvp.role.blue': '蓝方',
+  'pvp.resign.enemy': '对方 {resigned}/{total} 人已投降',
+  'pvp.resign.waiting': '已投降（{resigned}/{total}），等待队友',
+  'pvp.room.spectating': '房间 {code} · 观战',
   'pvp.resign.confirm': '认输',
   'pvp.opponentLeftShort': '掉线中',
   'pvp.opponentOnline': '在线',

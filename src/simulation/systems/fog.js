@@ -87,6 +87,7 @@ function paintCircle(terrain, mask, x, y, radius) {
 // 敌单位是否被 viewerFaction 目视：所在格当前可见，
 // 且森林中的敌军仅当距己方任一单位 ≤ forestSpotDistance（gdd.md §5）。
 export function isSpotted(world, unit, viewerFaction) {
+  if (!viewerFaction) return true;   // 观战（§11.21）：全局视野，所有单位都可见
   if (unit.state === 'dead' || unit.faction === viewerFaction) return false;
   const terrain = world.terrain;
   const cell = terrain.cellAt(unit.x, unit.y);

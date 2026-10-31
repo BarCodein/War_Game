@@ -1509,3 +1509,42 @@ if (state.mode === 'local') {
 | 全量单测 | **626 passed / 8 failed**（8 条既有供应/配置漂移） |
 
 > 附带效果：己方单位在"路线还没同步到"的那一小段时间里也不再乱指，同样按位移转向；战役侧行为不变（有路线时仍优先按路径点）。
+
+﻿### 11.21 身份（蓝/红/观战）、同阵营多人、全队投降、观战全局视野（2026-10-31）
+
+需求方决策：每方 4 人 / 观战 8 人；双方各 ≥1 名参战玩家且全员准备才开局；投降立即失去指挥权、
+全队投降才判负；掉线只在全队掉线时判负；观战只能在等待环节进入、可看敌方路线；同阵营共享指挥权。
+
+**服务端**
+
+| 文件 | 改动 |
+|---|---|
+| `rooms.js` | `newPlayer(user, role)`：`role: blue/red/spectator`，`faction` 为其派生（观战 = null）；`resigned` 标记<br>`join({ role })`：只能在 `waiting` 进入；未指定身份时**按人数平衡补位**（1 蓝、2 红、3 蓝…）；`maxPerSide` / `maxSpectators` 容量校验（`SIDE_FULL` / `SPECTATOR_FULL`）<br>`setRole()`：等待阶段切换身份（开打锁定），切换后清 ready<br>`canStart()`：双方各 ≥1 名参战玩家 + 所有参战玩家 ready（观战者不参与）<br>`resign()`：登记本人投降，返回 `{ resigned, total, allResigned }`（幂等）<br>`sweep()`：掉线判定改为**某阵营全部参战玩家掉线/投降**才判该阵营负<br>`rearm()`：清 ready 与 resigned |
+| `snapshot.js` | `buildSnapshot(world, null)` = 观战视图：双方单位 + **双方完整路线** |
+| `driver.js` | 新增 `room:<code>:spec` 频道：仅当房间有观战者时发送，频率 = `snapshotHz / 2`（默认 7.5Hz） |
+| `app.js` | `match:join` 支持观战（进 spec 频道、`socket.data.faction=null`、ack 带 `role/spectator/teammates`）；新增 `room:setRole`；`cmd` 拒绝观战者（`SPECTATOR_CANNOT_COMMAND`）与已投降玩家（`RESIGNED`）；`match:resign` 改为登记 + 广播 `match:resignState`，全队投降才 `finishRoom`；掉线额外广播 `player:left` |
+| `config.js` | `maxPerSide=4`、`maxSpectators=8`、`spectatorSnapshotHz=7.5`（均可用环境变量覆盖） |
+
+**客户端**
+
+| 位置 | 改动 |
+|---|---|
+| `pvp.html` | 房间面板新增身份选择（蓝 n/4、红 n/4、观战 n/8，当前身份高亮）；玩家表加"身份"列与"已投降"；观战者隐藏「准备」 |
+| `src/pvp/battle.js` | join ack 记录 `spectator/role/teammates/resigned`；观战：`viewerFaction()=null` → 迷雾关闭、可选任意单位、双方路线都画、认输按钮隐藏、`issue()` 直接忽略；投降回执显示 `已投降（1/2），等待队友`；监听 `match:resignState` 提示己方/对方投降进度 |
+| `fogRenderer.js` | `faction` 为 null → 不画迷雾（`sync()` 直接隐藏迷雾层） |
+| `unitRenderer.js` | `viewer=null` → 渲染全部单位（含敌方），不再做"未见即隐藏" |
+| `selection.js` / `battleOverlay.js` | `getFaction()=null` / `viewerFaction=null` → 任意选择、双方路线都画 |
+| `simulation/systems/fog.js` | `isSpotted(world, unit, null)` → true（观战全局可见） |
+| `styles.css` | `.role-btn` 三个小按钮样式（active 高亮） |
+
+**验证**
+
+| 项 | 结果 |
+|---|---|
+| 新增单测 `tests/unit/pvp-roles.test.js`（13 条） | **passed**：平衡补位、双方容量、观战容量、等待期切换/开打锁定、开打条件、观战不能准备、部分投降不判负/全队投降判负、单人阵营投降、幂等、rearm 清标记、队友掉线不判负、全队掉线判负、观战不能进已开局房间 |
+| 更新 `tests/unit/server-rooms.test.js` | 旧用例"第三人 = ROOM_FULL"改为新规则（第三人补蓝、显式指定满员阵营才 `SIDE_FULL`） |
+| 新增 e2e `tests/e2e/pvp-roles.spec.js` | **passed**：蓝 2 + 红 1 + 观战 1；观战者能看到双方单位、选中**红方**单位能画补给线（`supplyLines=1`）、右键下令无效、认输按钮隐藏；蓝方第 1 人投降 → **无结算**；第 2 人投降 → 立即结算，红方胜利 |
+| 全量 PvP e2e（battle/orders/rooms/resign/rematch/login/facing/roles） | **12 passed**（1.5 min） |
+| 全量单测 | **639 passed / 8 failed**（8 条既有供应/配置漂移） |
+
+**取舍记录**：观战者可见敌方路线（需求方确认），这存在"观战者向对局者转述信息"的风险，房间层面暂不限制。

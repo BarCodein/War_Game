@@ -342,7 +342,7 @@ export class MatchSim {
       result: this.result,
       unitsAlive: this.unitCounts(),
       fogAuthority: this.fogAuthority,
-      routeDeltas: this.routeDeltasFor(faction),
+      routeDeltas: faction === null ? null : this.routeDeltasFor(faction),
     });
   }
 

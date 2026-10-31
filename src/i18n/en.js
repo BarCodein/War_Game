@@ -153,6 +153,12 @@ export default {
   'battlechoose.card.status.available': 'AVAILABLE',
   'battlechoose.card.status.completed': 'COMPLETED',
   // PvP 对局页（docs/pvp-plan.md §11.15）
+  'pvp.role.spectator': 'Spectator',
+  'pvp.role.red': 'Red',
+  'pvp.role.blue': 'Blue',
+  'pvp.resign.enemy': 'Enemy {resigned}/{total} resigned',
+  'pvp.resign.waiting': 'Resigned ({resigned}/{total}), waiting for teammates',
+  'pvp.room.spectating': 'Room {code} · spectating',
   'pvp.resign.confirm': 'Resign',
   'pvp.opponentLeftShort': 'disconnected',
   'pvp.opponentOnline': 'online',

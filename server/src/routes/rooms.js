@@ -40,7 +40,8 @@ export function createRoomRouter({ db, config, rooms }) {
 
   router.post('/:code/join', (req, res) => {
     try {
-      const room = rooms.join({ code: normalizeCode(req.params.code), user: req.user });
+      const role = req.body?.role ?? null;
+      const room = rooms.join({ code: normalizeCode(req.params.code), user: req.user, role });
       res.json({ ok: true, room: roomView(room, req.user.id) });
     } catch (error) {
       fail(res, error);

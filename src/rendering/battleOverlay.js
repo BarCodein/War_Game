@@ -68,7 +68,7 @@ export function drawDashedPath(graphics, points, dashLength = 12, gapLength = 8)
  * @param {object} graphics Phaser.Graphics
  * @param {object} options
  * @param {object} options.world          世界（读 units[].route/routeIndex/pendingQueue/forcedMarch）
- * @param {'blue'|'red'} options.viewerFaction 只画这一方的行军路线（敌方绝不画）
+ * @param {'blue'|'red'|null} options.viewerFaction 只画这一方的行军路线（敌方绝不画）；null = 观战，双方都画
  * @param {object} [options.selection]    选择框（需 getDragRect()）
  * @param {Array}  [options.routing]      正在拖的轨迹点
  * @param {boolean}[options.forcedRouting] 正在拖的轨迹是否急行军
@@ -102,7 +102,8 @@ export function drawBattleOverlays(graphics, {
   // 未到达终点前不消失，直到单位到达/命令结束；已走过/阵亡/溃逃/到达自然消失。
   // 急行军的轨迹改用暗红，一眼能看出哪些部队在急行军。
   for (const unit of world.units) {
-    if (unit.faction !== viewerFaction || unit.state === 'dead' || unit.state === 'rout') continue;
+    // 观战（viewerFaction = null）时双方路线都画；参战者只画己方
+    if ((viewerFaction && unit.faction !== viewerFaction) || unit.state === 'dead' || unit.state === 'rout') continue;
     const route = unit.route ?? [];
     const routeIndex = unit.routeIndex ?? 0;
     if (route.length > 0 && routeIndex < route.length) {

@@ -22,7 +22,8 @@ export function createSelection(scene, world, options = {}) {
   }
 
   function unitAt(p) {
-    return world.units.find(unit => unit.state !== 'dead' && unit.faction === getFaction()
+    const faction = getFaction();
+    return world.units.find(unit => unit.state !== 'dead' && (!faction || unit.faction === faction)
       && Math.hypot(unit.x - p.x, unit.y - p.y) <= values.input.clickHitRadius) ?? null;
   }
 
@@ -86,7 +87,8 @@ export function createSelection(scene, world, options = {}) {
       top: Math.min(boxStart.y, p.y),
       bottom: Math.max(boxStart.y, p.y),
     };
-    const hits = world.units.filter(unit => unit.state !== 'dead' && unit.faction === getFaction()
+    const faction = getFaction();
+    const hits = world.units.filter(unit => unit.state !== 'dead' && (!faction || unit.faction === faction)
       && unit.x > box.left && unit.x < box.right && unit.y > box.top && unit.y < box.bottom);
     for (const unit of hits) selected.add(unit.id);
     notify();

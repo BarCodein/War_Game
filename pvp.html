@@ -128,9 +128,15 @@
         <p>房间码 <b id="roomCode" class="code-big">—</b> <button id="btnCopyCode">复制</button></p>
         <p id="roomStateText" class="hint2">—</p>
         <table class="players" id="roomPlayers">
-          <thead><tr><th>玩家</th><th>阵营</th><th>状态</th></tr></thead>
+          <thead><tr><th>玩家</th><th>身份</th><th>状态</th></tr></thead>
           <tbody></tbody>
         </table>
+        <div class="row" id="rolePicker">
+          <span class="hint2">身份：</span>
+          <button class="role-btn" data-role="blue" id="btnRoleBlue">蓝方 <em>(0/4)</em></button>
+          <button class="role-btn" data-role="red" id="btnRoleRed">红方 <em>(0/4)</em></button>
+          <button class="role-btn" data-role="spectator" id="btnRoleSpec">观战 <em>(0/8)</em></button>
+        </div>
         <div class="row">
           <button id="btnReady">准备</button>
           <button id="btnLeaveRoom">离开房间</button>
@@ -303,6 +309,47 @@
         roomMsg.className = isError ? 'bad-text' : 'ok-text';
       }
 
+      // 身份选择（§11.21）：蓝/红/观战，只在等待阶段；容量从 state.limits 读
+      function renderRolePicker(state) {
+        var limits = state.limits || {};
+        var counts = state.counts || { blue: 0, red: 0, spectator: 0 };
+        var maxPerSide = limits.maxPerSide || 4;
+        var maxSpec = limits.maxSpectators || 8;
+        $('btnRoleBlue').innerHTML = '蓝方 <em>(' + counts.blue + '/' + maxPerSide + ')</em>';
+        $('btnRoleRed').innerHTML = '红方 <em>(' + counts.red + '/' + maxPerSide + ')</em>';
+        $('btnRoleSpec').innerHTML = '观战 <em>(' + counts.spectator + '/' + maxSpec + ')</em>';
+        var mine = (state.players || []).find(function (player) { return me && player.id === me.id; });
+        var myRole = mine ? (mine.role || mine.faction) : null;
+        ['blue', 'red', 'spectator'].forEach(function (role) {
+          var button = role === 'blue' ? $('btnRoleBlue') : role === 'red' ? $('btnRoleRed') : $('btnRoleSpec');
+          button.disabled = state.state !== 'waiting';
+          button.classList.toggle('active', myRole === role);
+        });
+        // 观战者不能准备
+        var readyButton = $('btnReady');
+        if (myRole === 'spectator') {
+          readyButton.hidden = true;
+          $('roomStateText').textContent = '观战中：等待参战双方开始对局（可观战时进对局页）';
+        } else {
+          readyButton.hidden = false;
+        }
+      }
+
+      function onSetRole(role) {
+        if (!roomCode) return;
+        ['blue', 'red', 'spectator'].forEach(function (item) {
+          var button = item === 'blue' ? $('btnRoleBlue') : item === 'red' ? $('btnRoleRed') : $('btnRoleSpec');
+          button.disabled = true;
+        });
+        emitWithAck('room:setRole', { roomCode: roomCode, role: role }).then(function (result) {
+          if (!result.ok) showRoomMessage((result.message || '切换身份失败') + (result.code ? ' [' + result.code + ']' : ''), true);
+          else if (result.room) renderRoomState(result.room);
+        });
+      }
+      $('btnRoleBlue').addEventListener('click', function () { onSetRole('blue'); });
+      $('btnRoleRed').addEventListener('click', function () { onSetRole('red'); });
+      $('btnRoleSpec').addEventListener('click', function () { onSetRole('spectator'); });
+
       function renderRoomAccess() {
         var loggedIn = Boolean(me);
         $('roomGuestHint').hidden = loggedIn || Boolean(roomCode);
@@ -331,6 +378,7 @@
         }
         room = state;
         if (!roomCode) roomCode = state.code;
+        renderRolePicker(state);
         $('roomLobby').hidden = true;
         $('roomGuestHint').hidden = true;
         $('roomActive').hidden = false;
@@ -342,12 +390,15 @@
           var tr = document.createElement('tr');
           var nameCell = document.createElement('td');
           nameCell.textContent = player.displayName + (me && player.id === me.id ? '（你）' : '');
+          var role = player.role || player.faction || 'spectator';
           var factionCell = document.createElement('td');
-          factionCell.className = 'faction-' + player.faction;
-          factionCell.textContent = player.faction === 'blue' ? '蓝方' : '红方';
+          factionCell.className = role === 'spectator' ? '' : 'faction-' + role;
+          factionCell.textContent = role === 'blue' ? '蓝方' : role === 'red' ? '红方' : '观战';
           var readyCell = document.createElement('td');
-          readyCell.className = player.ready ? 'ready-yes' : 'ready-no';
-          readyCell.textContent = player.ready ? '已准备' : '未准备';
+          readyCell.className = player.resigned ? 'ready-no' : (player.ready ? 'ready-yes' : 'ready-no');
+          readyCell.textContent = player.resigned
+            ? '已投降'
+            : role === 'spectator' ? '观战中' : (player.ready ? '已准备' : '未准备');
           tr.appendChild(nameCell); tr.appendChild(factionCell); tr.appendChild(readyCell);
           tbody.appendChild(tr);
         });

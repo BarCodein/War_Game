@@ -94,12 +94,21 @@ function leaveToLobby() {
 
 // 认输：点击立即生效（需求方确认不做二次确认），服务器按 forfeit 结算，收到 match:end 后弹结算。
 function bindResign() {
+  if (debug.spectator) {
+    if (hud.resign) hud.resign.hidden = true;
+    return;
+  }
   hud.resign?.addEventListener('click', () => {
     if (debug.resigned) return;
     debug.resigned = true;
     hud.resign.disabled = true;
     hud.resign.textContent = t('pvp.resign.sent');
-    socket?.emit('match:resign', { roomCode });
+    socket?.emit('match:resign', { roomCode }, (result) => {
+      if (!result?.ok) return;
+      debug.resigned = true;
+      if (hud.resign) hud.resign.textContent = t('pvp.resign.waiting', { resigned: result.resigned, total: result.total });
+      flashToast(t('pvp.resign.waiting', { resigned: result.resigned, total: result.total }), 'warn');
+    });
   });
 }
 
@@ -214,13 +223,15 @@ class BattleScene extends Phaser.Scene {
     this.world = world;
     debug.world = world;
 
-    this.selection = createSelection(this, world, { getFaction: () => debug.myFaction ?? 'blue' });
+    // 观战（§11.21）：viewer 为 null → 不受阵营限制（可选任意单位、看全部单位与双方路线）
+    this.selection = createSelection(this, world, { getFaction: () => viewerFaction() });
     debug.selection = this.selection;
 
     createTerrainRenderer(this, world);
     // 渲染层按"我是哪一方"过滤敌军 / 画迷雾 / 显示己方血条。
     // 传函数而不是值：socket 握手完成后才知道自己是蓝方还是红方，而场景可能先建好。
-    const viewerFaction = () => debug.myFaction ?? 'blue';
+    this.viewerFaction = () => (debug.spectator ? null : (debug.myFaction ?? 'blue'));
+    const viewerFaction = this.viewerFaction;
     this.fogRenderer = createFogRenderer(this, world, { faction: viewerFaction });
     this.unitRenderer = createUnitRenderer(this, world, this.selection, { faction: viewerFaction });
     this.mapCamera = createMapCamera(this, world);
@@ -245,13 +256,14 @@ class BattleScene extends Phaser.Scene {
     });
     debug.commandQueue = this.commandQueue;
     const issue = (unitIds, command) => {
+      if (debug.spectator || debug.resigned) return;   // 观战/已投降：没有指挥权
       this.commandQueue.enqueue(unitIds, command);
       applyPreviewRoutes(world, unitIds, command);
       debug.commandsSent = (debug.commandsSent ?? 0) + unitIds.length;
     };
     this.orders = createOrders(this, world, this.selection, {
       issue,
-      getFaction: () => debug.myFaction ?? 'blue',
+      getFaction: () => viewerFaction(),
     });
 
     // 与战役同一套 HUD（src/rendering/hud.js）：这里只用到"左上角时钟 + 结算浮层"，
@@ -368,7 +380,7 @@ class BattleScene extends Phaser.Scene {
     // 框选矩形、拖动轨迹、己方行军路线（实线 + 末端箭头）、排队路线（虚线）。
     drawBattleOverlays(this.overlay, {
       world: this.world,
-      viewerFaction: debug.myFaction ?? 'blue',
+      viewerFaction: this.viewerFaction(),
       selection: this.selection,
       routing: this.orders?.getCurrentRoute?.() ?? null,
       forcedRouting: this.orders?.isForcedRouting?.() ?? false,
@@ -449,7 +461,7 @@ function applySnapshot(snapshot) {
 
   // 迷雾完全由客户端本地算：只用到己方单位/城市/占领点（与服务器同一套规则）
   debug.fogAuthority = snapshot.fogAuthority ?? 'client';
-  updateFog(world);
+  if (!debug.spectator) updateFog(world);   // 观战：全局视野，不需要迷雾
 
   // 快照里消失的单位 → 判定阵亡（规则见 src/pvp/missingUnits.js 与 docs/pvp-plan.md §11.13）
   debug.vanishedUnits = markVanishedUnits(world, seen, myFaction, debug.fogAuthority);
@@ -457,7 +469,7 @@ function applySnapshot(snapshot) {
   clearRoutesOfDead(world);
 
   // "可见敌军"由客户端用迷雾判定（服务端不再替我们过滤）
-  debug.visibleEnemies = world.units
+  debug.visibleEnemies = debug.spectator ? world.units.filter((unit) => unit.state !== 'dead').length : world.units
     .filter((unit) => unit.faction !== myFaction && unit.state !== 'dead' && isSpotted(world, unit, myFaction))
     .length;
   debug.enemyUnitsKnown = world.units
@@ -470,7 +482,9 @@ function applySnapshot(snapshot) {
 // ---------------- HUD ----------------
 function updateHud() {
   const snapshot = debug.lastSnapshot;
-  if (hud.room) {
+  if (debug.spectator && hud.room) {
+    hud.room.textContent = t('pvp.room.spectating', { code: roomCode || '—' });
+  } else if (hud.room) {
     hud.room.textContent = t('pvp.room.label', {
       code: roomCode || '—',
       faction: debug.myFaction === 'red' ? t('pvp.faction.red') : t('pvp.faction.blue'),
@@ -559,6 +573,12 @@ function onConnect() {
       return;
     }
     debug.myFaction = response.room?.you?.faction ?? null;
+    debug.myRole = response.role ?? response.room?.you?.role ?? debug.myFaction;
+    debug.spectator = response.spectator === true || debug.myRole === 'spectator';
+    // 身份在 join ack 才确定（bindResign 早于 ack 执行），所以这里再同步一次按钮可见性
+    if (hud.resign) hud.resign.hidden = debug.spectator;
+    debug.teammates = response.teammates ?? [];
+    debug.resigned = response.room?.you?.resigned === true;
     debug.myUserId = response.room?.you?.id ?? null;
     debug.matchId = response.match?.matchId ?? null;
     debug.prepRemainingMs = response.match?.prepRemainingMs ?? 0;
@@ -599,6 +619,13 @@ function bindSocket() {
   // 派生校正包（控制线折线 + 补给边）：低频（3s），用于本地派生的偏差度量与自愈
   socket.on('world:derive', (packet) => {
     debug.derive?.applyPacket(packet);
+  });
+  socket.on('match:resignState', (info) => {
+    debug.resignState = info;
+    if (debug.spectator) return;
+    const mine = info?.faction && debug.myFaction && info.faction === debug.myFaction;
+    if (mine) flashToast(t('pvp.resign.waiting', { resigned: info.resigned, total: info.total }), 'warn');
+    else flashToast(t('pvp.resign.enemy', { resigned: info.resigned, total: info.total }), 'warn');
   });
   socket.on('match:end', (payload) => {
     showBanner('');

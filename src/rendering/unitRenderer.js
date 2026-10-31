@@ -160,7 +160,7 @@ export function createUnitRenderer(scene, world, selection, options = {}) {
         if (text) text.setVisible(false);
         continue;
       }
-      if (unit.faction !== resolveViewer() && !isSpotted(world, unit, resolveViewer())) {
+      if (resolveViewer() && unit.faction !== resolveViewer() && !isSpotted(world, unit, resolveViewer())) {
         const text = badgeTextPool.get(unit.id);
         if (text) text.setVisible(false);
         continue;
@@ -203,7 +203,7 @@ export function createUnitRenderer(scene, world, selection, options = {}) {
         hideSprite(unit.id);
         continue;
       }
-      if (unit.faction !== resolveViewer() && !isSpotted(world, unit, resolveViewer())) {
+      if (resolveViewer() && unit.faction !== resolveViewer() && !isSpotted(world, unit, resolveViewer())) {
         hideSprite(unit.id); // 未被目视：隐藏贴图，改画最后已知位置虚影
         const last = unit.lastSeen?.[resolveViewer()];
         if (last) {
