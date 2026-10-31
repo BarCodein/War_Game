@@ -71,6 +71,24 @@ test.describe('PvP 身份 / 多人同阵营 / 全队投降 / 观战', () => {
       await expect.poll(() => pageD.evaluate(() => window.__pvp.deriveStats?.supplySelected ?? 0), { timeout: 15000 })
         .toBeGreaterThanOrEqual(1);
 
+      // 观战降频（7.5Hz）后插值窗口必须跟着实测间隔走：否则 alpha 半程就到 1 → 后半段单位定住 = 卡顿
+      const smooth = await pageD.evaluate(async () => {
+        const samples = [];
+        for (let i = 0; i < 24; i += 1) {
+          samples.push(window.__pvp.deriveStats?.lastAlpha ?? 1);
+          await new Promise((resolve) => setTimeout(resolve, 25));
+        }
+        return {
+          interval: window.__pvp.deriveStats?.snapshotIntervalMs ?? 0,
+          minAlpha: Math.min(...samples),
+          maxAlpha: Math.max(...samples),
+        };
+      });
+      expect(smooth.interval).toBeGreaterThanOrEqual(100);   // 观战 ≈133ms（7.5Hz）
+      expect(smooth.interval).toBeLessThanOrEqual(200);
+      expect(smooth.minAlpha).toBeLessThan(0.5);             // 间隔内仍在推进，没有"定住半程"
+      expect(smooth.maxAlpha).toBeLessThanOrEqual(1.01);
+
       // 观战者右键下令：不应产生任何命令
       const beforeCommands = await pageD.evaluate(() => window.__pvp.commandsSent ?? 0);
       const clickPoint = await pageD.evaluate(() => {

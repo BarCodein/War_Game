@@ -1548,3 +1548,33 @@ if (state.mode === 'local') {
 | 全量单测 | **639 passed / 8 failed**（8 条既有供应/配置漂移） |
 
 **取舍记录**：观战者可见敌方路线（需求方确认），这存在"观战者向对局者转述信息"的风险，房间层面暂不限制。
+
+﻿### 11.22 修观战卡顿：插值窗口按**实测快照间隔**走（2026-10-31）
+
+**现象**：观战者画面卡顿（参战者不卡）。
+
+**根因**：插值一直在跑，但窗口写死成 15Hz：
+
+- `src/pvp/battle.js`：`SNAPSHOT_INTERVAL_MS = 1000/15 ≈ 66.7ms`，`alpha = alphaFor(now - lastSnapshotAt, 66.7)`
+- 观战走 `room:<code>:spec` 频道，频率是 **7.5Hz（≈133ms）**
+- 于是 alpha 在 66.7ms 就到 1 被 clamp 卡住 → **后半程约 66ms 单位定住**，下一帧再跳 → 观感就是 7.5Hz 顿挫
+
+**修法**（客户端）
+
+| 位置 | 改动 |
+|---|---|
+| `socket.on('tick')` | 用相邻快照到达时间做**指数滑动平均**（0.7 旧 + 0.3 新）得到 `debug.snapshotIntervalMs`，限定在 [33ms, 250ms] |
+| `interpolate()` | 插值窗口改用 `debug.snapshotIntervalMs`（兜底 66.7ms），并把 `lastAlpha / interpolateIntervalMs` 写进调试量 |
+| `deriveStats` | 新增 `snapshotIntervalMs`、`lastAlpha` 两个自检字段 |
+
+参战者仍是 15Hz → 实测≈66ms，行为与以前一致；观战者实测≈133ms，**整段间隔都在推进**，不再"走一半停一半"。
+
+**验证**
+
+| 项 | 结果 |
+|---|---|
+| `tests/e2e/pvp-roles.spec.js` 新增断言 | **passed**：观战 `snapshotIntervalMs ∈ [100,200]`（实测≈133）；25ms×24 次采样中 `minAlpha < 0.5`（证明间隔内仍在推进，没有半程定住）、`maxAlpha ≤ 1` |
+| 全量 PvP e2e（8 spec） | **12 passed**（1.5 min） |
+| 全量单测 | **639 passed / 8 failed**（8 条既有供应/配置漂移） |
+
+**说明**：观战快照本身仍带"双方单位 + 双方路线"，体积比参战者大，但频率已减半（7.5Hz，≈44KB/s/人）；本次卡顿的主因是插值窗口，不是带宽。

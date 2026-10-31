@@ -37,7 +37,11 @@ import { previewForCommand, prunePreviews } from './routePreview.js';
 //   · 迷雾在客户端本地算（updateFog 只依赖**己方**单位/城市/占领点，与服务器同源），
 //     所以敌方单位"看不见就不画"，而且服务器压根没把它们的坐标发过来；
 //   · 15Hz 快照 + 60FPS 渲染之间做线性插值（src/pvp/interpolate.js），静止时精确等于快照坐标。
+// 兜底值（参战者 15Hz）。真正的插值窗口用**实测到的快照间隔**：
+// 观战走 7.5Hz 频道，若仍按 66.7ms 插值，alpha 会在半程就到 1 → 后半段单位定住 → 观感卡顿。
 const SNAPSHOT_INTERVAL_MS = 1000 / 15;
+const SNAPSHOT_INTERVAL_MIN = 33;    // 最快 30Hz
+const SNAPSHOT_INTERVAL_MAX = 250;   // 最慢 4Hz（掉帧/暂停时不至于抖）
 
 const params = new URLSearchParams(location.search);
 const roomCode = (params.get('room') ?? '').toUpperCase();
@@ -340,6 +344,9 @@ class BattleScene extends Phaser.Scene {
       supplyBacktrackRawMax: Math.round(this.supplyLines.state.maxBacktrackRawPx * 10) / 10,
       supplyBacktrackDrawnMax: Math.round(this.supplyLines.state.maxBacktrackDrawnPx * 10) / 10,
       supplyRepath: this.supplyLines.state.repath,
+      // 观战降频后的插值自检：实测快照间隔 / 当前 alpha（应 < 1，否则说明窗口还是按 15Hz 算的）
+      snapshotIntervalMs: Math.round(debug.snapshotIntervalMs ?? 0),
+      lastAlpha: Math.round((debug.lastAlpha ?? 0) * 100) / 100,
       // 排查"选中单位却没有任何补给线"：兜底/跳过计数 + 每个单位本帧画了什么
       supplyMissingCity: this.supplyLines.state.missingCity,
       supplyPathFallback: this.supplyLines.state.pathFallback,
@@ -366,7 +373,13 @@ class BattleScene extends Phaser.Scene {
   /** 15Hz 快照 → 60FPS：在上一帧位置与快照位置之间线性插值（静止时精确等于快照） */
   interpolate(nowMs) {
     if (!debug.lastSnapshotAt) return;
-    const alpha = alphaFor(nowMs - debug.lastSnapshotAt, SNAPSHOT_INTERVAL_MS);
+    const interval = Math.min(
+      SNAPSHOT_INTERVAL_MAX,
+      Math.max(SNAPSHOT_INTERVAL_MIN, debug.snapshotIntervalMs ?? SNAPSHOT_INTERVAL_MS),
+    );
+    const alpha = alphaFor(nowMs - debug.lastSnapshotAt, interval);
+    debug.lastAlpha = alpha;
+    debug.interpolateIntervalMs = Math.round(interval);
     for (const unit of this.world.units) {
       if (!unit.target) continue;
       const position = interpolatePosition(unit.prev, unit.target, alpha);
@@ -615,7 +628,20 @@ function bindSocket() {
     return;
   }
   socket.on('connect', onConnect);
-  socket.on('tick', (snapshot) => applySnapshot(snapshot));
+  socket.on('tick', (snapshot) => {
+    // 实测快照间隔（指数滑动平均）：参战者≈66ms、观战≈133ms，插值窗口按它走
+    const nowMs = performance.now();
+    if (debug.lastSnapshotAt) {
+      const delta = nowMs - debug.lastSnapshotAt;
+      if (delta >= SNAPSHOT_INTERVAL_MIN / 2 && delta <= SNAPSHOT_INTERVAL_MAX) {
+        debug.snapshotIntervalMs = debug.snapshotIntervalMs
+          ? debug.snapshotIntervalMs * 0.7 + delta * 0.3
+          : delta;
+      }
+    }
+    applySnapshot(snapshot);
+    // 注意：applySnapshot 里会刷新 lastSnapshotAt（用于插值起点），这里保持不变
+  });
   // 派生校正包（控制线折线 + 补给边）：低频（3s），用于本地派生的偏差度量与自愈
   socket.on('world:derive', (packet) => {
     debug.derive?.applyPacket(packet);
