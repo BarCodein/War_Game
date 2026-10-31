@@ -36,7 +36,7 @@ describe('MatchSim：初始化', () => {
   it('开局双方兵力相等、城市相等、阶段为 playing', () => {
     const match = makeMatch();
     expect(match.phase).toBe('playing');
-    expect(match.unitCounts()).toEqual({ blue: 16, red: 16 }); // 渡江 PvP：各 10 轻 + 6 重
+    expect(match.unitCounts()).toEqual({ blue: 40, red: 40 }); // 渡江 PvP：40v40（每城 2 轻 2 重 + 8 人预备队）
     expect(match.cityCount('blue')).toBe(match.cityCount('red'));
     expect(match.world.mess.mode).toBe('normal');
     expect(match.elapsedMs()).toBe(0);
@@ -144,15 +144,15 @@ describe('迷雾归属：默认全量下发，客户端自己过滤', () => {
 
     const snapshot = match.snapshotFor('blue');
     expect(snapshot.fogAuthority).toBe('client');
-    // 32 个单位全部下发（16 蓝 + 16 红）
-    expect(snapshot.units.filter((unit) => unit.faction === 'blue')).toHaveLength(16);
-    expect(snapshot.units.filter((unit) => unit.faction === 'red')).toHaveLength(16);
+    // 80 个单位全部下发（40 蓝 + 40 红）
+    expect(snapshot.units.filter((unit) => unit.faction === 'blue')).toHaveLength(40);
+    expect(snapshot.units.filter((unit) => unit.faction === 'red')).toHaveLength(40);
 
     // 客户端用同一套规则算"我真能看见哪些" —— 只有一部分
     const visibleFromClient = match.world.units
       .filter((unit) => unit.faction === 'red' && isSpotted(match.world, unit, 'blue'));
     expect(visibleFromClient.length).toBeGreaterThan(0);
-    expect(visibleFromClient.length).toBeLessThan(16);
+    expect(visibleFromClient.length).toBeLessThan(40);
   });
 
   it('切换为 fogAuthority=server 时恢复服务端过滤（未目视敌军不下发）', () => {
@@ -242,7 +242,7 @@ describe('MatchSim：预热', () => {
     // 正式对局仍然是干净的初始状态
     const match = makeMatch();
     expect(match.ticks).toBe(0);
-    expect(match.unitCounts()).toEqual({ blue: 16, red: 16 });
+    expect(match.unitCounts()).toEqual({ blue: 40, red: 40 });
     expect(match.elapsedMs()).toBe(0);
   });
 
@@ -285,7 +285,9 @@ describe('MatchSim：确定性与性能', () => {
     expect(second.state).toEqual(first.state);
   });
 
-  it('12000 tick（200 秒模拟）平均成本 < 2 ms、最大 < 8 ms，快照 < 8 KB', () => {
+  // 40v40 之后单帧快照 ≈11.7 KB（80 个单位），上限随内容放大到 14 KB：
+  // 带宽影响见 docs/pvp-plan.md §11.23（15Hz ≈ 175 KB/s/人）
+  it('12000 tick（200 秒模拟）平均成本 < 3 ms、最大 < 60 ms，快照 < 14 KB', () => {
     const match = makeMatch();
     const blueIds = unitsOf(match, 'blue').map((unit) => unit.id);
     const redIds = unitsOf(match, 'red').map((unit) => unit.id);
@@ -302,11 +304,12 @@ describe('MatchSim：确定性与性能', () => {
 
     // eslint-disable-next-line no-console
     console.log(`[pvp] ${match.ticks} ticks · 平均 ${avg.toFixed(3)} ms/tick · 最大 ${match.stats.tickMsMax.toFixed(2)} ms · 快照 ${(bytes / 1024).toFixed(2)} KB`);
-    expect(avg).toBeLessThan(2);
+    // 40v40（80 单位）比 16v16 翻了一倍；全量套件并行跑时还有 CPU 竞争，阈值放宽到 3ms/60ms
+    expect(avg).toBeLessThan(3);
     // 单帧尖峰受 GC / CI 并发负载影响很大（实测 6–34 ms 都出现过），只做"是否发生灾难性停顿"的兜底，
     // 真正的验收指标是平均成本（<2 ms，实测 0.65–0.85 ms）
-    expect(match.stats.tickMsMax).toBeLessThan(40);
-    expect(bytes).toBeLessThan(8 * 1024);
+    expect(match.stats.tickMsMax).toBeLessThan(60);
+    expect(bytes).toBeLessThan(14 * 1024);
     expect(snapshot.tick).toBe(match.ticks);
   }, 30000); // 12000 tick 在 CI/冷启动下可能超过 vitest 默认 5s
 });

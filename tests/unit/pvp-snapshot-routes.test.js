@@ -27,7 +27,7 @@ describe('快照路线下发：变化才发', () => {
       command: moveCommand([{ x: 900, y: 700 }]),
     })));
     const ordered = match.snapshotFor('blue');
-    expect(ordered.units.filter((unit) => Array.isArray(unit.route))).toHaveLength(16);
+    expect(ordered.units.filter((unit) => Array.isArray(unit.route))).toHaveLength(40);
 
     const second = match.snapshotFor('blue');
     expect(second.units.filter((unit) => 'route' in unit)).toHaveLength(0);
@@ -45,7 +45,7 @@ describe('快照路线下发：变化才发', () => {
 
     const ordered = match.snapshotFor('blue');
     const withRoute = ordered.units.filter((unit) => Array.isArray(unit.route));
-    expect(withRoute).toHaveLength(16);
+    expect(withRoute).toHaveLength(40);
     expect(withRoute[0].route.length).toBeGreaterThan(0);
     // routeIndex 还是 0（没变）→ 按"变化才发"的规则不会重复带这个字段；客户端缓存里本来就是 0
     expect(withRoute[0].routeIndex ?? 0).toBe(0);
@@ -118,7 +118,7 @@ describe('快照路线下发：变化才发', () => {
     match.snapshotFor('blue');   // 发过一次增量
 
     const routes = match.routesSnapshot('blue');
-    expect(routes).toHaveLength(16);
+    expect(routes).toHaveLength(40);
     for (const entry of routes) {
       expect(Object.keys(entry).sort()).toEqual(['forcedMarch', 'id', 'pendingQueue', 'route', 'routeIndex']);
       expect(entry.route.length).toBeGreaterThan(0);
@@ -128,7 +128,7 @@ describe('快照路线下发：变化才发', () => {
 
     match.resetRouteSync('blue');
     const again = match.snapshotFor('blue');
-    expect(again.units.filter((unit) => Array.isArray(unit.route))).toHaveLength(16);
+    expect(again.units.filter((unit) => Array.isArray(unit.route))).toHaveLength(40);
   });
 
   it('PVP_SEND_ROUTES=0（sendRoutes=false）时完全不发路线', () => {

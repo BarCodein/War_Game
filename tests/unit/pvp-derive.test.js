@@ -217,6 +217,11 @@ describe('降级为 server 模式后，补给仍然实时派生', () => {
     // 一个蓝方单位站在红城旁边、缺补给
     const unit = world.units.find((item) => item.faction === 'blue');
     const city = world.cities.find((item) => item.faction === 'red');
+    // 40v40 之后每座城都有守军：先清掉这座城附近的红方单位（模拟"打下来"），
+    // 否则敌方控制区会把补给路径挡死，测不到"占领城市成为补给源"这件事。
+    for (const enemy of world.units) {
+      if (enemy.faction === 'red' && Math.hypot(enemy.x - city.x, enemy.y - city.y) <= 220) enemy.state = 'dead';
+    }
     unit.x = city.x + 20;
     unit.y = city.y + 10;
     unit.supplyStock = 0;

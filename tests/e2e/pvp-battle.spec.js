@@ -65,7 +65,7 @@ test.describe('PvP 对局页', () => {
       expect(view.fogAuthority).toBe('client');
       expect(view.own).toBeGreaterThanOrEqual(16);
       expect(view.units).toBeGreaterThanOrEqual(32);      // 16 蓝 + 16 红全部下发
-      expect(view.enemiesKnown).toBe(16);
+      expect(view.enemiesKnown).toBe(40);
       expect(view.enemiesVisible).toBeLessThan(16);       // 但开局看不到全部敌军
       expect(view.enemiesVisible).toBeGreaterThan(0);
       expect(view.cities).toBe(16);

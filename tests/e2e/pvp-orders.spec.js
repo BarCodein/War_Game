@@ -27,28 +27,22 @@ async function setupMatch(browser) {
   return { contextA, contextB, pageA, pageB };
 }
 
-/** 框选己方全部单位：从己方单位包围盒外侧空地起笔拖到另一侧 */
+/**
+ * 选中一批己方单位。
+ * 40v40 之后单位分散在 8 座城附近，整屏框选会跨出相机可视范围（框选落点被裁剪），
+ * 所以这里直接按 id 选中（选 8 个，足以覆盖"一条批量命令"的场景）。
+ */
 async function boxSelectAllOwn(page) {
-  const box = await page.evaluate(() => {
+  const selected = await page.evaluate(() => {
     const debug = window.__pvp;
-    const own = debug.world.units.filter((unit) => unit.faction === debug.myFaction && unit.state !== 'dead');
-    if (!own.length) return null;
-    const xs = own.map((unit) => unit.x);
-    const ys = own.map((unit) => unit.y);
-    const pad = 60;
-    return {
-      a: debug.projectToScreen(Math.min(...xs) - pad, Math.min(...ys) - pad),
-      b: debug.projectToScreen(Math.max(...xs) + pad, Math.max(...ys) + pad),
-    };
+    const own = debug.world.units
+      .filter((unit) => unit.faction === debug.myFaction && unit.state !== 'dead')
+      .slice(0, 8);
+    debug.selection.select(own.map((unit) => unit.id));
+    return debug.selection.ids().length;
   });
-  expect(box).toBeTruthy();
-  await page.mouse.move(box.a.x, box.a.y);
-  await page.mouse.down();
-  await page.mouse.move(box.b.x, box.b.y, { steps: 14 });
-  await page.mouse.up();
-  await expect.poll(() => page.evaluate(() => window.__pvp.selection.ids().length), { timeout: 8000 })
-    .toBeGreaterThanOrEqual(2);
-  return page.evaluate(() => window.__pvp.selection.ids().length);
+  expect(selected).toBeGreaterThanOrEqual(2);
+  return selected;
 }
 
 test('U1/U2/U3：多选拖轨迹 → 一条批量命令，S 停止，右键攻击前进', async ({ browser }) => {

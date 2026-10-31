@@ -25,15 +25,33 @@ test.describe('敌方单位朝向', () => {
       await pageB.waitForURL(/pvp-battle\.html/, { timeout: 30000 });
       await expect.poll(() => pageA.evaluate(() => window.__pvp?.lastSnapshot?.phase), { timeout: 25000 }).toBe('playing');
 
-      // 红方（B）选一个单位，往正东方向拖一条路径
+      // 红方（B）选一个**在屏幕内**的单位，往正东方向拖一条路径
+      // （40v40 后单位分散在各地，随便挑一个可能落在相机视野外，拖拽点会被裁掉）
       const red = await pageB.evaluate(() => {
         const debug = window.__pvp;
-        const unit = debug.world.units.find((item) => item.faction === debug.myFaction && item.state !== 'dead');
+        const canvas = debug.scene.game.canvas.getBoundingClientRect();
+        // 只挑"离蓝方最近"的红方单位：蓝方客户端要能看见它（有精灵）才读得到朝向
+        const blues = debug.world.units.filter((item) => item.faction !== debug.myFaction && item.state !== 'dead');
+        const candidates = debug.world.units
+          .filter((item) => item.faction === debug.myFaction && item.state !== 'dead')
+          .sort((a, b) => {
+            const near = (unit) => Math.min(...blues.map((blue) => Math.hypot(blue.x - unit.x, blue.y - unit.y)));
+            return near(a) - near(b);
+          });
+        const unit = candidates.find((item) => {
+          const point = debug.projectToScreen(item.x, item.y);
+          const target = debug.projectToScreen(item.x + 120, item.y);
+          return point.x > canvas.left + 40 && point.x < canvas.right - 160
+            && point.y > canvas.top + 80 && point.y < canvas.bottom - 80
+            && target.x < canvas.right - 20;
+        }) ?? candidates[0];
         debug.selection.select([unit.id]);
+        const from = debug.projectToScreen(unit.x, unit.y);
+        const to = debug.projectToScreen(unit.x + 120, unit.y);
         return {
           id: unit.id,
-          from: debug.projectToScreen(unit.x, unit.y),
-          to: debug.projectToScreen(unit.x + 220, unit.y),
+          from: { x: Math.min(Math.max(from.x, canvas.left + 5), canvas.right - 5), y: Math.min(Math.max(from.y, canvas.top + 70), canvas.bottom - 5) },
+          to: { x: Math.min(to.x, canvas.right - 5), y: Math.min(Math.max(to.y, canvas.top + 70), canvas.bottom - 5) },
         };
       });
       await pageB.mouse.move(red.from.x, red.from.y);

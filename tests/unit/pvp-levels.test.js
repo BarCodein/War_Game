@@ -48,16 +48,25 @@ describe('PvP 关卡：对称兵力模板', () => {
     expect(level.ai).toBeNull();
   });
 
-  it.each(PVP_LEVELS)('%s：每方只用本方出生点，且出生点确实在地图上', (levelId) => {
+  it.each(PVP_LEVELS)('%s：每方兵力都锚在"本方"的出生点或城市上', (levelId) => {
+    // §11.23 起渡江 PvP 的单位分驻城市：at 可以是 { spawnId }（集结点/预备队）或 { cityId }（城内驻军）
     const { level, map } = loadPvpLevel(levelId);
+    const cities = map.cities ?? [];
     for (const force of level.forces) {
+      if (force.at.cityId) {
+        const city = cities.find((item) => item.id === force.at.cityId);
+        expect(city, `地图里没有城市 ${force.at.cityId}`).toBeTruthy();
+        expect(city.faction, `${force.at.cityId} 不属于 ${force.faction}`).toBe(force.faction);
+        continue;
+      }
       const spawnId = force.at.spawnId;
-      expect(spawnId, `${force.faction} 的兵力应使用 spawnId 出生`).toBeTruthy();
+      expect(spawnId, `${force.faction} 的兵力应锚在本方出生点或城市`).toBeTruthy();
       const spawn = map.spawns.find((item) => item.id === spawnId);
       expect(spawn, `地图里没有出生点 ${spawnId}`).toBeTruthy();
       expect(spawn.faction).toBe(force.faction);
-      expect(spawnsOf(map, force.faction).length).toBeGreaterThanOrEqual(2);
     }
+    expect(spawnsOf(map, 'blue').length).toBeGreaterThanOrEqual(2);
+    expect(spawnsOf(map, 'red').length).toBeGreaterThanOrEqual(2);
   });
 
   it.each(PVP_LEVELS)('%s：所有单位都出生在可通行地形上（不会卡在水里/山里）', (levelId) => {
@@ -70,19 +79,17 @@ describe('PvP 关卡：对称兵力模板', () => {
     }
   });
 
-  it.each(PVP_LEVELS)('%s：双方出生点至少相隔 400px（开局不会被对方直接目视）', (levelId) => {
+  it.each(PVP_LEVELS)('%s：开局双方最近单位间距足够（不会叠在一起/立刻接敌）', (levelId) => {
+    // 40v40 分驻各城之后，前线城市（如 c25 / c24）天然靠得比较近：
+    // 实测渡江最近一对 143px —— 不会重叠、也不在交战距离（40px）内，但可能落在重装视野（160px）边缘。
     const { level, map } = loadPvpLevel(levelId);
-    const spawnOf = (force) => map.spawns.find((spawn) => spawn.id === force.at.spawnId);
-    const blue = level.forces.filter((force) => force.faction === 'blue').map(spawnOf);
-    const red = level.forces.filter((force) => force.faction === 'red').map(spawnOf);
-    let minDistance = Infinity;
-    for (const a of blue) {
-      for (const b of red) {
-        minDistance = Math.min(minDistance, Math.hypot(a.x - b.x, a.y - b.y));
-      }
-    }
-    // 视野：轻步兵 140 / 重步兵 160 / 城市 180 —— 400px 保证开局互不可见
-    expect(minDistance).toBeGreaterThanOrEqual(400);
+    const world = new World(map);
+    deployForces(world, level.forces, level.anchors ?? {});
+    const blue = world.units.filter((unit) => unit.faction === 'blue');
+    const red = world.units.filter((unit) => unit.faction === 'red');
+    let nearest = Infinity;
+    for (const a of blue) for (const b of red) nearest = Math.min(nearest, Math.hypot(a.x - b.x, a.y - b.y));
+    expect(nearest).toBeGreaterThanOrEqual(60);   // 大于占领半径，开局不会立刻开始夺城
   });
 
   it.each(PVP_LEVELS)('%s：双方各持有城市，且城市总数与战报一致', (levelId) => {

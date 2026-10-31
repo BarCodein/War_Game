@@ -87,8 +87,8 @@ describe('PvP 迷雾：双方看到的是不同的区域', () => {
 
     // 快照不再按视野过滤：蓝方拿到 16 蓝 + 16 红，红方同样 16 + 16
     expect(blueSnapshot.fogAuthority).toBe('client');
-    expect(blueSnapshot.units.filter((unit) => unit.faction === 'red')).toHaveLength(16);
-    expect(redSnapshot.units.filter((unit) => unit.faction === 'blue')).toHaveLength(16);
+    expect(blueSnapshot.units.filter((unit) => unit.faction === 'red')).toHaveLength(40);
+    expect(redSnapshot.units.filter((unit) => unit.faction === 'blue')).toHaveLength(40);
     expect(blueSnapshot.units.length).toBe(redSnapshot.units.length);
 
     // 但客户端各自用迷雾算出的"可见敌军"都少于全部，而且两边不一样

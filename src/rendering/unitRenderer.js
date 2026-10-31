@@ -101,16 +101,12 @@ export function createUnitRenderer(scene, world, selection, options = {}) {
   // priority 越高越优先显示（仅显示 priority 最高的一个）。
   function getStatusEffects(unit) {
     const effects = [];
-    // 急行军
-    if (unit.forcedMarch) effects.push({ icon: '冲', color: 0xffd700, bg: 0x8b6914, priority: 10 });
-    // 交战
-    if (unit.state === 'combat') effects.push({ icon: '战', color: 0xff6a33, bg: 0x7a2e0d, priority: 9 });
+    // 注：急行军「冲」、交战「战」、补给存量「尽 / 缺」四个角标已按需求去掉，
+    // 不再显示（急行军/交战仍能从路线颜色与交战抖动看出来，存量看血条下的补给条）。
     // 溃逃
     if (unit.state === 'rout') effects.push({ icon: '溃', color: 0xff4444, bg: 0x8b1a1a, priority: 8 });
-    // 补给存量将尽（< 30% 上限）
-    if (unit.supplyStock / (unit.maxSupplyStock || 1) < values.supplyStock.thresholds.shakenBelow) effects.push({ icon: '尽', color: 0xff8a76, bg: 0x7a3020, priority: 7 });
-    // 补给存量不足（< 60% 上限）
-    else if (unit.supplyStock / (unit.maxSupplyStock || 1) < values.supplyStock.thresholds.weakenedBelow) effects.push({ icon: '缺', color: 0xf2d42a, bg: 0x6b5c0e, priority: 6 });
+    // 基地回血（站在己方城市恢复半径内且掉血中）：显示"愈"
+    if (isRecoveringNearCity(unit)) effects.push({ icon: '愈', color: 0x9ae6a0, bg: 0x1f4a24, priority: 6 });
     // 水域掉血
     if (world.terrain.terrainAt(unit.x, unit.y) === values.terrain.codes.water) effects.push({ icon: '水', color: 0x63a6d8, bg: 0x1a3d5c, priority: 5 });
     // 补给断裂
@@ -149,6 +145,12 @@ export function createUnitRenderer(scene, world, selection, options = {}) {
       if (Math.hypot(other.x - unit.x, other.y - unit.y) < threshold) return true;
     }
     return false;
+  }
+
+  // 状态标签：是否正在"由己方基地回血"（与 simulation/systems/supply.js#recoverNearCity 同一判据：
+  // 落在任意一座己方城市的恢复半径内、且血没满；多城不叠加）。纯判定，便于单测。
+  function isRecoveringNearCity(unit) {
+    return recoveringNearCity(world, unit);
   }
 
   // 绘制所有存活单位的状态标签
@@ -504,6 +506,15 @@ export function createUnitRenderer(scene, world, selection, options = {}) {
  * 联机里敌方行军路线不下发，位移是唯一可用的"正在往哪走"来源。
  * 位移小于 eps（几乎没动）时返回 null，让调用方保持上次朝向。
  */
+/** 是否正在由己方基地回血（world/unit 结构见 simulation；纯判定，供渲染与单测共用） */
+export function recoveringNearCity(world, unit) {
+  if (!world || !unit || unit.state === 'dead') return false;
+  if (unit.hp >= unit.maxHp - 0.01) return false;
+  const { radius } = values.cities.recovery;
+  return (world.cities ?? []).some((city) => city.faction === unit.faction
+    && Math.hypot(city.x - unit.x, city.y - unit.y) <= radius);
+}
+
 export function movementFacing(lastPos, unit, eps = MOVE_FACING_EPS) {
   if (!lastPos) return null;
   const movedX = unit.x - lastPos.x;

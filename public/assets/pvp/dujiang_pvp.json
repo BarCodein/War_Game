@@ -12,40 +12,592 @@
   "forces": [
     {
       "faction": "blue",
-      "at": { "spawnId": "s35" },
-      "group": "blue-west",
+      "at": {
+        "cityId": "c13"
+      },
+      "group": "blue-c13",
       "units": [
-        { "type": "light", "count": 5, "spacing": { "x": 32, "y": 0 } },
-        { "type": "heavy", "count": 3, "offset": { "x": 0, "y": 44 }, "spacing": { "x": 32, "y": 0 } }
+        {
+          "type": "light",
+          "count": 2,
+          "offset": {
+            "x": 14,
+            "y": 0
+          },
+          "spacing": {
+            "x": 28,
+            "y": 0
+          }
+        },
+        {
+          "type": "heavy",
+          "count": 2,
+          "offset": {
+            "x": 14,
+            "y": 28
+          },
+          "spacing": {
+            "x": 28,
+            "y": 0
+          }
+        }
       ]
     },
     {
       "faction": "blue",
-      "at": { "spawnId": "s37" },
-      "group": "blue-main",
+      "at": {
+        "cityId": "c14"
+      },
+      "group": "blue-c14",
       "units": [
-        { "type": "light", "count": 5, "spacing": { "x": 32, "y": 0 } },
-        { "type": "heavy", "count": 3, "offset": { "x": 0, "y": 44 }, "spacing": { "x": 32, "y": 0 } }
+        {
+          "type": "light",
+          "count": 2,
+          "offset": {
+            "x": 14,
+            "y": 0
+          },
+          "spacing": {
+            "x": 28,
+            "y": 0
+          }
+        },
+        {
+          "type": "heavy",
+          "count": 2,
+          "offset": {
+            "x": 14,
+            "y": 28
+          },
+          "spacing": {
+            "x": 28,
+            "y": 0
+          }
+        }
+      ]
+    },
+    {
+      "faction": "blue",
+      "at": {
+        "cityId": "c15"
+      },
+      "group": "blue-c15",
+      "units": [
+        {
+          "type": "light",
+          "count": 2,
+          "offset": {
+            "x": 14,
+            "y": 0
+          },
+          "spacing": {
+            "x": 28,
+            "y": 0
+          }
+        },
+        {
+          "type": "heavy",
+          "count": 2,
+          "offset": {
+            "x": 14,
+            "y": 28
+          },
+          "spacing": {
+            "x": 28,
+            "y": 0
+          }
+        }
+      ]
+    },
+    {
+      "faction": "blue",
+      "at": {
+        "cityId": "c17"
+      },
+      "group": "blue-c17",
+      "units": [
+        {
+          "type": "light",
+          "count": 2,
+          "offset": {
+            "x": 14,
+            "y": 0
+          },
+          "spacing": {
+            "x": 28,
+            "y": 0
+          }
+        },
+        {
+          "type": "heavy",
+          "count": 2,
+          "offset": {
+            "x": 14,
+            "y": 28
+          },
+          "spacing": {
+            "x": 28,
+            "y": 0
+          }
+        }
+      ]
+    },
+    {
+      "faction": "blue",
+      "at": {
+        "cityId": "c23"
+      },
+      "group": "blue-c23",
+      "units": [
+        {
+          "type": "light",
+          "count": 2,
+          "offset": {
+            "x": 14,
+            "y": 0
+          },
+          "spacing": {
+            "x": 28,
+            "y": 0
+          }
+        },
+        {
+          "type": "heavy",
+          "count": 2,
+          "offset": {
+            "x": 14,
+            "y": 28
+          },
+          "spacing": {
+            "x": 28,
+            "y": 0
+          }
+        }
+      ]
+    },
+    {
+      "faction": "blue",
+      "at": {
+        "cityId": "c25"
+      },
+      "group": "blue-c25",
+      "units": [
+        {
+          "type": "light",
+          "count": 2,
+          "offset": {
+            "x": 14,
+            "y": 0
+          },
+          "spacing": {
+            "x": 28,
+            "y": 0
+          }
+        },
+        {
+          "type": "heavy",
+          "count": 2,
+          "offset": {
+            "x": 14,
+            "y": 28
+          },
+          "spacing": {
+            "x": 28,
+            "y": 0
+          }
+        }
+      ]
+    },
+    {
+      "faction": "blue",
+      "at": {
+        "cityId": "c26"
+      },
+      "group": "blue-c26",
+      "units": [
+        {
+          "type": "light",
+          "count": 2,
+          "offset": {
+            "x": 14,
+            "y": 0
+          },
+          "spacing": {
+            "x": 28,
+            "y": 0
+          }
+        },
+        {
+          "type": "heavy",
+          "count": 2,
+          "offset": {
+            "x": 14,
+            "y": 28
+          },
+          "spacing": {
+            "x": 28,
+            "y": 0
+          }
+        }
+      ]
+    },
+    {
+      "faction": "blue",
+      "at": {
+        "cityId": "c27"
+      },
+      "group": "blue-c27",
+      "units": [
+        {
+          "type": "light",
+          "count": 2,
+          "offset": {
+            "x": 14,
+            "y": 0
+          },
+          "spacing": {
+            "x": 28,
+            "y": 0
+          }
+        },
+        {
+          "type": "heavy",
+          "count": 2,
+          "offset": {
+            "x": 14,
+            "y": 28
+          },
+          "spacing": {
+            "x": 28,
+            "y": 0
+          }
+        }
       ]
     },
     {
       "faction": "red",
-      "at": { "spawnId": "s43" },
-      "group": "red-east",
+      "at": {
+        "cityId": "c12"
+      },
+      "group": "red-c12",
       "units": [
-        { "type": "light", "count": 5, "spacing": { "x": 32, "y": 0 } },
-        { "type": "heavy", "count": 3, "offset": { "x": 0, "y": 44 }, "spacing": { "x": 32, "y": 0 } }
+        {
+          "type": "light",
+          "count": 2,
+          "offset": {
+            "x": 14,
+            "y": 0
+          },
+          "spacing": {
+            "x": 28,
+            "y": 0
+          }
+        },
+        {
+          "type": "heavy",
+          "count": 2,
+          "offset": {
+            "x": 14,
+            "y": 28
+          },
+          "spacing": {
+            "x": 28,
+            "y": 0
+          }
+        }
       ]
     },
     {
       "faction": "red",
-      "at": { "spawnId": "s42" },
-      "group": "red-main",
+      "at": {
+        "cityId": "c16"
+      },
+      "group": "red-c16",
       "units": [
-        { "type": "light", "count": 5, "spacing": { "x": 32, "y": 0 } },
-        { "type": "heavy", "count": 3, "offset": { "x": 0, "y": 44 }, "spacing": { "x": 32, "y": 0 } }
+        {
+          "type": "light",
+          "count": 2,
+          "offset": {
+            "x": 14,
+            "y": 0
+          },
+          "spacing": {
+            "x": 28,
+            "y": 0
+          }
+        },
+        {
+          "type": "heavy",
+          "count": 2,
+          "offset": {
+            "x": 14,
+            "y": 28
+          },
+          "spacing": {
+            "x": 28,
+            "y": 0
+          }
+        }
+      ]
+    },
+    {
+      "faction": "red",
+      "at": {
+        "cityId": "c18"
+      },
+      "group": "red-c18",
+      "units": [
+        {
+          "type": "light",
+          "count": 2,
+          "offset": {
+            "x": 14,
+            "y": 0
+          },
+          "spacing": {
+            "x": 28,
+            "y": 0
+          }
+        },
+        {
+          "type": "heavy",
+          "count": 2,
+          "offset": {
+            "x": 14,
+            "y": 28
+          },
+          "spacing": {
+            "x": 28,
+            "y": 0
+          }
+        }
+      ]
+    },
+    {
+      "faction": "red",
+      "at": {
+        "cityId": "c19"
+      },
+      "group": "red-c19",
+      "units": [
+        {
+          "type": "light",
+          "count": 2,
+          "offset": {
+            "x": 14,
+            "y": 0
+          },
+          "spacing": {
+            "x": 28,
+            "y": 0
+          }
+        },
+        {
+          "type": "heavy",
+          "count": 2,
+          "offset": {
+            "x": 14,
+            "y": 28
+          },
+          "spacing": {
+            "x": 28,
+            "y": 0
+          }
+        }
+      ]
+    },
+    {
+      "faction": "red",
+      "at": {
+        "cityId": "c21"
+      },
+      "group": "red-c21",
+      "units": [
+        {
+          "type": "light",
+          "count": 2,
+          "offset": {
+            "x": 14,
+            "y": 0
+          },
+          "spacing": {
+            "x": 28,
+            "y": 0
+          }
+        },
+        {
+          "type": "heavy",
+          "count": 2,
+          "offset": {
+            "x": 14,
+            "y": 28
+          },
+          "spacing": {
+            "x": 28,
+            "y": 0
+          }
+        }
+      ]
+    },
+    {
+      "faction": "red",
+      "at": {
+        "cityId": "c24"
+      },
+      "group": "red-c24",
+      "units": [
+        {
+          "type": "light",
+          "count": 2,
+          "offset": {
+            "x": 14,
+            "y": 0
+          },
+          "spacing": {
+            "x": 28,
+            "y": 0
+          }
+        },
+        {
+          "type": "heavy",
+          "count": 2,
+          "offset": {
+            "x": 14,
+            "y": 28
+          },
+          "spacing": {
+            "x": 28,
+            "y": 0
+          }
+        }
+      ]
+    },
+    {
+      "faction": "red",
+      "at": {
+        "cityId": "c28"
+      },
+      "group": "red-c28",
+      "units": [
+        {
+          "type": "light",
+          "count": 2,
+          "offset": {
+            "x": 14,
+            "y": 0
+          },
+          "spacing": {
+            "x": 28,
+            "y": 0
+          }
+        },
+        {
+          "type": "heavy",
+          "count": 2,
+          "offset": {
+            "x": 14,
+            "y": 28
+          },
+          "spacing": {
+            "x": 28,
+            "y": 0
+          }
+        }
+      ]
+    },
+    {
+      "faction": "red",
+      "at": {
+        "cityId": "c29"
+      },
+      "group": "red-c29",
+      "units": [
+        {
+          "type": "light",
+          "count": 2,
+          "offset": {
+            "x": 14,
+            "y": 0
+          },
+          "spacing": {
+            "x": 28,
+            "y": 0
+          }
+        },
+        {
+          "type": "heavy",
+          "count": 2,
+          "offset": {
+            "x": 14,
+            "y": 28
+          },
+          "spacing": {
+            "x": 28,
+            "y": 0
+          }
+        }
+      ]
+    },
+    {
+      "faction": "blue",
+      "at": {
+        "spawnId": "s37"
+      },
+      "group": "blue-reserve",
+      "units": [
+        {
+          "type": "light",
+          "count": 5,
+          "spacing": {
+            "x": -32,
+            "y": 0
+          }
+        },
+        {
+          "type": "heavy",
+          "count": 3,
+          "offset": {
+            "x": 0,
+            "y": 44
+          },
+          "spacing": {
+            "x": -32,
+            "y": 0
+          }
+        }
+      ]
+    },
+    {
+      "faction": "red",
+      "at": {
+        "spawnId": "s42"
+      },
+      "group": "red-reserve",
+      "units": [
+        {
+          "type": "light",
+          "count": 5,
+          "spacing": {
+            "x": 32,
+            "y": 0
+          }
+        },
+        {
+          "type": "heavy",
+          "count": 3,
+          "offset": {
+            "x": 0,
+            "y": 44
+          },
+          "spacing": {
+            "x": 32,
+            "y": 0
+          }
+        }
       ]
     }
   ],
-  "victory": { "mode": "normal" }
+  "victory": {
+    "mode": "normal"
+  }
 }

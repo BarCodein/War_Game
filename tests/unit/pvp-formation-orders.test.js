@@ -29,11 +29,15 @@ describe('buildFormationOrders：多选拖轨迹 → 每单位一条命令', () 
     }
     // 第一条的起点 = 该单位自身位置
     const first = units.find((unit) => unit.id === orders[0].unitIds[0]);
-    expect(orders[0].command.path[0]).toEqual({ x: first.x, y: first.y });
+    // 浮点累加有 1e-14 级误差，逐轴近似
+    expect(orders[0].command.path[0].x).toBeCloseTo(first.x, 6);
+    expect(orders[0].command.path[0].y).toBeCloseTo(first.y, 6);
     // 每个单位的路径都是"自己的位置 + 同一组相对位移" → 彼此保持原来的相对位置
     orders.forEach((order, index) => {
       const unit = units[index];
-      expect(order.command.path[2]).toEqual({ x: unit.x + 100, y: unit.y + 60 });
+      // 浮点累加有 1e-14 级误差，逐轴近似比较
+      expect(order.command.path[2].x).toBeCloseTo(unit.x + 100, 6);
+      expect(order.command.path[2].y).toBeCloseTo(unit.y + 60, 6);
     });
     // 相对位移彼此一致（队形不塌的关键）
     const deltas = orders.map((order) => {
@@ -43,7 +47,11 @@ describe('buildFormationOrders：多选拖轨迹 → 每单位一条命令', () 
         y: order.command.path[2].y - unit.y,
       };
     });
-    for (const delta of deltas) expect(delta).toEqual(deltas[0]);
+    // 相对位移彼此一致（队形不塌）：浮点逐轴近似比较
+    for (const delta of deltas) {
+      expect(delta.x).toBeCloseTo(deltas[0].x, 6);
+      expect(delta.y).toBeCloseTo(deltas[0].y, 6);
+    }
   });
 
   it('E 急行军 → forced:true；Shift 拖拽 → appendRoute（锚点接在路线尾）', () => {
