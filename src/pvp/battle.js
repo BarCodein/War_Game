@@ -278,6 +278,8 @@ class BattleScene extends Phaser.Scene {
 
     this.scale.on('resize', () => this.cameras.main.setSize(this.scale.width, this.scale.height));
     debug.scene = this;
+    // 回归用：读某个单位精灵当前的显示角度（rad）——用于验证"敌方单位前进时会转向"
+    debug.facingOf = (id) => this.unitRenderer?.debug?.angleOf(id) ?? null;
     // 测试辅助：世界坐标 → 屏幕坐标（Playwright 要点中某个单位/地面）
     debug.projectToScreen = (x, y) => {
       const camera = this.cameras.main;

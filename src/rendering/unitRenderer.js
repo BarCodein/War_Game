@@ -40,6 +40,10 @@ const SPRITE_FACING_OFFSET = Math.PI / 2;
 // 180° 掉头约 0.63s。只影响贴图旋转，不改任何模拟状态 / 路径 / 方向判定。
 const TURN_RATE = 5;
 
+// 没有路线时用「本帧位移」推断朝向：一帧移动超过这个距离才算在前进（避免静止抖动乱转）。
+// 联机快照不下发敌方行军路线，这是敌方单位唯一可用的朝向来源。
+const MOVE_FACING_EPS = 0.05;
+
 // 贴图对角线相对碰撞半径的倍数：2 = 对角线正好等于碰撞直径（贴图内切于碰撞圆）。
 // 当前取 3 让方块更醒目；调整大小只需改这一个数。
 const SPRITE_DIAGONAL_FACTOR = 3;
@@ -230,9 +234,15 @@ export function createUnitRenderer(scene, world, selection, options = {}) {
     if (sprite) sprite.setVisible(false);
   }
 
+  // 每个单位上一帧的渲染位置（用于"没有路线时按位移转向"）
+  const lastPositions = new Map();
+
   function drawUnit(unit, dt) {
     const { x, y, radius } = unit;
     const isSelected = selection.isSelected(unit.id);
+    const previousPos = lastPositions.get(unit.id) ?? { x, y };
+    const facing = facingAngle(unit, previousPos);
+    lastPositions.set(unit.id, { x, y });
     // 交战：沿「自身→敌人」连线方向的低频率小幅度抖动（仅渲染层，不影响模拟坐标）
     let dx = x;
     let dy = y;
@@ -252,7 +262,7 @@ export function createUnitRenderer(scene, world, selection, options = {}) {
       graphics.strokeCircle(dx, dy, radius + 8);
     }
     const texture = unitTexture(unit);
-    if (textured.get(texture.key)) drawTexturedUnit(unit, texture.key, dx, dy, isSelected, dt);
+    if (textured.get(texture.key)) drawTexturedUnit(unit, texture.key, dx, dy, isSelected, dt, facing);
     else drawCircleUnit(unit, dx, dy, isSelected);
     drawCracks(unit, dx, dy); // 血量<50% 轻破碎、<20% 重破碎（跟随单位震动）
     drawBars(unit, x, y); // 仅己方显示血条/补给存量条；固定于单位真实位置，不跟随震动
@@ -261,13 +271,12 @@ export function createUnitRenderer(scene, world, selection, options = {}) {
   // 贴图单位：等比缩放到「对角线 = 半径 × SPRITE_DIAGONAL_FACTOR」，保持贴图原始长宽比；
   // 按目标方向**平滑转向**（每帧朝目标角以 TURN_RATE 逼近，不瞬时跳变）；选中着色加深。
   // 普通/精英各用其贴图。
-  function drawTexturedUnit(unit, textureKey, dx, dy, isSelected, dt) {
+  function drawTexturedUnit(unit, textureKey, dx, dy, isSelected, dt, facing = null) {
     const sprite = spriteFor(unit, textureKey);
     sprite.setVisible(true);
     // 等比缩放（scaleX === scaleY）→ 长宽比不变
     sprite.setScale((unit.radius * SPRITE_DIAGONAL_FACTOR) / diagonalOf(textureKey));
     sprite.setPosition(dx, dy);
-    const facing = facingAngle(unit);
     // 显示朝向持久化在精灵上：首次出现直接落位（避免开局统一从 0 旋转）；
     // 之后每帧朝目标角转 TURN_RATE × dt，facing 为 null（无目标）时保持当前朝向。
     let displayAngle = sprite._displayAngle;
@@ -294,8 +303,10 @@ export function createUnitRenderer(scene, world, selection, options = {}) {
     graphics.strokeCircle(dx, dy, unit.radius);
   }
 
-  // 贴图朝向：交战时朝当前目标；否则朝下一个路径点；两者都没有则返回 null（保持上次朝向）
-  function facingAngle(unit) {
+  // 贴图朝向：交战时朝当前目标；否则朝下一个路径点；两者都没有则按**本帧位移**推断
+  // （联机快照不下发敌方行军路线，靠位移是唯一能拿到"正在往哪走"的来源）；
+  // 完全静止时返回 null（保持上次朝向）。
+  function facingAngle(unit, lastPos = null) {
     if (unit.state === 'combat') {
       const enemy = liveEnemy(unit);
       if (enemy) return Math.atan2(enemy.y - unit.y, enemy.x - unit.x);
@@ -304,7 +315,9 @@ export function createUnitRenderer(scene, world, selection, options = {}) {
       const waypoint = unit.route[unit.routeIndex];
       return Math.atan2(waypoint.y - unit.y, waypoint.x - unit.x);
     }
-    return null;
+    // 没有路线（联机里敌方路线从不下发；己方在路线还没同步到时也是空的）：
+    // 用本帧与上一帧渲染位置的位移当作前进方向。
+    return movementFacing(lastPos, unit);
   }
 
   // 当前交战目标（用于抖动方向与朝向）；无目标时兜底取最近敌军
@@ -473,7 +486,30 @@ export function createUnitRenderer(scene, world, selection, options = {}) {
     graphics.lineBetween(x - radius, y + radius, x + radius, y - radius);
   }
 
-  return { draw, stats };
+  return {
+    draw,
+    stats,
+    // 排查/回归用：读某单位精灵当前的显示角度（rad，未加贴图偏移），没有精灵时 null
+    debug: {
+      angleOf: (id) => {
+        const sprite = sprites.get(id);
+        return sprite?._displayAngle ?? null;
+      },
+    },
+  };
+}
+
+/**
+ * 没有路线时的朝向：用「上一帧 → 这一帧」的位移当方向（纯函数，供单测）。
+ * 联机里敌方行军路线不下发，位移是唯一可用的"正在往哪走"来源。
+ * 位移小于 eps（几乎没动）时返回 null，让调用方保持上次朝向。
+ */
+export function movementFacing(lastPos, unit, eps = MOVE_FACING_EPS) {
+  if (!lastPos) return null;
+  const movedX = unit.x - lastPos.x;
+  const movedY = unit.y - lastPos.y;
+  if (Math.hypot(movedX, movedY) > eps) return Math.atan2(movedY, movedX);
+  return null;
 }
 
 // 显示层的角度逼近（纯函数，供单测）：从 current 朝 target 最多转 maxStep（弧度），

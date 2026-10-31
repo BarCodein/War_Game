@@ -1482,3 +1482,30 @@ if (state.mode === 'local') {
 | 新增 `tests/e2e/pvp-login.spec.js`（3 条） | **passed**：未登录进大厅 → 跳统一登录页（带 next）→ 注册后回大厅且本地会话写入 → 战役页放行 → 首页有联机入口 → 登出后两边都失效；错误密码给出"用户名或密码不正确"；未登录访问 `index.html` 也被送到登录页 |
 | 全量 PvP e2e（battle/orders/rooms/resign/reconnect/rematch/login） | **12 passed**（1.5 min） |
 | 全量单测 | **621 passed / 8 failed**（8 条既有供应/配置漂移） |
+
+﻿### 11.20 修 bug：本地渲染时敌军前进不朝向前进方向（2026-10-31）
+
+**现象**：联机里敌方单位在前进，但贴图朝向不变（一直保持初始角度）。
+
+**根因**：`src/rendering/unitRenderer.js#facingAngle()` 的朝向来源只有两个：
+① 交战时朝目标；② 朝 `unit.route[routeIndex]` 这个路径点。
+而按 §11.15 的设计，**敌方行军路线从不下发**（避免泄露对手操作），所以敌方单位 `route` 永远为空 →
+`facingAngle` 返回 `null` → 精灵保持上次朝向，看起来就是"不转向"。
+
+**修法**（只改渲染层，不动协议）
+
+| 位置 | 改动 |
+|---|---|
+| `src/rendering/unitRenderer.js` | 新增纯函数 `movementFacing(lastPos, unit, eps)`：没有路线时用**上一帧 → 这一帧的位移**当方向；位移小于 `MOVE_FACING_EPS`（0.05px）视为静止返回 `null`（保持上次朝向，避免抖动）<br>`drawUnit()` 维护 `lastPositions`（每单位上一帧渲染位置），算好 `facing` 再传给 `drawTexturedUnit()`（原来的调用在函数内部重算，拿不到位移）<br>新增调试口 `debug.angleOf(id)`：读某单位精灵当前显示角度（e2e 用） |
+| `src/pvp/battle.js` | 暴露 `__pvp.facingOf(id)`（转调渲染层的调试口） |
+
+**验证**
+
+| 项 | 结果 |
+|---|---|
+| 新增单测 `tests/unit/unit-facing.test.js`（5 条） | **passed**：右移→0、上移→-π/2、左下→3π/4、几乎不动→null、无上一帧→null |
+| 新增 e2e `tests/e2e/pvp-facing.spec.js` | **passed**：红方（对手）向东拖路径行进，蓝方读该单位精灵显示角度 → \|angle\| < 0.5（≈向东），证明"敌方前进会转向" |
+| 全量 PvP e2e（battle/orders/rooms/resign/rematch/login/facing） | **11 passed**（1.3 min） |
+| 全量单测 | **626 passed / 8 failed**（8 条既有供应/配置漂移） |
+
+> 附带效果：己方单位在"路线还没同步到"的那一小段时间里也不再乱指，同样按位移转向；战役侧行为不变（有路线时仍优先按路径点）。
