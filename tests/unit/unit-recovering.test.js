@@ -29,6 +29,13 @@ describe('基地回血判定（愈角标）', () => {
     expect(recoveringNearCity(world([{ faction: 'red', x: 100, y: 100 }]), unit())).toBe(false);
   });
 
+  it('交战中 → false（机制：战斗中的单位不接受基地治疗）', () => {
+    const near = world([{ faction: 'blue', x: 100, y: 100 }]);
+    expect(recoveringNearCity(near, unit({ state: 'combat' }))).toBe(false);
+    // 同一位置、非交战 → 才会回血
+    expect(recoveringNearCity(near, unit({ state: 'hold' }))).toBe(true);
+  });
+
   it('阵亡单位 / 空世界 → false', () => {
     expect(recoveringNearCity(world([{ faction: 'blue', x: 100, y: 100 }]), unit({ state: 'dead' }))).toBe(false);
     expect(recoveringNearCity(null, unit())).toBe(false);

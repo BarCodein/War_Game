@@ -220,7 +220,9 @@ export const values = {
     // 不再随时间自动涨兵（避免拖时间自动获得单位，破坏关卡设计的兵力配比）。
     // 逻辑仍保留在 supply.js，改回 true 即恢复「每 interval 秒产 1 个 unitType」的旧行为。
     production: { enabled: false, interval: 12, unitType: 'light', pauseWhenSupplyFull: true },
-    recovery: { radius: 80, hpPerSecond: 1 }, // 只回血：补给走补给系统（gdd.md §7、§8）
+    // 只回血：补给走补给系统（gdd.md §7、§8）。
+    // 交战中的单位**不享受回血**（recoverNearCity 里按 unit.state === 'combat' 跳过）。
+    recovery: { radius: 80, hpPerSecond: 1 },
     vision: 180,
   },
 

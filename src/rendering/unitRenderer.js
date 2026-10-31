@@ -509,6 +509,7 @@ export function createUnitRenderer(scene, world, selection, options = {}) {
 /** 是否正在由己方基地回血（world/unit 结构见 simulation；纯判定，供渲染与单测共用） */
 export function recoveringNearCity(world, unit) {
   if (!world || !unit || unit.state === 'dead') return false;
+  if (unit.state === 'combat') return false;   // 交战中没有基地治疗（与 supply.js#recoverNearCity 同口径）
   if (unit.hp >= unit.maxHp - 0.01) return false;
   const { radius } = values.cities.recovery;
   return (world.cities ?? []).some((city) => city.faction === unit.faction

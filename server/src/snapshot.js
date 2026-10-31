@@ -84,6 +84,8 @@ export function buildSnapshot(world, faction, meta = {}) {
       x: round1(point.x),
       y: round1(point.y),
       faction: point.faction,
+      // 占领进度（0–100）：缺了它客户端只能等 100% 时归属突变，看不到"正在被占"
+      captureProgress: round1(point.captureProgress ?? 0),
     })),
     casualties: {
       blue: round1(world.casualties?.blue ?? 0),

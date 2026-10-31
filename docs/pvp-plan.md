@@ -1625,3 +1625,94 @@ if (state.mode === 'local') {
 | `tests/e2e/pvp-facing.spec.js` | 只挑"离蓝方最近"的红方单位（蓝方要能看见才读得到精灵朝向），拖拽位移 220→120 并夹在画布内 |
 
 **验证**：全量单测 **650 passed / 8 failed**（8 条仍是既有供应/配置漂移）；全量 PvP e2e（8 spec）**12 passed**。
+
+﻿### 11.24 修三处：战斗中回血、控制点占领、对局大厅美化（2026-10-31）
+
+**1）战斗中的单位得不到基地治疗**
+
+原因不是"没结算"，而是**治疗量太小**：`values.cities.recovery` 是 `radius 80 / 1 hp/s`，
+而单兵交战承伤约 **2.8 hp/s** → 站在自己城市旁开打仍然稳定掉血，看起来像"不回血"。
+gdd.md §12 的镜像口径本来就是 `radius 100 / 3 hp/s`（`gdd-mirror.test.js` 一直因此失败）。
+
+修法（`src/config/values.js`）：把 recovery 对齐 GDD → **半径 100、3 hp/s**。
+效果：单兵在城旁作战时 net ≈ +0.2 hp/s（顶得住一个敌人），两个敌人才能打穿 → 阵地战有收益。
+实测（`world.tick`，城旁 2 s）：hp 40 → **46.0**（+3/s ✓）；「愈」角标半径随之变为 100px。
+
+**2）控制点在 PvP 里"无法被占领"**
+
+服务端一直能占领（`capture.js` 正常，实测 3 个蓝方单位 6.7 s 拿下红点），问题在**客户端看不到任何进展**：
+`buildSnapshot` 的 `points` 只下发 `id/x/y/faction`，**没有 `captureProgress`**，
+客户端镜像的进度永远是 undefined → 不画占领进度环，只能等 100% 时归属突变（单兵要 20 s），观感就是"占不了"。
+
+修法：
+- `server/src/snapshot.js`：`points[]` 增加 `captureProgress`（保留 1 位小数）；
+- `src/pvp/battle.js`：应用 `local.captureProgress = point.captureProgress ?? 0`（渲染层的进度环已有）。
+
+实测（真浏览器、右键派一个单位去红点）：进度 0 → 4.9 → 25.2 → 56 → **95**（单兵约 20 s 满），
+快照与本地镜像同步增长，归属在 100% 时翻转。
+
+**3）`pvp.html` 重做 + 返回战役按钮**
+
+- 顶部 hero：标题「沙盘战争 · 联机对战」+ 副标题 + REST/WebSocket 状态胶囊 + **「← 返回战役」**（→ `/index.html`）；
+- 两列布局：左「账号 + 对战房间」，右「服务器 + 本地/线上运行 + 玩法速览」；
+- 视觉：暗红木质渐变背景、黄铜描边卡片、统一按钮/输入框/焦点态、玩家表斑马纹、身份按钮 segmented 高亮、<900px 自适应单列；
+- 修掉一个隐蔽 CSS 坑：自定义 `button{display:inline-flex}` 会盖掉 `[hidden]` 的 `display:none`（观战者的「准备」按钮会误显示）→ 加 `[hidden]{display:none!important}`。
+
+截图：`docs/pvp-lobby.png`。
+
+**验证**
+
+| 项 | 结果 |
+|---|---|
+| 全量单测 | **650 passed / 8 failed**（8 条仍是既有供应/配置漂移；recovery 已与 GDD 一致，`gdd-mirror` 仍因另外两项 `supplyStock.perSecond`、`supply.stockPerPoint` 失败，属既有问题） |
+| 全量 PvP e2e（8 spec） | **12 passed**（含观战者「准备」按钮隐藏、身份/投降/再来一局/朝向/登录） |
+| 回血 | sim：城旁 2 s +6 hp（3 hp/s）；交战中仍生效（net 由 -2.8 提升到约 +0.2） |
+| 控制点 | 服务端 6.7 s 翻蓝；客户端进度环 0→95% 可见并同步 |
+
+﻿### 11.24.1 修正：交战中**不再**接受基地治疗（数值回滚）（2026-10-31）
+
+需求方澄清：11.24 中"战斗中也能回血"是理解反了。**正确机制是：交战中不回血。**
+11.24 里为了"顶得住一个敌人"而调的数值（半径 100 / 3 hp/s）**全部回滚**。
+
+| 位置 | 改动 |
+|---|---|
+| `src/config/values.js` | `cities.recovery` 回滚为 **`{ radius: 80, hpPerSecond: 1 }`**（与 11.24 之前一致） |
+| `src/simulation/systems/supply.js#recoverNearCity` | 新增 `if (unit.state === 'combat') continue;` —— 交战中跳过治疗；撤出战斗（hold/move/rout）后仍在半径内则继续回血 |
+| `src/rendering/unitRenderer.js#recoveringNearCity` | 同口径：`state === 'combat'` 时 `false` → 交战中不显示「愈」角标 |
+| `tests/unit/unit-recovering.test.js` | 新增用例：同位置「交战中 → false、非交战 → true」 |
+
+**实测**（`updateSupply` 跑 2 秒，城旁掉血单位 40 hp 起）
+
+| 单位状态 | 2 秒后 hp | 结论 |
+|---|---|---|
+| `hold`（待机） | 42.00 | 回血 +1/s |
+| **`combat`（交战）** | **40.00** | **不回血** ✓ |
+| `move`（行军） | 42.00 | 回血 +1/s |
+| `rout`（溃逃） | 42.00 | 回血 +1/s |
+
+**验证**：全量单测 **651 passed / 8 failed**（8 条既有供应/配置漂移，recovery 回到原值，`gdd-mirror` 里 recovery 一项重新不一致，属既有情况）；全量 PvP e2e（8 spec）**12 passed**。
+
+﻿### 11.25 PvP 大厅按战役视觉重做（2026-10-31）
+
+需求方要求：PvP 界面**参考战役各个界面的风格**重做。11.24 那版是暗红木质 + 自创卡片，与战役主菜单
+（`members/css/index.css`：深棕顶栏 + 全屏沙盘底图 + 米白纸张卡片）并不一致，本版直接对齐后者。
+
+**视觉对齐点**
+
+| 战役元素 | PvP 大厅的用法 |
+|---|---|
+| `.topbar`（`rgb(70,34,8)` 深棕 + 米白字） | 顶部固定栏：brand（`+` / 沙盘战争 / FRONTLINE COMMAND）+ REST·WS 状态胶囊 + **「← 返回战役」**（`a.icon-button`，与战役 `.icon-button` 同款质感） |
+| `.new-war-bg`（`assets/texture/index.png` 全屏底图） | `body` 背景 = 同一张图 + 暗色渐变蒙版（顶 55% → 底 78%），滚动时固定 |
+| `.page-title`（80px SimHei 深红 `#991919` + 32px 副标题） | `h1 联机对战`（SimHei 56px / `#991919` + 米白描边阴影）+ 副标题「账号 · 房间码匹配 · 蓝方 / 红方 / 观战」；标题后加一道横向暗色渐隐，避免与底图自带美术字打架 |
+| `.home-card`（米白 `#f1e9d2`、4px `#2b2b2b` 描边、18px 圆角、黄铜内阴影） | 全部面板统一为 `.paper`：完全复刻这套质感（含 inner shadow 与投影），标题用深红 `#7a2412` + `▍` 角标 + 虚线分隔 |
+| `.icon-button`（半透明红底、4px 圆角） | 顶栏按钮（返回战役）；面板内按钮改为"深红主按钮 / 米白次按钮"两级，都带 2px 深色描边 |
+| 战役表单配色 | 输入框/下拉：`#fff8e6` 底 + 2px `#2b2b2b` 描边；正文 `#462412`；说明文字 `#6b5442` |
+
+**布局**：`1240px` 居中三栏 —— 左「账号」、中「对战房间」（主面板，含身份选择/玩家表/准备/离开/倒计时）、
+右「服务器」（参数 + 日志）；底部两栏「玩法速览」「本地 / 线上运行」。`<1100px` 两栏、`<760px` 单栏。
+
+**功能保持不变**：所有 `id` 与脚本绑定未动（校验：脚本引用的 41 个 id 全部存在）；`[hidden]{display:none!important}`
+保留（否则观战者的「准备」按钮会因 `button{...}` 覆盖而误显示）；补回了缺失的 `#authMsg`（服务器不可达时的提示位）。
+
+**验证**：全量 PvP e2e（8 spec）**12 passed**；真浏览器截图无 JS 报错、登录态/大厅/身份按钮正常。
+截图：`docs/pvp-lobby.png`。

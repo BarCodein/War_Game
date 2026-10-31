@@ -444,6 +444,7 @@ function applySnapshot(snapshot) {
     const local = world.capturePoints.find((item) => item.id === point.id);
     if (!local) continue;
     local.faction = point.faction;
+    local.captureProgress = point.captureProgress ?? 0;   // 占领进度条（§11.24）
   }
 
   const seen = new Set();

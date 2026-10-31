@@ -205,6 +205,9 @@ function recoverNearCity(world, dt) {
   const { radius, hpPerSecond } = values.cities.recovery;
   for (const unit of world.units) {
     if (unit.state === 'dead') continue;
+    // 交战中不接受基地治疗（需求方口径）：扛着敌人的时候补给站没法给你包扎。
+    // 打完/撤出战斗（state 变回 hold/move/rout）后，只要还在己方城市恢复半径内就会继续回血。
+    if (unit.state === 'combat') continue;
     const nearCity = world.cities.some(city => city.faction === unit.faction
       && Math.hypot(city.x - unit.x, city.y - unit.y) <= radius);
     if (nearCity) unit.hp = Math.min(unit.maxHp, unit.hp + hpPerSecond * dt);
